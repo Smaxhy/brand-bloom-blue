@@ -1,0 +1,239 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import logo from "@/assets/inspirova-logo.png";
+import { ArrowLeft, TrendingUp, Target, Megaphone, Sparkles, Mail, ShoppingBag } from "lucide-react";
+
+export const Route = createFileRoute("/results")({
+  head: () => ({
+    meta: [
+      { title: "Results & Portfolio — Inspirova Marketing" },
+      {
+        name: "description",
+        content:
+          "Real numbers from real brands. Inspirova's portfolio of paid ads, email and lead-gen campaigns generating millions in client revenue.",
+      },
+      { property: "og:title", content: "Results & Portfolio — Inspirova" },
+      {
+        property: "og:description",
+        content: "Real client results: 89× ROAS, $293K Q1 revenue, 4,000+ leads and counting.",
+      },
+    ],
+  }),
+  component: ResultsPage,
+});
+
+const headlineStats = [
+  { k: "$293.9K", v: "Q1 2026 revenue", icon: TrendingUp },
+  { k: "89×", v: "Peak ROAS", icon: Target },
+  { k: "4,056", v: "Leads in one campaign", icon: Sparkles },
+  { k: "$68K", v: "Generated from ads (1 month)", icon: Megaphone },
+];
+
+const caseStudies = [
+  {
+    tag: "E-commerce · Paid Ads",
+    icon: ShoppingBag,
+    title: "From flat months to a $35K breakout",
+    body:
+      "Stable, sub-$10K months for nearly a year. Within 60 days of taking over their ads, email and creative system, the brand broke their first $35K month, then $25K the next — now climbing toward $200K.",
+    metrics: [
+      { k: "+27%", v: "Total sales" },
+      { k: "+23%", v: "Orders" },
+      { k: "+17%", v: "Conversion rate" },
+    ],
+  },
+  {
+    tag: "DTC · Meta Ads",
+    icon: Megaphone,
+    title: "$68K in 1 month from paid alone",
+    body:
+      "$2,420 in ad spend returned $68,135 in tracked conversion value across the account — a 28× blended ROAS with individual campaigns hitting 53× and 57×.",
+    metrics: [
+      { k: "28×", v: "Blended ROAS" },
+      { k: "$2.4K", v: "Ad spend" },
+      { k: "$68K", v: "Conversion value" },
+    ],
+  },
+  {
+    tag: "Lead Gen · Meta Ads",
+    icon: Sparkles,
+    title: "4,056 leads from a single campaign",
+    body:
+      "Two-pixel split test running emails, sales campaigns and lead-gen creative side-by-side. Top campaign drove 4,056 website leads at scale; combined campaigns delivered 6,657 leads in the test window.",
+    metrics: [
+      { k: "4,056", v: "Top campaign leads" },
+      { k: "15,869", v: "Reach" },
+      { k: "6,657", v: "Total leads" },
+    ],
+  },
+  {
+    tag: "Shopify · Retention",
+    icon: TrendingUp,
+    title: "2× revenue in 60 days",
+    body:
+      "Restructured retargeting and email flows. Total revenue doubled vs January, conversion rate climbed by 1% and the customer reoccurrence rate now ticks up steadily every month.",
+    metrics: [
+      { k: "2×", v: "Revenue vs Jan" },
+      { k: "6.91%", v: "Conv. rate" },
+      { k: "11.45%", v: "Top segment CR" },
+    ],
+  },
+  {
+    tag: "Premium Ads",
+    icon: Target,
+    title: "1,508× return on a hero ad",
+    body:
+      "Single creative achieved a 1,508% return on ad spend with $18.8K in conversion value at a 1.96% click-through rate — built around a hook-first short-form ad framework.",
+    metrics: [
+      { k: "83×", v: "Purchase ROAS" },
+      { k: "1.96%", v: "CTR" },
+      { k: "$18.8K", v: "Conv. value" },
+    ],
+  },
+  {
+    tag: "Email Marketing",
+    icon: Mail,
+    title: "Always-on revenue from the list",
+    body:
+      "Welcome flows, FOMO sequences, win-back and post-purchase automations turning dormant subscribers into a predictable monthly revenue line for every brand we operate.",
+    metrics: [
+      { k: "30+", v: "Brands served" },
+      { k: "2 yrs", v: "Track record" },
+      { k: "100%", v: "Done-for-you" },
+    ],
+  },
+];
+
+function ResultsPage() {
+  return (
+    <main className="min-h-screen">
+      <header className="fixed top-0 z-50 w-full border-b border-border/50 bg-background/70 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+          <Link to="/" className="flex items-center gap-2">
+            <img src={logo} alt="Inspirova" className="h-9 w-9 rounded-md object-cover" />
+            <span className="text-lg font-semibold tracking-tight">Inspirova</span>
+          </Link>
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Back home
+          </Link>
+        </div>
+      </header>
+
+      <section className="relative overflow-hidden pt-32 pb-20 md:pt-44 md:pb-28">
+        <div
+          aria-hidden
+          className="absolute inset-0 -z-10 opacity-60"
+          style={{
+            background:
+              "radial-gradient(60% 50% at 50% 0%, color-mix(in oklab, var(--brand-purple) 22%, transparent) 0%, transparent 70%), radial-gradient(40% 40% at 80% 20%, color-mix(in oklab, var(--brand-blue) 25%, transparent) 0%, transparent 70%)",
+          }}
+        />
+        <div className="mx-auto max-w-6xl px-6 text-center">
+          <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-border bg-background/60 px-4 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur">
+            <Sparkles className="h-3.5 w-3.5 text-primary" />
+            Portfolio · 2026
+          </div>
+          <h1 className="mt-6 text-balance text-5xl font-semibold tracking-tight md:text-7xl">
+            Real brands. <span className="text-gradient-brand">Real numbers.</span>
+          </h1>
+          <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg text-muted-foreground">
+            A snapshot of what our system has produced for clients across e-commerce, DTC and lead-gen.
+          </p>
+
+          <div className="mx-auto mt-16 grid max-w-4xl grid-cols-2 gap-4 md:grid-cols-4">
+            {headlineStats.map((s) => (
+              <div key={s.v} className="rounded-2xl border border-border bg-card p-6 shadow-card">
+                <s.icon className="h-5 w-5 text-primary" />
+                <div className="mt-4 text-2xl font-semibold tracking-tight md:text-3xl">{s.k}</div>
+                <div className="mt-1 text-xs uppercase tracking-wider text-muted-foreground">{s.v}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-gradient-soft py-20 md:py-28">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="max-w-2xl">
+            <div className="text-xs font-semibold uppercase tracking-widest text-primary">Case studies</div>
+            <h2 className="mt-3 text-4xl font-semibold tracking-tight md:text-5xl">
+              Selected <span className="text-gradient-brand">client work.</span>
+            </h2>
+          </div>
+
+          <div className="mt-14 grid gap-6 md:grid-cols-2">
+            {caseStudies.map((c) => (
+              <article
+                key={c.title}
+                className="group relative overflow-hidden rounded-2xl border border-border bg-card p-8 shadow-card transition-all hover:-translate-y-1 hover:shadow-glow"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-brand text-white shadow-glow">
+                    <c.icon className="h-4 w-4" />
+                  </div>
+                  <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                    {c.tag}
+                  </span>
+                </div>
+                <h3 className="mt-5 text-2xl font-semibold tracking-tight">{c.title}</h3>
+                <p className="mt-3 text-muted-foreground">{c.body}</p>
+
+                <div className="mt-6 grid grid-cols-3 gap-3 border-t border-border pt-5">
+                  {c.metrics.map((m) => (
+                    <div key={m.v}>
+                      <div className="text-lg font-semibold tracking-tight text-gradient-brand md:text-xl">
+                        {m.k}
+                      </div>
+                      <div className="mt-0.5 text-[11px] uppercase tracking-wider text-muted-foreground">
+                        {m.v}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="py-24 md:py-32">
+        <div className="mx-auto max-w-3xl px-6 text-center">
+          <h2 className="text-4xl font-semibold tracking-tight md:text-6xl">
+            Want to be the <span className="text-gradient-brand">next case study?</span>
+          </h2>
+          <p className="mx-auto mt-6 max-w-xl text-lg text-muted-foreground">
+            Slide into the DMs. We'll come back with a plan tailored to your brand.
+          </p>
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+            <a
+              href="https://instagram.com/max.grchv"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-brand px-6 py-3 text-sm font-medium text-white shadow-glow transition-transform hover:scale-[1.03]"
+            >
+              DM @max.grchv
+            </a>
+            <Link
+              to="/"
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+            >
+              <ArrowLeft className="h-4 w-4" /> Back home
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t border-border py-10">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 text-sm text-muted-foreground md:flex-row">
+          <div className="flex items-center gap-2">
+            <img src={logo} alt="" className="h-6 w-6 rounded object-cover" />
+            <span>© {new Date().getFullYear()} Inspirova Marketing</span>
+          </div>
+          <div>Built to market.</div>
+        </div>
+      </footer>
+    </main>
+  );
+}
