@@ -64,12 +64,8 @@ function Hero() {
           Full-service digital marketing agency
         </div>
         <h1 className="mt-6 text-balance text-5xl font-semibold tracking-tight md:text-7xl">
-          We turn attention into <span className="text-gradient-brand">revenue.</span>
+          We create to <span className="text-gradient-brand">inspire.</span>
         </h1>
-        <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg text-muted-foreground">
-          Inspirova helps ambitious brands scale with paid ads, high-converting funnels,
-          conversion-built websites and short-form video that actually performs.
-        </p>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
           <a
             href="#contact"
