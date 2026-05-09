@@ -321,7 +321,7 @@ function Footer() {
           <img src={logo} alt="" className="h-6 w-6 rounded object-cover" />
           <span>© {new Date().getFullYear()} Inspirova Marketing</span>
         </div>
-        <div>Built to scale brands.</div>
+        <div>Built to market.</div>
       </div>
     </footer>
   );
@@ -335,6 +335,7 @@ function Index() {
       <Services />
       <About />
       <Results />
+      <Team />
       <Contact />
       <Footer />
     </main>
