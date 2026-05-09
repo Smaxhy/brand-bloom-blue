@@ -241,7 +241,7 @@ function Results() {
 function Team() {
   const members = [
     { name: "Max Grachev", role: "Agency Owner", handle: "max.grchv" },
-    { name: "Santiago", role: "Co-founder", handle: "santago.inspirova" },
+    { name: "Santiago", role: "Founder", handle: "santago.inspirova" },
   ];
   return (
     <section id="team" className="bg-gradient-soft py-24 md:py-32">
@@ -302,7 +302,7 @@ function Contact() {
             DM @max.grchv on Instagram <ArrowRight className="h-4 w-4" />
           </a>
           <a
-            href="mailto:hello@inspirova.com"
+            href="mailto:inspirovamedia@gmail.com"
             className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
           >
             Email us
