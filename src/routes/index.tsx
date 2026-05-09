@@ -244,7 +244,7 @@ function Results() {
 function Team() {
   const members = [
     { name: "Max Grachev", role: "Agency Owner / Co-Founder", handle: "max.grchv" },
-    { name: "Santiago", role: "Founder", handle: "santago.inspirova" },
+    { name: "Santiago", role: "Founder / Co-Founder", handle: "santago.inspirova" },
   ];
   return (
     <section id="team" className="bg-gradient-soft py-24 md:py-32">
