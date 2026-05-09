@@ -161,21 +161,24 @@ function About() {
         <div>
           <div className="text-xs font-semibold uppercase tracking-widest text-primary">About</div>
           <h2 className="mt-3 text-4xl font-semibold tracking-tight md:text-5xl">
-            We've been scaling brands for <span className="text-gradient-brand">two years.</span>
+            Marketing built to <span className="text-gradient-brand">move numbers.</span>
           </h2>
           <p className="mt-6 text-lg text-muted-foreground">
-            Inspirova is a full-service digital marketing agency that has helped 30+ businesses build real,
-            measurable success — from first sale to consistent monthly revenue.
+            Inspirova is a full-service digital marketing agency partnering with brands that are ready to
+            treat marketing like the growth engine it actually is.
           </p>
           <p className="mt-4 text-muted-foreground">
-            We work with Forbes 30 Under 30 artists, multi-service operators and ambitious brands ready to
-            scale beyond $50K/month with proper digital infrastructure.
+            We plug into your business across paid ads, email, websites and short-form content — running
+            the system end-to-end so you can stay focused on the product.
           </p>
         </div>
 
         <div className="relative">
           <div className="absolute -inset-6 -z-10 rounded-3xl bg-gradient-brand opacity-20 blur-3xl" />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="text-xs font-semibold uppercase tracking-widest text-primary">
+            Recent results from 2026
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-4">
             {[
               { icon: TrendingUp, k: "$293.9K", v: "Revenue generated" },
               { icon: Target, k: "2,760+", v: "Orders fulfilled" },
