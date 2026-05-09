@@ -215,6 +215,36 @@ function ResultsPage() {
         </div>
       </section>
 
+      <section className="py-20 md:py-28">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+              <Camera className="h-3.5 w-3.5" /> Picture proof
+            </div>
+            <h2 className="mt-3 text-4xl font-semibold tracking-tight md:text-5xl">
+              Receipts from real <span className="text-gradient-brand">client dashboards.</span>
+            </h2>
+            <p className="mt-4 text-lg text-muted-foreground">
+              Screenshots straight from Meta Ads Manager, Shopify and our analytics — no edits, no fluff.
+            </p>
+          </div>
+
+          <div className="mt-12 columns-1 gap-6 sm:columns-2 lg:columns-3 [&>*]:mb-6 [&>*]:break-inside-avoid">
+            {proofs.map((p, i) => (
+              <figure
+                key={i}
+                className="overflow-hidden rounded-2xl border border-border bg-card shadow-card transition-all hover:-translate-y-1 hover:shadow-glow"
+              >
+                <img src={p.src} alt={p.caption} loading="lazy" className="block w-full" />
+                <figcaption className="border-t border-border p-4 text-sm text-muted-foreground">
+                  {p.caption}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="py-24 md:py-32">
         <div className="mx-auto max-w-3xl px-6 text-center">
           <h2 className="text-4xl font-semibold tracking-tight md:text-6xl">
