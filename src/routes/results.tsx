@@ -1,6 +1,23 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import logo from "@/assets/inspirova-logo.png";
-import { ArrowLeft, TrendingUp, Target, Megaphone, Sparkles, Mail, ShoppingBag } from "lucide-react";
+import proof1 from "@/assets/proof-1.png";
+import proof2 from "@/assets/proof-2.png";
+import proof3 from "@/assets/proof-3.png";
+import proof4 from "@/assets/proof-4.png";
+import proof5 from "@/assets/proof-5.png";
+import proof6 from "@/assets/proof-6.png";
+import proof7 from "@/assets/proof-7.png";
+import { ArrowLeft, TrendingUp, Target, Megaphone, Sparkles, Mail, ShoppingBag, Camera } from "lucide-react";
+
+const proofs = [
+  { src: proof4, caption: "2× revenue in 60 days — client broke their first $35K month." },
+  { src: proof5, caption: "$68K in conversion value from $2.4K ad spend — 28× blended ROAS." },
+  { src: proof3, caption: "4,056 leads from a single lead-gen campaign." },
+  { src: proof7, caption: "Conversion rate up to 11.45% on top retargeting segment." },
+  { src: proof1, caption: "Scaling individual campaigns to 89× purchase ROAS." },
+  { src: proof2, caption: "1,508× return on a single hero ad — $18.8K conversion value." },
+  { src: proof6, caption: "Shopify store green for 4 straight months under our system." },
+];
 
 export const Route = createFileRoute("/results")({
   head: () => ({
@@ -193,6 +210,36 @@ function ResultsPage() {
                   ))}
                 </div>
               </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="py-20 md:py-28">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+              <Camera className="h-3.5 w-3.5" /> Picture proof
+            </div>
+            <h2 className="mt-3 text-4xl font-semibold tracking-tight md:text-5xl">
+              Receipts from real <span className="text-gradient-brand">client dashboards.</span>
+            </h2>
+            <p className="mt-4 text-lg text-muted-foreground">
+              Screenshots straight from Meta Ads Manager, Shopify and our analytics — no edits, no fluff.
+            </p>
+          </div>
+
+          <div className="mt-12 columns-1 gap-6 sm:columns-2 lg:columns-3 [&>*]:mb-6 [&>*]:break-inside-avoid">
+            {proofs.map((p, i) => (
+              <figure
+                key={i}
+                className="overflow-hidden rounded-2xl border border-border bg-card shadow-card transition-all hover:-translate-y-1 hover:shadow-glow"
+              >
+                <img src={p.src} alt={p.caption} loading="lazy" className="block w-full" />
+                <figcaption className="border-t border-border p-4 text-sm text-muted-foreground">
+                  {p.caption}
+                </figcaption>
+              </figure>
             ))}
           </div>
         </div>
