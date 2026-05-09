@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import logo from "@/assets/inspirova-logo.png";
-import { Megaphone, Mail, Globe, Video, ArrowRight, Sparkles, Target, TrendingUp } from "lucide-react";
+import { Megaphone, Mail, Globe, Video, ArrowRight, Sparkles, Target, TrendingUp, Instagram } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
