@@ -32,7 +32,8 @@ function Nav() {
         <nav className="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
           <a href="#services" className="transition-colors hover:text-foreground">Services</a>
           <a href="#about" className="transition-colors hover:text-foreground">About</a>
-          <a href="#results" className="transition-colors hover:text-foreground">Results</a>
+          <Link to="/results" className="transition-colors hover:text-foreground">Results</Link>
+          <a href="#team" className="transition-colors hover:text-foreground">Team</a>
           <a href="#contact" className="transition-colors hover:text-foreground">Contact</a>
         </nav>
         <a
