@@ -208,7 +208,7 @@ function Results() {
       />
       <div className="relative mx-auto max-w-6xl px-6 text-center text-white">
         <div className="text-xs font-semibold uppercase tracking-widest" style={{ color: "color-mix(in oklab, var(--brand-blue) 80%, white)" }}>
-          The numbers don't lie
+          2026 results so far
         </div>
         <h2 className="mx-auto mt-3 max-w-3xl text-4xl font-semibold tracking-tight md:text-6xl">
           Q1 2026 outperformed peak holiday season — on the same store.
@@ -219,11 +219,62 @@ function Results() {
 
         <blockquote className="mx-auto mt-16 max-w-2xl rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur">
           <p className="text-lg italic text-white/90">
-            “Max is lowkey the only person we've met in the scaling industry who's genuinely interested in
+            “Lowkey the only people we've met in the scaling industry who are genuinely interested in
             the best for both sides — and the results speak for themselves.”
           </p>
-          <footer className="mt-4 text-sm text-white/60">— Noah, client</footer>
+          <footer className="mt-4 text-sm text-white/60">— Inspirova client</footer>
         </blockquote>
+
+        <div className="mt-12">
+          <Link
+            to="/results"
+            className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-6 py-3 text-sm font-medium text-white backdrop-blur transition-colors hover:bg-white/20"
+          >
+            See the full portfolio <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Team() {
+  const members = [
+    { name: "Max Grachev", role: "Agency Owner", handle: "max.grchv" },
+    { name: "Santiago", role: "Co-founder", handle: "santago.inspirova" },
+  ];
+  return (
+    <section id="team" className="bg-gradient-soft py-24 md:py-32">
+      <div className="mx-auto max-w-6xl px-6">
+        <div className="max-w-2xl">
+          <div className="text-xs font-semibold uppercase tracking-widest text-primary">The team</div>
+          <h2 className="mt-3 text-4xl font-semibold tracking-tight md:text-5xl">
+            Operators behind <span className="text-gradient-brand">Inspirova.</span>
+          </h2>
+          <p className="mt-4 text-lg text-muted-foreground">
+            A small team obsessed with building systems that move real numbers for real brands.
+          </p>
+        </div>
+        <div className="mt-14 grid gap-6 md:grid-cols-2">
+          {members.map((m) => (
+            <a
+              key={m.handle}
+              href={`https://instagram.com/${m.handle}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center justify-between rounded-2xl border border-border bg-card p-8 shadow-card transition-all hover:-translate-y-1 hover:shadow-glow"
+            >
+              <div>
+                <div className="text-xl font-semibold tracking-tight">{m.name}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{m.role}</div>
+                <div className="mt-3 text-sm font-medium text-primary">@{m.handle}</div>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-brand text-white shadow-glow">
+                <Instagram className="h-5 w-5" />
+              </div>
+            </a>
+          ))}
+        </div>
       </div>
     </section>
   );
