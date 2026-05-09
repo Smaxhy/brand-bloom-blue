@@ -243,7 +243,7 @@ function Results() {
 
 function Team() {
   const members = [
-    { name: "Max Grachev", role: "Agency Owner", handle: "max.grchv" },
+    { name: "Max Grachev", role: "Agency Owner / Co-Founder", handle: "max.grchv" },
     { name: "Santiago", role: "Founder", handle: "santago.inspirova" },
   ];
   return (
