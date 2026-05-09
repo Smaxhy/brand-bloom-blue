@@ -289,7 +289,7 @@ function Contact() {
       <div className="mx-auto max-w-3xl px-6 text-center">
         <div className="text-xs font-semibold uppercase tracking-widest text-primary">Get in touch</div>
         <h2 className="mt-3 text-4xl font-semibold tracking-tight md:text-6xl">
-          Ready to <span className="text-gradient-brand">scale?</span>
+          Start with us <span className="text-gradient-brand">today.</span>
         </h2>
         <p className="mx-auto mt-6 max-w-xl text-lg text-muted-foreground">
           Tell us about your brand. We'll come back with a plan tailored to where you are and where you want
