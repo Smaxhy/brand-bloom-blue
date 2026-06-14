@@ -70,8 +70,7 @@ function HomePage() {
       title="Inspirova"
       srcDoc={renderedHtml}
       onLoad={syncIframeHeight}
-      className="block w-full border-0"
-      style={{ height: "7800px" }}
+      className="block h-screen w-full border-0"
       sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
     />
   );
