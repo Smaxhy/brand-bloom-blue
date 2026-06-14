@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import siteHtml from "../inspirova.html?raw";
 import logo from "@/assets/inspirova-logo.png";
 
@@ -13,7 +14,30 @@ export const Route = createFileRoute("/")({
 });
 
 function HomePage() {
-  const renderedHtml = siteHtml.replaceAll("__LOGO__", logo);
+  const navigate = useNavigate({ from: "/" });
+  const renderedHtml = siteHtml.replaceAll("__LOGO__", logo).replace(
+    "</body>",
+    `<script>
+      document.querySelectorAll('a[href="/results"]').forEach(function(link) {
+        link.addEventListener('click', function(event) {
+          event.preventDefault();
+          window.parent.postMessage({ type: 'inspirova:navigate', path: '/results' }, '*');
+        });
+      });
+    </script></body>`,
+  );
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === "inspirova:navigate" && event.data.path === "/results") {
+        navigate({ to: "/results" });
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [navigate]);
+
   return (
     <iframe
       title="Inspirova"
