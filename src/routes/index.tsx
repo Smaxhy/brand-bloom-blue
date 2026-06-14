@@ -19,7 +19,7 @@ function HomePage() {
       title="Inspirova"
       srcDoc={renderedHtml}
       className="block h-screen w-full border-0"
-      sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+      sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
     />
   );
 }
