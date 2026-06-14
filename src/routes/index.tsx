@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import siteHtml from "../inspirova.html?raw";
+import logo from "@/assets/inspirova-logo.png";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
@@ -12,10 +13,11 @@ export const Route = createFileRoute("/")({
 });
 
 function HomePage() {
+  const renderedHtml = siteHtml.replaceAll("__LOGO__", logo);
   return (
     <iframe
       title="Inspirova"
-      srcDoc={siteHtml}
+      srcDoc={renderedHtml}
       className="block h-screen w-full border-0"
       sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
     />
