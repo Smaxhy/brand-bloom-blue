@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, Bot, ChartNoAxesCombined, Globe2, Instagram, Mail, Megaphone, Play, ShoppingBag, Sparkles, Store, Video } from "lucide-react";
+import { useEffect } from "react";
 import logo from "@/assets/inspirova-logo.png";
 
 export const Route = createFileRoute("/")({
@@ -36,7 +37,7 @@ function Nav() {
 }
 
 function Hero() {
-  return <section id="top" className="relative overflow-hidden px-5 pb-20 pt-32 md:px-8 md:pb-28 md:pt-44"><div className="hero-orb hero-orb-one" aria-hidden="true" /><div className="hero-orb hero-orb-two" aria-hidden="true" /><div className="mx-auto grid max-w-7xl items-center gap-16 lg:grid-cols-[1.08fr_.92fr]"><div><div className="eyebrow"><span /> Independent growth agency</div><h1 className="mt-7 max-w-4xl font-display text-6xl font-extrabold leading-[.92] tracking-[-.045em] sm:text-7xl lg:text-[6.3rem]">We make brands <span className="text-gradient-warm">impossible to ignore.</span></h1><p className="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground md:text-xl">Strategy, creative and technology built around one goal: growth you can measure.</p><div className="mt-9 flex flex-wrap gap-3"><a href="#contact" className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3.5 font-semibold text-primary-foreground shadow-brand transition-transform hover:-translate-y-0.5">Start a project <ArrowRight className="h-4 w-4" /></a><Link to="/results" className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-6 py-3.5 font-semibold transition-colors hover:bg-secondary"><Play className="h-4 w-4 text-primary" /> See our results</Link></div><div className="mt-14 flex gap-9 border-t border-border pt-7 sm:gap-14">{[["30+", "Brands helped"], ["28×", "Average ROAS"], ["$293K", "Generated in Q1"]].map(([value, label]) => <div key={label}><div className="font-display text-2xl font-bold md:text-3xl">{value}</div><div className="mt-1 text-[10px] font-semibold uppercase tracking-[.14em] text-muted-foreground">{label}</div></div>)}</div></div><div className="growth-panel"><div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[.15em] text-muted-foreground"><span>Growth snapshot · 2026</span><span className="flex items-center gap-2 text-primary"><i className="h-2 w-2 rounded-full bg-primary" /> Live</span></div><svg viewBox="0 0 500 300" className="mt-8 w-full" role="img" aria-label="Upward growth chart"><defs><linearGradient id="line" x1="0" y1="0" x2="1" y2="0"><stop stopColor="var(--brand-violet)" /><stop offset="1" stopColor="var(--brand-coral)" /></linearGradient><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop stopColor="var(--brand-violet)" stopOpacity=".22" /><stop offset="1" stopColor="var(--brand-violet)" stopOpacity="0" /></linearGradient></defs><path d="M10 264 C80 250 115 232 165 212 C225 187 265 170 310 126 C360 80 400 78 490 22 L490 280 L10 280Z" fill="url(#area)" /><path d="M10 264 C80 250 115 232 165 212 C225 187 265 170 310 126 C360 80 400 78 490 22" fill="none" stroke="url(#line)" strokeWidth="5" strokeLinecap="round" /></svg><div className="flex items-end justify-between border-t border-border pt-5"><div><span className="metric-label">Q4 holiday peak</span><strong className="mt-1 block font-display text-xl">$191.2K</strong></div><ArrowRight className="mb-2 h-5 w-5 text-primary" /><div className="text-right"><span className="metric-label">Q1 slow season</span><strong className="mt-1 block font-display text-xl">$293.9K</strong></div></div></div></div></section>;
+  return <section id="top" className="relative overflow-hidden px-5 pb-20 pt-32 md:px-8 md:pb-28 md:pt-44"><div className="hero-orb hero-orb-one" aria-hidden="true" /><div className="hero-orb hero-orb-two" aria-hidden="true" /><div className="mx-auto grid max-w-7xl items-center gap-16 lg:grid-cols-[1.08fr_.92fr]"><div><div className="eyebrow hero-enter"><span /> Independent growth agency</div><h1 className="mt-7 max-w-4xl font-display text-6xl font-extrabold leading-[.92] tracking-[-.045em] sm:text-7xl lg:text-[6.3rem]"><span className="reveal-line"><span>We make brands</span></span><span className="reveal-line"><span className="text-gradient-warm">impossible to ignore.</span></span></h1><p className="hero-enter hero-delay-3 mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground md:text-xl">Strategy, creative and technology built around one goal: growth you can measure.</p><div className="hero-enter hero-delay-4 mt-9 flex flex-wrap gap-3"><a href="#contact" className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3.5 font-semibold text-primary-foreground shadow-brand transition-transform hover:-translate-y-0.5">Start a project <ArrowRight className="h-4 w-4" /></a><Link to="/results" className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-6 py-3.5 font-semibold transition-colors hover:bg-secondary"><Play className="h-4 w-4 text-primary" /> See our results</Link></div><div className="hero-enter hero-delay-5 mt-14 flex gap-9 border-t border-border pt-7 sm:gap-14">{[[30, "+", "Brands helped", ""], [28, "×", "Average ROAS", ""], [293, "K", "Generated in Q1", "$"]].map(([value, suffix, label, prefix]) => <div key={label}><div className="count-up font-display text-2xl font-bold md:text-3xl" data-count={value} data-prefix={prefix} data-suffix={suffix}>0</div><div className="mt-1 text-[10px] font-semibold uppercase tracking-[.14em] text-muted-foreground">{label}</div></div>)}</div></div><div className="growth-panel chart-reveal"><div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[.15em] text-muted-foreground"><span>Growth snapshot · 2026</span><span className="flex items-center gap-2 text-primary"><i className="live-dot h-2 w-2 rounded-full bg-primary" /> Live</span></div><svg viewBox="0 0 500 300" className="mt-8 w-full" role="img" aria-label="Upward growth chart"><defs><linearGradient id="line" x1="0" y1="0" x2="1" y2="0"><stop stopColor="var(--brand-violet)" /><stop offset="1" stopColor="var(--brand-coral)" /></linearGradient><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop stopColor="var(--brand-violet)" stopOpacity=".22" /><stop offset="1" stopColor="var(--brand-violet)" stopOpacity="0" /></linearGradient></defs><path className="chart-area" d="M10 264 C80 250 115 232 165 212 C225 187 265 170 310 126 C360 80 400 78 490 22 L490 280 L10 280Z" fill="url(#area)" /><path className="chart-line" pathLength="1" d="M10 264 C80 250 115 232 165 212 C225 187 265 170 310 126 C360 80 400 78 490 22" fill="none" stroke="url(#line)" strokeWidth="5" strokeLinecap="round" /></svg><div className="flex items-end justify-between border-t border-border pt-5"><div><span className="metric-label">Q4 holiday peak</span><strong className="mt-1 block font-display text-xl">$191.2K</strong></div><ArrowRight className="mb-2 h-5 w-5 text-primary" /><div className="text-right"><span className="metric-label">Q1 slow season</span><strong className="mt-1 block font-display text-xl">$293.9K</strong></div></div></div></div><div className="ticker mt-20 border-y border-border py-5" aria-hidden="true"><div className="ticker-track">{[0, 1].map((copy) => <div className="flex shrink-0 items-center gap-10" key={copy}>{["Paid media", "Websites", "AI automation", "Email & SMS", "Content", "Growth strategy"].map((item) => <span className="flex items-center gap-10 font-display text-lg font-semibold text-muted-foreground" key={`${copy}-${item}`}>{item}<i className="text-xs not-italic text-primary">✦</i></span>)}</div>)}</div></div></section>;
 }
 
 function Services() {
@@ -61,5 +62,37 @@ function Contact() {
 }
 
 function HomePage() {
-  return <main className="min-h-screen overflow-hidden"><Nav /><Hero /><Services /><WhoWeHelp /><Results /><Team /><Contact /><footer className="border-t border-border py-10"><div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-5 px-5 text-sm text-muted-foreground md:flex-row md:px-8"><Logo compact /><span>© {new Date().getFullYear()} Inspirova Marketing</span><span className="font-mono text-xs uppercase tracking-[.14em]">Built to market.</span></div></footer></main>;
+  useEffect(() => {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const revealItems = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
+    const counts = Array.from(document.querySelectorAll<HTMLElement>(".count-up"));
+    if (reduceMotion) {
+      revealItems.forEach((item) => item.classList.add("is-visible"));
+      counts.forEach((item) => { item.textContent = `${item.dataset.prefix ?? ""}${item.dataset.count ?? "0"}${item.dataset.suffix ?? ""}`; });
+      return;
+    }
+    const revealObserver = new IntersectionObserver((entries) => entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      (entry.target as HTMLElement).classList.add("is-visible");
+      revealObserver.unobserve(entry.target);
+    }), { threshold: 0.16, rootMargin: "0px 0px -6% 0px" });
+    revealItems.forEach((item) => revealObserver.observe(item));
+    const countObserver = new IntersectionObserver((entries) => entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      const item = entry.target as HTMLElement;
+      const target = Number(item.dataset.count ?? 0);
+      const start = performance.now();
+      const draw = (now: number) => {
+        const progress = Math.min((now - start) / 1400, 1);
+        const value = Math.round(target * (1 - Math.pow(1 - progress, 3)));
+        item.textContent = `${item.dataset.prefix ?? ""}${value}${item.dataset.suffix ?? ""}`;
+        if (progress < 1) requestAnimationFrame(draw);
+      };
+      requestAnimationFrame(draw);
+      countObserver.unobserve(item);
+    }), { threshold: 0.6 });
+    counts.forEach((item) => countObserver.observe(item));
+    return () => { revealObserver.disconnect(); countObserver.disconnect(); };
+  }, []);
+  return <main className="min-h-screen overflow-hidden"><Nav /><Hero /><div data-reveal><Services /></div><div data-reveal><WhoWeHelp /></div><div data-reveal><Results /></div><div data-reveal><Team /></div><div data-reveal><Contact /></div><footer className="border-t border-border py-10"><div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-5 px-5 text-sm text-muted-foreground md:flex-row md:px-8"><Logo compact /><span>© {new Date().getFullYear()} Inspirova Marketing</span><span className="font-mono text-xs uppercase tracking-[.14em]">Built to market.</span></div></footer></main>;
 }
