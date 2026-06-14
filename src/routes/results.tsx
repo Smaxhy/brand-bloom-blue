@@ -142,16 +142,9 @@ function ResultsPage() {
           }}
         />
         <div className="mx-auto max-w-6xl px-6 text-center">
-          <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-border bg-background/60 px-4 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur">
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            Portfolio · 2026
-          </div>
           <h1 className="mt-6 text-balance text-5xl font-semibold tracking-tight md:text-7xl">
-            Real brands. <span className="text-gradient-brand">Real numbers.</span>
+            Real businesses <span className="text-gradient-brand">real numbers.</span>
           </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg text-muted-foreground">
-            A snapshot of what our system has produced for clients across e-commerce, DTC and lead-gen.
-          </p>
 
           <div className="mx-auto mt-16 grid max-w-4xl grid-cols-2 gap-4 md:grid-cols-4">
             {headlineStats.map((s) => (
