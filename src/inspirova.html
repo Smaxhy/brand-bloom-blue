@@ -96,7 +96,7 @@
   header.scrolled{background:rgba(255,255,255,.78);backdrop-filter:blur(16px) saturate(1.2);border-bottom:1px solid var(--line)}
   .nav{display:flex;align-items:center;justify-content:space-between;height:70px}
   .brand{display:flex;align-items:center;gap:11px;font-family:var(--display);font-weight:700;font-size:1.18rem;letter-spacing:-.01em}
-  .logo-mark{width:34px;height:34px;flex:none}
+  .logo-mark{width:34px;height:34px;flex:none;border-radius:9px;object-fit:cover}
   .nav-links{display:flex;align-items:center;gap:30px}
   .nav-links a{font-size:.92rem;color:var(--muted);transition:color .2s;position:relative}
   .nav-links a:hover{color:var(--mist)}
@@ -294,25 +294,19 @@
   <div class="wrap">
     <nav class="nav">
       <a class="brand" href="#top" aria-label="Inspirova home">
-        <svg class="logo-mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-          <rect x="1" y="1" width="38" height="38" rx="11" stroke="url(#lg)" stroke-width="1.5"/>
-          <path d="M11 28V12M11 12l9 16 9-16v16" stroke="url(#lg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-          <defs><linearGradient id="lg" x1="0" y1="0" x2="40" y2="40">
-            <stop stop-color="#B79CFF"/><stop offset="1" stop-color="#FF6B4A"/>
-          </linearGradient></defs>
-        </svg>
+        <img class="logo-mark" src="__LOGO__" alt="Inspirova logo">
         Inspirova
       </a>
       <div class="nav-links" id="navlinks">
         <a href="#services">Services</a>
-        <a href="#focus">Specializations</a>
-        <a href="#results">Results</a>
+        <a href="#focus">Our Audience</a>
+        <a href="/results" target="_top">Results</a>
         <a href="#team">Team</a>
-        <a href="#contact">Contact</a>
+        <a href="https://instagram.com/max.grchv" target="_blank" rel="noopener noreferrer">Contact</a>
       </div>
       <div class="nav-cta">
         <a href="#services" class="btn btn-ghost">What we do</a>
-        <a href="#contact" class="btn btn-primary">Work with us <span class="arr">→</span></a>
+        <a href="https://instagram.com/max.grchv" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Work with us <span class="arr">→</span></a>
         <button class="menu-btn" id="menuBtn" aria-label="Toggle menu" aria-expanded="false">
           <span></span><span></span><span></span>
         </button>
@@ -334,15 +328,14 @@
           <span class="reveal-line"><span>system that</span></span>
           <span class="reveal-line"><span class="grad">scales brands.</span></span>
         </h1>
-        <p class="sub">Paid ads, email &amp; SMS, websites, AI automation, social and conversion optimization — run end-to-end as one compounding growth engine.</p>
         <div class="hero-cta">
-          <a href="#contact" class="btn btn-primary">Start today <span class="arr">→</span></a>
+          <a href="https://instagram.com/max.grchv" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Start today <span class="arr">→</span></a>
           <a href="#services" class="btn btn-ghost">See the system</a>
         </div>
         <div class="stat-row">
           <div class="stat"><div class="num count" data-count="30" data-suffix="+">0</div><div class="lbl">Businesses helped</div></div>
           <div class="stat"><div class="num count" data-count="28" data-suffix="×">0</div><div class="lbl">Average ROAS</div></div>
-          <div class="stat"><div class="num count" data-count="293" data-prefix="$" data-suffix="K">0</div><div class="lbl">Generated in Q1</div></div>
+          <div class="stat"><div class="num count" data-count="293" data-prefix="$" data-suffix="K">0</div><div class="lbl">E-commerce · 2026</div></div>
         </div>
       </div>
 
@@ -391,8 +384,7 @@
   <div class="wrap">
     <div class="sec-head ro">
       <span class="eyebrow">Core Services</span>
-      <h2 class="title">Nine levers.<br>One compounding system.</h2>
-      <p class="lede">Every service plugs into the same engine — built so each part makes the others perform better. You can start with one or run the whole stack.</p>
+      <h2 class="title">Services we provide.</h2>
     </div>
 
     <div class="svc-grid">
