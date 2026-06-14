@@ -268,11 +268,52 @@
     .svc-grid{grid-template-columns:repeat(2,1fr)}
   }
   @media(max-width:720px){
+    .wrap{padding:0 18px}
+    .nav{height:64px}
+    .brand{gap:8px;font-size:1.05rem}
+    .logo-mark{width:31px;height:31px}
     .nav-links,.nav-cta .btn-ghost{display:none}
     .menu-btn{display:flex;flex-direction:column;justify-content:center}
-    .nav-links.open{display:flex;flex-direction:column;position:absolute;top:70px;left:0;right:0;background:rgba(255,255,255,.97);backdrop-filter:blur(16px);border-bottom:1px solid var(--line);padding:22px 24px;gap:18px}
+    .nav-links.open{display:flex;flex-direction:column;position:absolute;top:64px;left:0;right:0;background:rgba(255,255,255,.97);backdrop-filter:blur(16px);border-bottom:1px solid var(--line);padding:22px 18px;gap:18px}
+    .nav-links.open a{font-size:1rem;padding:4px 0}
+    .nav-cta{gap:8px}
+    .nav-cta .btn-primary{padding:10px 14px;font-size:.82rem}
+    .hero{min-height:auto;padding:104px 0 42px}
+    .hero-grid{gap:30px}
+    .hero h1{font-size:clamp(2.7rem,14vw,4rem)}
+    .hero p.sub{margin-top:20px}
+    .hero-cta{margin-top:26px}
+    .stat-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:36px}
+    .stat{min-width:0}
+    .stat .lbl{font-size:9px;line-height:1.4;letter-spacing:.08em}
+    .console{padding:16px;border-radius:18px}
+    .console-foot{font-size:10px;gap:8px}
+    .pill-live{font-size:9px}
+    .sec{padding:72px 0}
+    .svc-grid,.spec-grid,.team-grid{margin-top:36px}
     .svc-grid,.spec-grid,.team-grid,.res-metrics{grid-template-columns:1fr}
-    .stat-row{gap:24px}
+    .svc,.spec{padding:22px 20px 24px}
+    .results{border-radius:20px;padding:24px 18px}
+    .bar-row .bar-top{gap:12px;font-size:10px}
+    .bar-row .bar-top span{min-width:0}
+    .bar-row .bar-top b{flex:none}
+    .member{padding:22px 18px;gap:16px}
+    .contact{border-radius:20px;padding:42px 18px}
+    .contact .cta{display:grid;grid-template-columns:1fr;gap:10px;margin-top:28px}
+    .contact .btn{justify-content:center;width:100%}
+    footer{padding:34px 0 40px}
+    .foot{align-items:flex-start;flex-direction:column}
+  }
+  @media(max-width:420px){
+    .nav-cta .btn-primary{display:none}
+    .hero h1{font-size:2.65rem}
+    .hero-cta{display:grid;grid-template-columns:1fr}
+    .hero-cta .btn{justify-content:center;width:100%}
+    .stat-row{grid-template-columns:1fr 1fr}
+    .stat:last-child{grid-column:1/-1}
+    .console-foot{display:grid;grid-template-columns:1fr 1fr}
+    .console-foot .pill-live{grid-column:1/-1;grid-row:1;justify-self:center}
+    .console-foot span:last-child{text-align:right!important}
   }
 
   @media(prefers-reduced-motion:reduce){
@@ -302,11 +343,11 @@
         <a href="#focus">Our Audience</a>
         <a href="/results" target="_top">Results</a>
         <a href="#team">Team</a>
-        <a href="https://instagram.com/max.grchv" target="_blank" rel="noopener noreferrer">Contact</a>
+        <a href="#contact" onclick="document.getElementById('contact').scrollIntoView({behavior:'smooth'});return false">Contact</a>
       </div>
       <div class="nav-cta">
         <a href="#services" class="btn btn-ghost">What we do</a>
-        <a href="https://instagram.com/max.grchv" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Work with us <span class="arr">→</span></a>
+        <a href="#contact" onclick="document.getElementById('contact').scrollIntoView({behavior:'smooth'});return false" class="btn btn-primary">Work with us <span class="arr">→</span></a>
         <button class="menu-btn" id="menuBtn" aria-label="Toggle menu" aria-expanded="false">
           <span></span><span></span><span></span>
         </button>
@@ -597,7 +638,19 @@
     var open = navlinks.classList.toggle('open');
     menuBtn.setAttribute('aria-expanded', open);
   });
-  navlinks.addEventListener('click', function(e){ if(e.target.tagName==='A') navlinks.classList.remove('open'); });
+  document.querySelectorAll('a[href="#contact"]').forEach(function(link){
+    link.addEventListener('click', function(e){
+      e.preventDefault();
+      var contact = document.getElementById('contact');
+      if(contact) contact.scrollIntoView({behavior:reduce?'auto':'smooth', block:'start'});
+    });
+  });
+  navlinks.addEventListener('click', function(e){
+    if(e.target.tagName==='A'){
+      navlinks.classList.remove('open');
+      menuBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
 
   /* hero headline reveal on load */
   window.addEventListener('load', function(){
