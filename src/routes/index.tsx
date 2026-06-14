@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import siteHtml from "../inspirova.html?raw";
 import logo from "@/assets/inspirova-logo.png";
 
@@ -15,13 +15,26 @@ export const Route = createFileRoute("/")({
 
 function HomePage() {
   const navigate = useNavigate({ from: "/" });
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const renderedHtml = siteHtml.replaceAll("__LOGO__", logo).replace(
     "</body>",
     `<script>
+      function reportHeight() {
+        window.parent.postMessage({ type: 'inspirova:height', height: document.documentElement.scrollHeight }, '*');
+      }
+      reportHeight();
+      window.addEventListener('load', reportHeight);
       document.querySelectorAll('a[href="/results"]').forEach(function(link) {
         link.addEventListener('click', function(event) {
           event.preventDefault();
           window.parent.postMessage({ type: 'inspirova:navigate', path: '/results' }, '*');
+        });
+      });
+      document.querySelectorAll('a[href="#contact"]').forEach(function(link) {
+        link.addEventListener('click', function(event) {
+          event.preventDefault();
+          var target = document.getElementById('contact');
+          if (target) window.parent.postMessage({ type: 'inspirova:scroll', top: target.offsetTop }, '*');
         });
       });
     </script></body>`,
@@ -32,6 +45,13 @@ function HomePage() {
       if (event.data?.type === "inspirova:navigate" && event.data.path === "/results") {
         navigate({ to: "/results" });
       }
+      if (event.data?.type === "inspirova:height" && iframeRef.current) {
+        iframeRef.current.style.height = `${event.data.height}px`;
+      }
+      if (event.data?.type === "inspirova:scroll" && iframeRef.current) {
+        const iframeTop = iframeRef.current.getBoundingClientRect().top + window.scrollY;
+        window.scrollTo({ top: iframeTop + event.data.top, behavior: "smooth" });
+      }
     };
 
     window.addEventListener("message", handleMessage);
@@ -40,9 +60,10 @@ function HomePage() {
 
   return (
     <iframe
+      ref={iframeRef}
       title="Inspirova"
       srcDoc={renderedHtml}
-      className="block h-screen w-full border-0"
+      className="block min-h-screen w-full border-0"
       sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
     />
   );
