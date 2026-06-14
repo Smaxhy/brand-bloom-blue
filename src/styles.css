@@ -50,6 +50,28 @@
   .hero-orb { position: absolute; z-index: -1; border-radius: 999px; pointer-events: none; }
   .hero-orb-one { top: 5rem; right: -12rem; width: 36rem; height: 36rem; background: radial-gradient(circle, color-mix(in oklab, var(--brand-violet) 13%, transparent), transparent 68%); }
   .hero-orb-two { bottom: -10rem; left: -12rem; width: 30rem; height: 30rem; background: radial-gradient(circle, color-mix(in oklab, var(--brand-coral) 9%, transparent), transparent 68%); }
+  .reveal-line { display: block; overflow: hidden; padding-bottom: .04em; }
+  .reveal-line > span { display: block; animation: headline-reveal .9s cubic-bezier(.22,.61,.36,1) both; }
+  .reveal-line:nth-child(2) > span { animation-delay: .12s; }
+  .hero-enter { animation: hero-enter .7s cubic-bezier(.22,.61,.36,1) both; }
+  .hero-delay-3 { animation-delay: .3s; } .hero-delay-4 { animation-delay: .42s; } .hero-delay-5 { animation-delay: .54s; }
+  .chart-reveal { animation: panel-enter .9s cubic-bezier(.22,.61,.36,1) .18s both; }
+  .chart-line { stroke-dasharray: 1; stroke-dashoffset: 1; animation: chart-draw 1.8s cubic-bezier(.22,.61,.36,1) .55s forwards; }
+  .chart-area { opacity: 0; animation: area-enter 1s ease 1s forwards; }
+  .live-dot { animation: live-pulse 2s infinite; }
+  .ticker { overflow: hidden; mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent); }
+  .ticker-track { display: flex; width: max-content; gap: 2.5rem; animation: ticker-scroll 28s linear infinite; }
+  .ticker:hover .ticker-track { animation-play-state: paused; }
+  [data-reveal] { opacity: 0; transform: translateY(32px); transition: opacity .8s cubic-bezier(.22,.61,.36,1), transform .8s cubic-bezier(.22,.61,.36,1); }
+  [data-reveal].is-visible { opacity: 1; transform: none; }
 }
 
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+@keyframes headline-reveal { from { opacity: 0; transform: translateY(110%); } to { opacity: 1; transform: none; } }
+@keyframes hero-enter { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes panel-enter { from { opacity: 0; transform: translateY(24px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes chart-draw { to { stroke-dashoffset: 0; } }
+@keyframes area-enter { to { opacity: 1; } }
+@keyframes live-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 50%, transparent); } 70% { box-shadow: 0 0 0 9px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+@keyframes ticker-scroll { to { transform: translateX(calc(-50% - 1.25rem)); } }
+
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } [data-reveal] { opacity: 1; transform: none; } }
