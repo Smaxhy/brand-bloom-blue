@@ -58,11 +58,18 @@ function HomePage() {
     return () => window.removeEventListener("message", handleMessage);
   }, [navigate]);
 
+  const syncIframeHeight = () => {
+    const iframe = iframeRef.current;
+    const documentHeight = iframe?.contentDocument?.documentElement.scrollHeight;
+    if (iframe && documentHeight) iframe.style.height = `${documentHeight}px`;
+  };
+
   return (
     <iframe
       ref={iframeRef}
       title="Inspirova"
       srcDoc={renderedHtml}
+      onLoad={syncIframeHeight}
       className="block min-h-screen w-full border-0"
       sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
     />
