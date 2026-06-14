@@ -96,7 +96,7 @@
   header.scrolled{background:rgba(255,255,255,.78);backdrop-filter:blur(16px) saturate(1.2);border-bottom:1px solid var(--line)}
   .nav{display:flex;align-items:center;justify-content:space-between;height:70px}
   .brand{display:flex;align-items:center;gap:11px;font-family:var(--display);font-weight:700;font-size:1.18rem;letter-spacing:-.01em}
-  .logo-mark{width:34px;height:34px;flex:none}
+  .logo-mark{width:34px;height:34px;flex:none;border-radius:9px;object-fit:cover}
   .nav-links{display:flex;align-items:center;gap:30px}
   .nav-links a{font-size:.92rem;color:var(--muted);transition:color .2s;position:relative}
   .nav-links a:hover{color:var(--mist)}
@@ -294,25 +294,19 @@
   <div class="wrap">
     <nav class="nav">
       <a class="brand" href="#top" aria-label="Inspirova home">
-        <svg class="logo-mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-          <rect x="1" y="1" width="38" height="38" rx="11" stroke="url(#lg)" stroke-width="1.5"/>
-          <path d="M11 28V12M11 12l9 16 9-16v16" stroke="url(#lg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-          <defs><linearGradient id="lg" x1="0" y1="0" x2="40" y2="40">
-            <stop stop-color="#B79CFF"/><stop offset="1" stop-color="#FF6B4A"/>
-          </linearGradient></defs>
-        </svg>
+        <img class="logo-mark" src="__LOGO__" alt="Inspirova logo">
         Inspirova
       </a>
       <div class="nav-links" id="navlinks">
         <a href="#services">Services</a>
-        <a href="#focus">Specializations</a>
-        <a href="#results">Results</a>
+        <a href="#focus">Our Audience</a>
+        <a href="/results" target="_top">Results</a>
         <a href="#team">Team</a>
-        <a href="#contact">Contact</a>
+        <a href="https://instagram.com/max.grchv" target="_blank" rel="noopener noreferrer">Contact</a>
       </div>
       <div class="nav-cta">
         <a href="#services" class="btn btn-ghost">What we do</a>
-        <a href="#contact" class="btn btn-primary">Work with us <span class="arr">→</span></a>
+        <a href="https://instagram.com/max.grchv" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Work with us <span class="arr">→</span></a>
         <button class="menu-btn" id="menuBtn" aria-label="Toggle menu" aria-expanded="false">
           <span></span><span></span><span></span>
         </button>
@@ -334,15 +328,14 @@
           <span class="reveal-line"><span>system that</span></span>
           <span class="reveal-line"><span class="grad">scales brands.</span></span>
         </h1>
-        <p class="sub">Paid ads, email &amp; SMS, websites, AI automation, social and conversion optimization — run end-to-end as one compounding growth engine.</p>
         <div class="hero-cta">
-          <a href="#contact" class="btn btn-primary">Start today <span class="arr">→</span></a>
+          <a href="https://instagram.com/max.grchv" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Start today <span class="arr">→</span></a>
           <a href="#services" class="btn btn-ghost">See the system</a>
         </div>
         <div class="stat-row">
           <div class="stat"><div class="num count" data-count="30" data-suffix="+">0</div><div class="lbl">Businesses helped</div></div>
           <div class="stat"><div class="num count" data-count="28" data-suffix="×">0</div><div class="lbl">Average ROAS</div></div>
-          <div class="stat"><div class="num count" data-count="293" data-prefix="$" data-suffix="K">0</div><div class="lbl">Generated in Q1</div></div>
+          <div class="stat"><div class="num count" data-count="293" data-prefix="$" data-suffix="K">0</div><div class="lbl">E-commerce · 2026</div></div>
         </div>
       </div>
 
@@ -391,8 +384,7 @@
   <div class="wrap">
     <div class="sec-head ro">
       <span class="eyebrow">Core Services</span>
-      <h2 class="title">Nine levers.<br>One compounding system.</h2>
-      <p class="lede">Every service plugs into the same engine — built so each part makes the others perform better. You can start with one or run the whole stack.</p>
+      <h2 class="title">Services we provide.</h2>
     </div>
 
     <div class="svc-grid">
@@ -401,63 +393,63 @@
         <div class="svc-no">01</div>
         <svg class="svc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a4 4 0 0 1 4 4v1a4 4 0 0 1 0 8v1a4 4 0 1 1-8 0v-1a4 4 0 0 1 0-8V6a4 4 0 0 1 4-4Z"/><path d="M12 8v8M9 12h6"/></svg>
         <h3>AI-Powered Business Automation</h3>
-        <p>Custom AI agents, workflow automations and chatbots that handle leads, support and operations around the clock.</p>
+        <p>AI agents and automations for leads, support and operations.</p>
       </article>
       <!-- 02 -->
       <article class="svc ro d2">
         <div class="svc-no">02</div>
         <svg class="svc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
         <h3>Email Marketing &amp; Customer Nurture</h3>
-        <p>FOMO sequences, discount funnels and re-engagement flows that turn your list into a predictable revenue channel.</p>
+        <p>Email flows that turn your audience into repeat customers.</p>
       </article>
       <!-- 03 -->
       <article class="svc ro d3">
         <div class="svc-no">03</div>
         <svg class="svc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 9h18M8 21h8M12 18v3"/></svg>
         <h3>Custom Website Design &amp; Development</h3>
-        <p>Conversion-focused builds and storefronts — fast, on-brand and engineered around the action you want visitors to take.</p>
+        <p>Fast, on-brand websites built to convert.</p>
       </article>
       <!-- 04 -->
       <article class="svc ro d1">
         <div class="svc-no">04</div>
         <svg class="svc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 11 18-8-8 18-2.5-7.5L3 11Z"/></svg>
         <h3>Paid Advertising &amp; Digital Marketing</h3>
-        <p>Pixel setup, audience research, retargeting and ROAS-driven Meta &amp; Google campaigns built to scale spend profitably.</p>
+        <p>Meta and Google campaigns built for profitable growth.</p>
       </article>
       <!-- 05 -->
       <article class="svc ro d2">
         <div class="svc-no">05</div>
         <svg class="svc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19 12a7 7 0 1 0-7 7M19 12h2M19 12l-2.5-2.5M19 12l-2.5 2.5"/></svg>
         <h3>Social Media Management &amp; Growth</h3>
-        <p>Content systems, short-form video and community building that grow attention and convert it into followers and buyers.</p>
+        <p>Content and social systems that grow attention and sales.</p>
       </article>
       <!-- 06 -->
       <article class="svc ro d3">
         <div class="svc-no">06</div>
         <svg class="svc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M9 6h6M12 18h.01"/></svg>
         <h3>SMS Marketing Automation</h3>
-        <p>Compliant, high-open-rate text flows for launches, abandoned carts and VIP offers — revenue straight to the pocket.</p>
+        <p>SMS flows for launches, abandoned carts and VIP offers.</p>
       </article>
       <!-- 07 -->
       <article class="svc ro d1">
         <div class="svc-no">07</div>
         <svg class="svc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 14l3-4 3 3 4-6"/></svg>
         <h3>Analytics, Reporting &amp; CRO</h3>
-        <p>Clean tracking, dashboards you actually read, and continuous conversion-rate testing so every visit works harder.</p>
+        <p>Clear reporting and testing that improve conversion.</p>
       </article>
       <!-- 08 -->
       <article class="svc ro d2">
         <div class="svc-no">08</div>
         <svg class="svc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16l-3 7 3 7H4l3-7-3-7Z"/></svg>
         <h3>Webflow Design &amp; Development</h3>
-        <p>Pixel-perfect, CMS-driven Webflow sites your team can edit — design and dev handled, no developer bottleneck.</p>
+        <p>Polished Webflow sites your team can easily manage.</p>
       </article>
       <!-- 09 -->
       <article class="svc ro d3">
         <div class="svc-no">09</div>
         <svg class="svc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/><circle cx="19" cy="17" r="2.4"/></svg>
         <h3>CRM Implementation &amp; Management</h3>
-        <p>Pipeline setup, automations and integrations that keep every lead organized and nurtured from first touch to close.</p>
+        <p>Simple pipelines that keep every lead organized.</p>
       </article>
     </div>
   </div>
@@ -467,32 +459,25 @@
 <section class="sec" id="focus">
   <div class="wrap">
     <div class="sec-head ro">
-      <span class="eyebrow">Specializations</span>
-      <h2 class="title">Built deep, not just wide.</h2>
-      <p class="lede">We run the full stack — but these are the verticals where we've built repeatable, proven playbooks.</p>
+      <span class="eyebrow">Our Audience</span>
+      <h2 class="title">Businesses we specialize in.</h2>
     </div>
 
     <div class="spec-grid">
       <article class="spec ro d1">
         <span class="spec-num">01</span>
         <span class="badge">E-commerce</span>
-        <h3>E-commerce Growth &amp; Sales Campaigns</h3>
-        <p>Full-funnel paid, email and SMS systems that scale store revenue profitably — built around AOV, retention and repeat purchase.</p>
-        <div class="meta">Best for DTC &amp; online stores <span aria-hidden="true">→</span></div>
+        <h3>E-commerce &amp; online stores</h3>
       </article>
       <article class="spec ro d2">
         <span class="spec-num">02</span>
         <span class="badge">Local Business</span>
-        <h3>Local Business Lead Generation Systems</h3>
-        <p>Geo-targeted ads, landing pages and follow-up automation that fill the calendar with qualified, ready-to-buy local leads.</p>
-        <div class="meta">Best for service &amp; storefront brands <span aria-hidden="true">→</span></div>
+        <h3>Local &amp; service businesses</h3>
       </article>
       <article class="spec ro d3">
         <span class="spec-num">03</span>
         <span class="badge">Real Estate</span>
-        <h3>Real Estate Lead Gen &amp; Client Acquisition</h3>
-        <p>Buyer and seller lead funnels, nurture sequences and CRM pipelines engineered for agents and teams that want consistent deals.</p>
-        <div class="meta">Best for agents &amp; brokerages <span aria-hidden="true">→</span></div>
+        <h3>Real estate professionals</h3>
       </article>
     </div>
   </div>
@@ -504,6 +489,7 @@
     <div class="sec-head ro">
       <span class="eyebrow">2026 Results So Far</span>
       <h2 class="title">Marketing built to<br>move numbers.</h2>
+      <p class="lede">See the full portfolio and every proof screenshot.</p>
     </div>
 
     <div class="results ro d1" id="results-card">
@@ -531,25 +517,7 @@
         "Lowkey the only people we've met in the scaling industry who are genuinely interested in the best for both sides — and the results speak for themselves."
         <cite>— Inspirova client</cite>
       </blockquote>
-    </div>
-  </div>
-</section>
-
-<!-- ============ ABOUT ============ -->
-<section class="sec" id="about">
-  <div class="wrap">
-    <div class="about-grid">
-      <div class="ro">
-        <span class="eyebrow">How we work</span>
-        <h2 class="title">We run the system end-to-end.</h2>
-        <p class="lede">Inspirova partners with brands ready to treat marketing like the growth engine it actually is. We plug in across every channel and run it as one connected system — so you can stay focused on the product.</p>
-      </div>
-      <ul class="about-list ro d1">
-        <li><span class="k">01</span><span class="v"><b>Audit &amp; map</b><span>We diagnose the funnel, the offer and the data before spending a dollar.</span></span></li>
-        <li><span class="k">02</span><span class="v"><b>Build the engine</b><span>Ads, email, SMS, site and automation set up to feed each other.</span></span></li>
-        <li><span class="k">03</span><span class="v"><b>Scale &amp; compound</b><span>We test, double down on winners and let the system stack returns.</span></span></li>
-        <li><span class="k">04</span><span class="v"><b>Report in plain numbers</b><span>One source of truth. Revenue, ROAS and CAC — no vanity metrics.</span></span></li>
-      </ul>
+      <a href="/results" target="_top" class="btn btn-primary" style="margin-top:34px">View all results &amp; proof <span class="arr">→</span></a>
     </div>
   </div>
 </section>
@@ -603,11 +571,7 @@
   <div class="wrap">
     <div class="foot">
       <a class="brand" href="#top">
-        <svg class="logo-mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-          <rect x="1" y="1" width="38" height="38" rx="11" stroke="url(#lg2)" stroke-width="1.5"/>
-          <path d="M11 28V12M11 12l9 16 9-16v16" stroke="url(#lg2)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-          <defs><linearGradient id="lg2" x1="0" y1="0" x2="40" y2="40"><stop stop-color="#B79CFF"/><stop offset="1" stop-color="#FF6B4A"/></linearGradient></defs>
-        </svg>
+        <img class="logo-mark" src="__LOGO__" alt="Inspirova logo">
         Inspirova
       </a>
       <span class="tag-mono">Built to market.</span>

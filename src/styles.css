@@ -34,6 +34,11 @@
 @utility shadow-brand { box-shadow: var(--shadow-brand); }
 @utility shadow-soft { box-shadow: var(--shadow-soft); }
 @utility bg-brand-gradient { background: linear-gradient(135deg, var(--brand-violet), var(--brand-coral)); }
+@utility bg-gradient-brand { background: linear-gradient(135deg, var(--brand-violet), var(--brand-coral)); }
+@utility bg-gradient-soft { background: linear-gradient(180deg, var(--background), var(--secondary)); }
+@utility text-gradient-brand { background: linear-gradient(110deg, var(--brand-violet), var(--brand-coral)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+@utility shadow-glow { box-shadow: var(--shadow-brand); }
+@utility shadow-card { box-shadow: var(--shadow-soft); }
 
 @layer components {
   .section-space { padding-block: clamp(5.5rem, 10vw, 9rem); }
