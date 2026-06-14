@@ -50,8 +50,7 @@ const caseStudies = [
     tag: "E-commerce · Paid Ads",
     icon: ShoppingBag,
     title: "From flat months to a $35K breakout",
-    body:
-      "Stable, sub-$10K months for nearly a year. Within 60 days of taking over their ads, email and creative system, the brand broke their first $35K month, then $25K the next — now climbing toward $200K.",
+    body: "From sub-$10K months to breaking $35K in 60 days — now climbing toward $200K.",
     metrics: [
       { k: "+27%", v: "Total sales" },
       { k: "+23%", v: "Orders" },
@@ -62,8 +61,7 @@ const caseStudies = [
     tag: "DTC · Meta Ads",
     icon: Megaphone,
     title: "$68K in 1 month from paid alone",
-    body:
-      "$2,420 in ad spend returned $68,135 in tracked conversion value across the account — a 28× blended ROAS with individual campaigns hitting 53× and 57×.",
+    body: "$2.4K ad spend returned $68K in conversion value — 28× blended ROAS.",
     metrics: [
       { k: "28×", v: "Blended ROAS" },
       { k: "$2.4K", v: "Ad spend" },
@@ -74,8 +72,7 @@ const caseStudies = [
     tag: "Lead Gen · Meta Ads",
     icon: Sparkles,
     title: "4,056 leads from a single campaign",
-    body:
-      "Two-pixel split test running emails, sales campaigns and lead-gen creative side-by-side. Top campaign drove 4,056 website leads at scale; combined campaigns delivered 6,657 leads in the test window.",
+    body: "Lead-gen creative at scale. Top campaign drove 4,056 leads; 6,657 total across the test window.",
     metrics: [
       { k: "4,056", v: "Top campaign leads" },
       { k: "15,869", v: "Reach" },
@@ -86,8 +83,7 @@ const caseStudies = [
     tag: "Shopify · Retention",
     icon: TrendingUp,
     title: "2× revenue in 60 days",
-    body:
-      "Restructured retargeting and email flows. Total revenue doubled vs January, conversion rate climbed by 1% and the customer reoccurrence rate now ticks up steadily every month.",
+    body: "Retargeting and email restructured. Revenue doubled, conversion rate climbed, repeat customers growing monthly.",
     metrics: [
       { k: "2×", v: "Revenue vs Jan" },
       { k: "6.91%", v: "Conv. rate" },
@@ -98,8 +94,7 @@ const caseStudies = [
     tag: "Premium Ads",
     icon: Target,
     title: "1,508× return on a hero ad",
-    body:
-      "Single creative achieved a 1,508% return on ad spend with $18.8K in conversion value at a 1.96% click-through rate — built around a hook-first short-form ad framework.",
+    body: "One creative hit 1,508% ROAS, $18.8K value and 1.96% CTR — hook-first short-form framework.",
     metrics: [
       { k: "83×", v: "Purchase ROAS" },
       { k: "1.96%", v: "CTR" },
@@ -110,8 +105,7 @@ const caseStudies = [
     tag: "Email Marketing",
     icon: Mail,
     title: "Always-on revenue from the list",
-    body:
-      "Welcome flows, FOMO sequences, win-back and post-purchase automations turning dormant subscribers into a predictable monthly revenue line for every brand we operate.",
+    body: "Welcome flows, FOMO sequences, win-back and post-purchase automations — predictable revenue, done-for-you.",
     metrics: [
       { k: "30+", v: "Brands served" },
       { k: "2 yrs", v: "Track record" },
