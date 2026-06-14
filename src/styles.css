@@ -1,0 +1,55 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px); --radius-md: calc(var(--radius) - 2px); --radius-lg: var(--radius); --radius-xl: calc(var(--radius) + 4px);
+  --font-display: "Bricolage Grotesque", "Inter", sans-serif; --font-mono: "JetBrains Mono", monospace;
+  --color-background: var(--background); --color-foreground: var(--foreground); --color-card: var(--card); --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover); --color-popover-foreground: var(--popover-foreground); --color-primary: var(--primary); --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary); --color-secondary-foreground: var(--secondary-foreground); --color-muted: var(--muted); --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent); --color-accent-foreground: var(--accent-foreground); --color-destructive: var(--destructive); --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border); --color-input: var(--input); --color-ring: var(--ring); --color-brand-light: var(--brand-light);
+}
+
+:root {
+  --radius: .9rem; --brand-violet: oklch(.57 .24 294); --brand-coral: oklch(.66 .21 35); --brand-ink: oklch(.18 .04 295); --brand-light: oklch(.81 .12 292);
+  --background: oklch(.995 .003 295); --foreground: oklch(.18 .04 295); --card: oklch(1 0 0); --card-foreground: var(--foreground);
+  --popover: var(--card); --popover-foreground: var(--foreground); --primary: oklch(.52 .25 294); --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(.965 .015 294); --secondary-foreground: var(--foreground); --muted: oklch(.965 .012 294); --muted-foreground: oklch(.48 .04 294);
+  --accent: var(--brand-coral); --accent-foreground: oklch(1 0 0); --destructive: oklch(.58 .24 27); --destructive-foreground: oklch(1 0 0);
+  --border: oklch(.91 .018 294); --input: var(--border); --ring: var(--primary);
+  --shadow-brand: 0 18px 40px -18px color-mix(in oklab, var(--brand-violet) 52%, transparent); --shadow-soft: 0 18px 60px -40px color-mix(in oklab, var(--brand-ink) 30%, transparent);
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  html { scroll-behavior: smooth; }
+  body { background: var(--background); color: var(--foreground); font-family: "Inter", system-ui, sans-serif; font-feature-settings: "ss01", "cv11"; }
+  ::selection { background: var(--primary); color: var(--primary-foreground); }
+}
+
+@utility shadow-brand { box-shadow: var(--shadow-brand); }
+@utility shadow-soft { box-shadow: var(--shadow-soft); }
+@utility bg-brand-gradient { background: linear-gradient(135deg, var(--brand-violet), var(--brand-coral)); }
+
+@layer components {
+  .section-space { padding-block: clamp(5.5rem, 10vw, 9rem); }
+  .section-title { max-width: 780px; font-family: "Bricolage Grotesque", "Inter", sans-serif; font-size: clamp(2.75rem, 6vw, 5rem); font-weight: 750; line-height: .98; letter-spacing: -.04em; }
+  .eyebrow { display: flex; align-items: center; gap: .65rem; color: var(--primary); font-family: "JetBrains Mono", monospace; font-size: .7rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+  .eyebrow > span { width: 1.6rem; height: 1px; background: var(--primary); opacity: .7; }
+  .text-gradient-warm { background: linear-gradient(110deg, var(--brand-violet) 15%, var(--brand-coral)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .growth-panel { position: relative; overflow: hidden; border: 1px solid var(--border); border-radius: 1.75rem; background: linear-gradient(165deg, var(--card), var(--secondary)); padding: clamp(1.25rem, 3vw, 2rem); box-shadow: var(--shadow-soft); }
+  .growth-panel::before { content: ""; position: absolute; inset: 0; background: radial-gradient(70% 55% at 100% 0%, color-mix(in oklab, var(--brand-violet) 15%, transparent), transparent); pointer-events: none; }
+  .metric-label { font-family: "JetBrains Mono", monospace; font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted-foreground); }
+  .bg-soft-grid { background-color: var(--secondary); background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px); background-size: 64px 64px; }
+  .results-panel { background: radial-gradient(80% 120% at 100% 0%, color-mix(in oklab, var(--brand-violet) 75%, transparent), transparent 65%), var(--brand-ink); }
+  .contact-panel { background: radial-gradient(70% 100% at 50% 100%, color-mix(in oklab, var(--brand-coral) 12%, transparent), transparent 70%), linear-gradient(135deg, var(--secondary), var(--card)); }
+  .hero-orb { position: absolute; z-index: -1; border-radius: 999px; pointer-events: none; }
+  .hero-orb-one { top: 5rem; right: -12rem; width: 36rem; height: 36rem; background: radial-gradient(circle, color-mix(in oklab, var(--brand-violet) 13%, transparent), transparent 68%); }
+  .hero-orb-two { bottom: -10rem; left: -12rem; width: 30rem; height: 30rem; background: radial-gradient(circle, color-mix(in oklab, var(--brand-coral) 9%, transparent), transparent 68%); }
+}
+
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
