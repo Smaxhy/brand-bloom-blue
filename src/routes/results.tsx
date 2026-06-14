@@ -180,14 +180,20 @@ function ResultsPage() {
                 key={c.title}
                 className="group relative overflow-hidden rounded-2xl border border-border bg-card p-8 shadow-card transition-all hover:-translate-y-1 hover:shadow-glow"
               >
-                <h3 className="text-2xl font-semibold tracking-tight">{c.title}</h3>
+                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  <c.icon className="h-3.5 w-3.5" />
+                  {c.tag}
+                </div>
+                <h3 className="mt-3 text-2xl font-semibold tracking-tight">{c.title}</h3>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{c.body}</p>
 
-                <div className="mt-5 grid grid-cols-3 gap-3">
+                <div className="mt-5 grid grid-cols-3 gap-3 border-t border-border pt-5">
                   {c.metrics.map((m) => (
                     <div key={m.v}>
                       <div className="text-lg font-semibold tracking-tight text-gradient-brand md:text-xl">
                         {m.k}
                       </div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">{m.v}</div>
                     </div>
                   ))}
                 </div>
