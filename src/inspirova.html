@@ -343,11 +343,11 @@
         <a href="#focus">Our Audience</a>
         <a href="/results" target="_top">Results</a>
         <a href="#team">Team</a>
-        <a href="#contact">Contact</a>
+        <a href="#contact" onclick="document.getElementById('contact').scrollIntoView({behavior:'smooth'});return false">Contact</a>
       </div>
       <div class="nav-cta">
         <a href="#services" class="btn btn-ghost">What we do</a>
-        <a href="#contact" class="btn btn-primary">Work with us <span class="arr">→</span></a>
+        <a href="#contact" onclick="document.getElementById('contact').scrollIntoView({behavior:'smooth'});return false" class="btn btn-primary">Work with us <span class="arr">→</span></a>
         <button class="menu-btn" id="menuBtn" aria-label="Toggle menu" aria-expanded="false">
           <span></span><span></span><span></span>
         </button>
