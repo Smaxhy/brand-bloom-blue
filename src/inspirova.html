@@ -185,6 +185,28 @@
   .totals-row.total .k{color:rgba(255,255,255,.7)}
   .totals-row.total .v{color:#fff}
   .totals-row.total .sub{color:rgba(255,255,255,.7)}
+
+  .bundles-title{font-family:var(--display);font-weight:800;letter-spacing:-.01em;font-size:1.4rem;color:var(--mist);margin:0 0 16px}
+  .bundles{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:8px}
+  .bundle{position:relative;display:flex;flex-direction:column;gap:8px;border:1.5px solid var(--line-strong);border-radius:20px;padding:22px 22px 24px;background:#fff;transition:transform .15s,box-shadow .15s,border-color .15s}
+  .bundle:hover{transform:translateY(-2px);box-shadow:0 18px 40px -24px var(--glow);border-color:var(--violet-bright)}
+  .bundle.featured{border-color:var(--violet);background:linear-gradient(160deg,#fff 0%,color-mix(in oklab, var(--violet) 7%, #fff) 100%);box-shadow:0 16px 40px -20px var(--glow)}
+  .bundle-badge{position:absolute;top:-10px;right:18px;background:var(--violet);color:#fff;font-family:var(--mono);font-weight:700;letter-spacing:.08em;font-size:.65rem;padding:5px 10px;border-radius:99px;text-transform:uppercase}
+  .bundle-name{font-family:var(--display);font-weight:800;font-size:1.15rem;color:var(--mist)}
+  .bundle-tag{font-size:.82rem;color:var(--muted);line-height:1.4}
+  .bundle-price{font-family:var(--display);font-weight:800;font-size:2rem;color:var(--violet-bright);line-height:1;margin-top:6px}
+  .bundle-price small{font-family:var(--sans);font-weight:500;color:var(--muted);font-size:.72rem;margin-left:4px}
+  .bundle-sub{font-size:.82rem;color:var(--muted);font-weight:600}
+  .bundle-list{list-style:none;padding:0;margin:6px 0 4px;display:grid;gap:4px}
+  .bundle-list li{position:relative;padding-left:18px;font-size:.82rem;color:var(--mist)}
+  .bundle-list li:before{content:"";position:absolute;left:0;top:8px;width:8px;height:8px;border-radius:50%;background:var(--violet)}
+  .bundle-btn{margin-top:auto;width:100%;justify-content:center}
+
+  .divider{display:flex;align-items:center;gap:14px;margin:30px 0 20px;color:var(--muted);font-family:var(--mono);font-weight:700;letter-spacing:.16em;font-size:.7rem;text-transform:uppercase}
+  .divider:before,.divider:after{content:"";flex:1;height:1px;background:var(--line-strong)}
+
+  .fineprint{margin-top:18px;font-size:.78rem;color:var(--muted);line-height:1.55;padding:14px 16px;border-radius:12px;background:color-mix(in oklab, var(--violet) 4%, #fff);border:1px solid var(--line)}
+
   .sliders{margin-top:30px}
   .slider-row{margin-bottom:26px}
   .slider-row label{display:flex;justify-content:space-between;font-weight:700;font-size:.92rem;margin-bottom:10px}
@@ -210,7 +232,7 @@
   .foot-links a{font-size:.9rem;transition:color .2s}.foot-links a:hover{color:var(--mist)}
 
   @media (max-width:880px){
-    .hero-grid,.feat-grid,.calc-grid,.breakdown,.totals{grid-template-columns:1fr}
+    .hero-grid,.feat-grid,.calc-grid,.breakdown,.totals,.bundles{grid-template-columns:1fr}
     .cards{grid-template-columns:1fr 1fr}
     .logos{grid-template-columns:repeat(3,1fr)}
     .nav-links{display:none}
@@ -368,12 +390,18 @@
 <section class="pricing" id="pricing">
   <div class="wrap pricing-head">
     <div class="eye">PRICING</div>
-    <h2>Pick the services you need.<br><span class="lime">Transparent pricing, no fluff.</span></h2>
-    <p>Whether you run an e-commerce brand or a service business, build a package that fits. No cost-per-lead nonsense — just clear setup fees and monthly retainers.</p>
+    <h2>Pick a bundle — or build your own.<br><span class="lime">Transparent. Month-to-month. Cancel anytime.</span></h2>
+    <p>Whether you run an e-commerce brand or a service business, grab a bundle below or check the exact services you need. You keep your own ad spend. We don't lock you into long contracts.</p>
   </div>
 
   <div class="wrap">
     <div class="calc-card">
+
+      <h3 class="bundles-title">Bundle deals</h3>
+      <div class="bundles" id="bundlesGrid"><!-- injected --></div>
+
+      <div class="divider"><span>or build your own</span></div>
+
       <div class="services-grid" id="servicesGrid">
         <!-- service cards injected by JS -->
       </div>
@@ -383,6 +411,12 @@
         <div class="totals-row"><span class="k">One-time setup</span><span class="v" id="sumSetup">€0,00</span><span class="sub">due at start</span></div>
         <div class="totals-row total"><span class="k">First-month total</span><span class="v" id="sumTotal">€0,00</span><span class="sub">setup + 1st month</span></div>
       </div>
+
+      <p class="fineprint">
+        Additional fees may apply when integrating with existing CRMs or third-party tools.
+        You manage your own ad spend directly with the ad platforms.
+        Monthly rolling contracts — you can cancel anytime. No refunds.
+      </p>
 
       <div class="calc-grid" style="margin-top:34px">
         <div class="sliders">
@@ -403,8 +437,8 @@
             <div class="bd-row"><div class="k">Strategy &amp; reporting calls</div><div class="v">Monthly</div></div>
             <div class="bd-row"><div class="k">Dedicated account manager</div><div class="v">Yes</div></div>
             <div class="bd-row"><div class="k">Creative production</div><div class="v">Included</div></div>
-            <div class="bd-row"><div class="k">No long-term contracts</div><div class="v">30-day rolling</div></div>
-            <div class="bd-row total"><div class="k">Service fee</div><div class="v">€500 / month</div></div>
+            <div class="bd-row"><div class="k">Contract length</div><div class="v">Month-to-month</div></div>
+            <div class="bd-row total"><div class="k">Refund policy</div><div class="v">No refunds · cancel anytime</div></div>
           </div>
         </div>
       </div>
@@ -461,18 +495,54 @@
     n&&n.querySelectorAll("a").forEach(function(a){a.addEventListener("click",function(){n.classList.remove("open");});});
   })();
 
-  /* ---- pricing service picker ---- */
+  /* ---- pricing service picker + bundles ---- */
   (function(){
     var grid=document.getElementById("servicesGrid");
-    if(!grid) return;
+    var bundlesGrid=document.getElementById("bundlesGrid");
+    if(!grid||!bundlesGrid) return;
+
     var SERVICES=[
-      {id:"ads_management", name:"Ads Management",        price:500,  billing:"monthly",  desc:"Ongoing Meta / Google / TikTok ads management.", checked:true},
-      {id:"ads_setup",      name:"Ads Setup",             price:500,  billing:"one-time", desc:"Accounts, pixel, audiences & first creative set up.", checked:true},
-      {id:"website_build",  name:"Website Build",         price:2500, billing:"one-time", desc:"Conversion-focused site or Shopify store build.", checked:false},
-      {id:"email_sms",      name:"Email & SMS Marketing", price:500,  billing:"monthly",  desc:"Flows, broadcasts and SMS campaigns.", checked:false},
-      {id:"service_fee",    name:"Service Fee",           price:500,  billing:"monthly",  desc:"Standard monthly service / strategy fee.", checked:true}
+      {id:"ads_setup",      name:"Ads Setup",                 price:1000, billing:"one-time", desc:"Ad accounts, audiences & launch-ready first creative.", checked:false},
+      {id:"ads_management", name:"Ads Management / Creation", price:500,  billing:"monthly",  desc:"Ongoing Meta / Google / TikTok ads & creative.",        checked:false},
+      {id:"video_creation", name:"Video Creation",            price:100,  billing:"one-time", desc:"Short-form ad / content video — per video.",            checked:false},
+      {id:"email_sms",      name:"Email & SMS Automations",   price:750,  billing:"monthly",  desc:"Flows, broadcasts and SMS automations.",                checked:false},
+      {id:"website",        name:"Website Design / Creation", price:300,  billing:"one-time", desc:"Conversion-focused website — per site.",                checked:false},
+      {id:"pixel_ecom",     name:"E-commerce Pixel Setup",    price:150,  billing:"one-time", desc:"Pixel + server-side tracking for e-commerce.",          checked:false},
+      {id:"pixel_leadgen",  name:"Lead-gen Pixel Setup",      price:150,  billing:"one-time", desc:"Pixel + form/lead tracking for service businesses.",   checked:false}
     ];
+
+    var BUNDLES=[
+      { id:"deluxe",   name:"Deluxe Package",   tag:"Everything — site, automations & management.", first:2500, recurring:750, includes:["website","ads_setup","ads_management","email_sms","pixel_ecom"], badge:"Most popular" },
+      { id:"growth",   name:"Growth Package",   tag:"Ads setup, ongoing management & tracking.",     first:1200, recurring:500, includes:["ads_setup","ads_management","pixel_ecom"], badge:"" },
+      { id:"creation", name:"Creation Package", tag:"Ads setup, creative & video production.",       first:750,  recurring:0,   includes:["ads_setup","video_creation"], badge:"" }
+    ];
+
     var euro=function(v){return "€"+v.toLocaleString("nl-BE",{minimumFractionDigits:2,maximumFractionDigits:2});};
+    var euro0=function(v){return "€"+Math.round(v).toLocaleString("nl-BE");};
+    var nameById=function(id){var s=SERVICES.find(function(x){return x.id===id;}); return s?s.name:id;};
+
+    function renderBundles(){
+      bundlesGrid.innerHTML=BUNDLES.map(function(b){
+        var items=b.includes.map(function(i){return '<li>'+nameById(i)+'</li>';}).join("");
+        return '<div class="bundle'+(b.badge?" featured":"")+'" data-id="'+b.id+'">'
+          +(b.badge?'<div class="bundle-badge">'+b.badge+'</div>':'')
+          +'<div class="bundle-name">'+b.name+'</div>'
+          +'<div class="bundle-tag">'+b.tag+'</div>'
+          +'<div class="bundle-price">'+euro0(b.first)+'<small> first month</small></div>'
+          +(b.recurring>0?'<div class="bundle-sub">then '+euro0(b.recurring)+' / month</div>':'<div class="bundle-sub">one-time</div>')
+          +'<ul class="bundle-list">'+items+'</ul>'
+          +'<button class="btn btn-primary bundle-btn" type="button">Select bundle</button>'
+        +'</div>';
+      }).join("");
+      bundlesGrid.querySelectorAll(".bundle").forEach(function(card){
+        card.querySelector(".bundle-btn").addEventListener("click",function(){
+          var b=BUNDLES.find(function(x){return x.id===card.dataset.id;});
+          SERVICES.forEach(function(s){ s.checked = b.includes.indexOf(s.id)!==-1; });
+          render(); calc();
+          document.getElementById("servicesGrid").scrollIntoView({behavior:"smooth",block:"center"});
+        });
+      });
+    }
 
     function render(){
       grid.innerHTML=SERVICES.map(function(s,i){
@@ -498,7 +568,7 @@
       document.getElementById("sumSetup").textContent=euro(setup);
       document.getElementById("sumTotal").textContent=euro(monthly+setup);
     }
-    render(); calc();
+    renderBundles(); render(); calc();
   })();
 
 </script>

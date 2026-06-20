@@ -143,11 +143,13 @@ export interface Service {
 }
 
 export const SERVICES: Service[] = [
-  { id: "ads_management",   name: "Ads Management",        price: 500,  billing: "monthly",  desc: "Ongoing Meta / Google / TikTok ads management." },
-  { id: "ads_setup",        name: "Ads Setup",             price: 500,  billing: "one-time", desc: "Account, pixel, audiences and first creative set up." },
-  { id: "website_build",    name: "Website Build",         price: 2500, billing: "one-time", desc: "Conversion-focused website or Shopify store build." },
-  { id: "email_sms",        name: "Email & SMS Marketing", price: 500,  billing: "monthly",  desc: "Flows, broadcasts and SMS campaigns." },
-  { id: "service_fee",      name: "Service Fee",           price: 500,  billing: "monthly",  desc: "Standard monthly service / strategy fee." },
+  { id: "ads_setup",        name: "Ads Setup",                 price: 1000, billing: "one-time", desc: "Ad accounts, audiences and launch-ready first creative set up." },
+  { id: "ads_management",   name: "Ads Management / Creation", price: 500,  billing: "monthly",  desc: "Ongoing Meta / Google / TikTok ads management & creative." },
+  { id: "video_creation",   name: "Video Creation",            price: 100,  billing: "one-time", desc: "Short-form ad / content video, per video." },
+  { id: "email_sms",        name: "Email & SMS Automations",   price: 750,  billing: "monthly",  desc: "Flows, broadcasts and SMS automations." },
+  { id: "website",          name: "Website Design / Creation", price: 300,  billing: "one-time", desc: "Conversion-focused website / landing page, per site." },
+  { id: "pixel_ecom",       name: "E-commerce Pixel Setup",    price: 150,  billing: "one-time", desc: "Pixel, server-side tracking & conversion API for e-commerce." },
+  { id: "pixel_leadgen",    name: "Lead-gen Pixel Setup",      price: 150,  billing: "one-time", desc: "Pixel + form / lead tracking for service businesses." },
 ];
 
 export function getService(id: string): Service | undefined {
@@ -166,12 +168,29 @@ export function totalsForServices(ids: string[]): { monthly: number; setup: numb
   return { monthly, setup, total: monthly + setup };
 }
 
+/* Pre-built bundles — flat-rate first month + recurring management. */
+export interface Bundle {
+  id: string;
+  name: string;
+  tagline: string;
+  firstMonth: number; // one-time / first-month price €
+  recurring: number;  // monthly afterwards €
+  includes: string[]; // service ids included
+}
+
+export const BUNDLES: Bundle[] = [
+  { id: "deluxe",   name: "Deluxe Package",   tagline: "Everything in — site, automations & management.", firstMonth: 2500, recurring: 750, includes: ["website", "ads_setup", "ads_management", "email_sms", "pixel_ecom"] },
+  { id: "creation", name: "Creation Package", tagline: "Ads setup, creative & video production.",          firstMonth: 750,  recurring: 0,   includes: ["ads_setup", "video_creation"] },
+  { id: "growth",   name: "Growth Package",   tagline: "Ads setup + ongoing management with creative.",   firstMonth: 1200, recurring: 500, includes: ["ads_setup", "ads_management", "pixel_ecom"] },
+];
+
 /* Pipeline starter templates — bundles of services. */
 export const DEAL_TEMPLATES: Record<string, { services: string[]; source: string; notes: string }> = {
-  "Ads Management Retainer": { services: ["ads_setup", "ads_management"], source: "Meta/Google Ads", notes: "Setup + monthly ads management." },
-  "Website Build":           { services: ["website_build"],               source: "Referral",        notes: "Conversion-focused website / Shopify store." },
-  "Email & SMS Marketing":   { services: ["email_sms"],                   source: "Inbound",         notes: "Monthly email + SMS marketing." },
-  "Full Growth System":      { services: ["website_build", "ads_setup", "ads_management", "email_sms"], source: "Inbound", notes: "Website + ads + email/SMS — full system." },
+  "Deluxe Package":     { services: ["website", "ads_setup", "ads_management", "email_sms", "pixel_ecom"], source: "Inbound",   notes: "Deluxe bundle — €2,500 first month, €750/mo after." },
+  "Creation Package":   { services: ["ads_setup", "video_creation"],                                       source: "Inbound",   notes: "€750 one-time creation package." },
+  "Growth Package":     { services: ["ads_setup", "ads_management", "pixel_ecom"],                         source: "Inbound",   notes: "€1,200 first month, €500/mo management." },
+  "Website Only":       { services: ["website"],                                                            source: "Referral",  notes: "Conversion-focused website / landing page." },
+  "Email & SMS Only":   { services: ["email_sms"],                                                          source: "Inbound",   notes: "Monthly email + SMS automations." },
 };
 
 /* ----------------------------------------------------------------------- */
