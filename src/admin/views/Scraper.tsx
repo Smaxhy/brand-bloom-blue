@@ -342,6 +342,10 @@ export function Scraper({
     }));
     update((prev) => ({ ...prev, raw: [...rows, ...prev.raw] }));
     setPushed(rows.length);
+    // Remove accepted contacts from the scraper queue so it acts as an inbox.
+    const acceptedIds = new Set(selectedPeople.map((p) => p.id));
+    setResults((prev) => prev.filter((p) => !acceptedIds.has(p.id)));
+    setSelected({});
   }
 
   function exportCSV(rows: ScrapedPerson[]) {
