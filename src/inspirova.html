@@ -83,11 +83,14 @@
   .orbit{position:relative;width:min(460px,86vw);aspect-ratio:1;margin-inline:auto}
   .orbit-ring{position:absolute;inset:8%;border:1px dashed rgba(255,255,255,.28);border-radius:50%}
   .orbit-ring.inner{inset:24%;border-color:rgba(255,255,255,.18)}
-  .orbit-core{position:absolute;inset:38%;border-radius:50%;
-    background:radial-gradient(circle at 50% 40%,#D8FB6A,#9ad62f 60%,#74b81f);
-    box-shadow:0 0 0 14px rgba(198,242,78,.18),0 0 60px rgba(198,242,78,.4);
-    display:grid;place-items:center;animation:corepulse 4s var(--ease) infinite}
-  .orbit-core::after{content:"";width:34%;aspect-ratio:1;border-radius:50%;background:#fff}
+  .orbit-core{position:absolute;inset:34%;border-radius:24px;
+    background:linear-gradient(160deg,#ffffff 0%,#F2EAFF 100%);
+    box-shadow:0 0 0 14px rgba(255,255,255,.16),0 0 60px rgba(124,92,255,.45);
+    display:grid;place-items:center;animation:corepulse 4s var(--ease) infinite;overflow:hidden}
+  .orbit-core::before,.orbit-core::after{content:"";position:absolute;width:78%;height:14%;border-radius:6px;
+    background:linear-gradient(90deg,var(--violet) 0%,var(--violet-bright) 50%,var(--coral) 100%)}
+  .orbit-core::before{transform:rotate(45deg)}
+  .orbit-core::after{transform:rotate(-45deg)}
   .node{position:absolute;top:50%;left:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:16px;
     background:#fff;display:grid;place-items:center;color:var(--violet);
     box-shadow:0 14px 30px -14px rgba(0,0,0,.45);animation:floaty 5s var(--ease) infinite}
