@@ -80,12 +80,22 @@ export function Scraper({
   const [revealPhone, setRevealPhone] = useState(false);
   const [enrichBusy, setEnrichBusy] = useState(false);
   const [enrichProgress, setEnrichProgress] = useState({ done: 0, total: 0 });
-  // id -> which source revealed the email ("Apollo" | "Hunter" | "demo")
+  // id -> which source revealed the email ("Apollo" | "Hunter" | "Google" | "demo")
   const [emailSource, setEmailSource] = useState<Record<string, string>>({});
+  // id -> URL where the email was found (Hunter source / Google result link)
+  const [emailSourceUrl, setEmailSourceUrl] = useState<Record<string, string>>({});
 
   function splitName(name: string): { first: string; last: string } {
     const parts = name.trim().split(/\s+/);
     return { first: parts[0] || "", last: parts.length > 1 ? parts.slice(1).join(" ") : "" };
+  }
+
+  function prettyHost(url: string): string {
+    try {
+      return new URL(url).hostname.replace(/^www\./, "");
+    } catch {
+      return url;
+    }
   }
 
   // Keywords are stored in filters.industry as a comma-separated string.
@@ -112,7 +122,7 @@ export function Scraper({
     setEnrichBusy(true);
     setEnrichProgress({ done: 0, total: list.length });
 
-    const updates: Record<string, { email: string; phone: string; source: string }> = {};
+    const updates: Record<string, { email: string; phone: string; source: string; sourceUrl: string }> = {};
     // Process in batches of 10 (Apollo bulk limit) to stay within Worker limits.
     for (let i = 0; i < list.length; i += 10) {
       const chunk = list.slice(i, i + 10);
@@ -130,7 +140,7 @@ export function Scraper({
       });
       const res = await enrichContacts(payload, revealPhone);
       res.forEach((r) => {
-        if (r.id) updates[r.id] = { email: r.email, phone: r.phone, source: r.source };
+        if (r.id) updates[r.id] = { email: r.email, phone: r.phone, source: r.source, sourceUrl: r.sourceUrl };
       });
       setEnrichProgress({ done: Math.min(i + chunk.length, list.length), total: list.length });
     }
@@ -151,6 +161,13 @@ export function Scraper({
       const next = { ...prev };
       Object.entries(updates).forEach(([id, u]) => {
         if (u.email) next[id] = u.source || "Apollo";
+      });
+      return next;
+    });
+    setEmailSourceUrl((prev) => {
+      const next = { ...prev };
+      Object.entries(updates).forEach(([id, u]) => {
+        if (u.email && u.sourceUrl) next[id] = u.sourceUrl;
       });
       return next;
     });
@@ -508,6 +525,17 @@ export function Scraper({
                             <span className="shrink-0 rounded-full bg-secondary px-1.5 py-0.5 text-[.6rem] font-semibold uppercase tracking-wide text-muted-foreground">
                               {emailSource[p.id]}
                             </span>
+                          )}
+                          {emailSourceUrl[p.id] && (
+                            <a
+                              href={emailSourceUrl[p.id]}
+                              target="_blank"
+                              rel="noreferrer"
+                              title={emailSourceUrl[p.id]}
+                              className="shrink-0 truncate max-w-[10rem] text-[.65rem] text-primary underline underline-offset-2 hover:opacity-80"
+                            >
+                              {prettyHost(emailSourceUrl[p.id])}
+                            </a>
                           )}
                         </span>
                       )}

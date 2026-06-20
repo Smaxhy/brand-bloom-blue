@@ -467,7 +467,8 @@ export interface EnrichResult {
   id?: string;
   email: string;
   phone: string;
-  source: string; // "Apollo" | "Hunter" | "demo" | ""
+  source: string; // "Apollo" | "Hunter" | "Google" | "demo" | ""
+  sourceUrl: string; // URL where the email was found (Hunter source / Google result link)
 }
 
 /**
@@ -495,7 +496,9 @@ export async function enrichContacts(
     });
     if (res.ok) {
       const j = (await res.json()) as { results?: EnrichResult[] };
-      if (Array.isArray(j.results)) return j.results;
+      if (Array.isArray(j.results)) {
+        return j.results.map((r) => ({ ...r, sourceUrl: r.sourceUrl ?? "" }));
+      }
     }
   } catch {
     /* ignore */
@@ -505,7 +508,7 @@ export async function enrichContacts(
     const dom = p.domain.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "") || "example.com";
     const f = (p.firstName || p.name.split(" ")[0] || "contact").toLowerCase();
     const l = (p.lastName || p.name.split(" ").slice(-1)[0] || "info").toLowerCase();
-    return { id: p.id, email: `${f}.${l}@${dom}`, phone: "", source: "demo" };
+    return { id: p.id, email: `${f}.${l}@${dom}`, phone: "", source: "demo", sourceUrl: "" };
   });
 }
 
