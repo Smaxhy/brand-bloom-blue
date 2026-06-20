@@ -25,13 +25,14 @@ export type StageId =
 
 export interface Deal {
   id: string;
-  name: string; // company / contact name
-  contact: string; // person
+  name: string;
+  contact: string;
   email: string;
   phone: string;
-  value: number; // deal value €
+  value: number; // total deal value €
   stage: StageId;
   source: string;
+  services: string[]; // selected service ids (see SERVICES)
   template?: string;
   notes: string;
   createdAt: number;
@@ -48,12 +49,11 @@ export interface RawBusiness {
   industry: string;
   status: "raw" | "accepted" | "rejected";
   scrapedAt: number;
-  // Optional fields populated by the Data Scraper (Apollo.io)
   contactName?: string;
   contactTitle?: string;
   seniority?: string;
   linkedin?: string;
-  source?: string; // e.g. "Apollo" | "Manual import"
+  source?: string;
 }
 
 export interface Client {
@@ -64,7 +64,9 @@ export interface Client {
   phone: string;
   address: string;
   plan: string;
+  services: string[]; // selected service ids
   monthly: number; // recurring revenue €
+  setupFee: number; // one-time setup fee €
   status: "active" | "paused" | "churned";
   notes: string;
   since: number;
