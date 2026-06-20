@@ -90,6 +90,14 @@ export function Scraper({
     return { first: parts[0] || "", last: parts.length > 1 ? parts.slice(1).join(" ") : "" };
   }
 
+  function prettyHost(url: string): string {
+    try {
+      return new URL(url).hostname.replace(/^www\./, "");
+    } catch {
+      return url;
+    }
+  }
+
   // Keywords are stored in filters.industry as a comma-separated string.
   const activeKeywords = filters.industry
     .split(",")
