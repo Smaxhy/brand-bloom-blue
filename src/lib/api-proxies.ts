@@ -268,16 +268,29 @@ async function enrich(request: Request, env: Env): Promise<Response> {
     return json({
       demo: true,
       reason: "missing_reveal_keys",
-      results: people.map((p) => ({ id: p.id, email: demoEmail(p), phone: "", source: "demo" })),
+      results: people.map((p) => ({
+        id: p.id,
+        email: demoEmail(p),
+        phone: "",
+        source: "demo",
+        sourceUrl: "",
+      })),
     });
   }
 
-  const results: { id?: string; email: string; phone: string; source: string }[] = [];
+  const results: {
+    id?: string;
+    email: string;
+    phone: string;
+    source: string;
+    sourceUrl: string;
+  }[] = [];
   for (const p of people) {
     const domain = cleanDomain(p.domain);
     let email = "";
     let phone = "";
     let source = "";
+    let sourceUrl = "";
 
     // 1) Hunter email-finder — most reliable for name + domain → email
     if (hunterKey && domain) {
@@ -292,10 +305,17 @@ async function enrich(request: Request, env: Env): Promise<Response> {
           u.searchParams.set("api_key", hunterKey);
           const res = await fetch(u.toString());
           if (res.ok) {
-            const d = (await res.json()) as { data?: { email?: string; phone_number?: string } };
+            const d = (await res.json()) as {
+              data?: {
+                email?: string;
+                phone_number?: string;
+                sources?: { uri?: string }[];
+              };
+            };
             if (d.data?.email) {
               email = d.data.email;
               source = "Hunter";
+              sourceUrl = d.data.sources?.find((s) => s.uri)?.uri ?? "";
               if (payload.revealPhone && d.data.phone_number) phone = d.data.phone_number;
             }
           }
@@ -305,7 +325,7 @@ async function enrich(request: Request, env: Env): Promise<Response> {
       }
     }
 
-    // 2) Serper fallback — scrape Google
+    // 2) Serper fallback — scrape Google, track which result the email came from
     if (!email && serperKey) {
       const q = [
         p.name ? `"${p.name}"` : "",
@@ -326,17 +346,35 @@ async function enrich(request: Request, env: Env): Promise<Response> {
             organic?: { title?: string; snippet?: string; link?: string }[];
             knowledgeGraph?: Record<string, unknown>;
           };
-          const blob = JSON.stringify(d.organic ?? []) + JSON.stringify(d.knowledgeGraph ?? {});
-          email = pickEmail(blob, domain);
+          const organic = d.organic ?? [];
+          // Prefer the first organic hit that actually contains a matching email
+          for (const o of organic) {
+            const text = `${o.title ?? ""} ${o.snippet ?? ""}`;
+            const found = pickEmail(text, domain);
+            if (found) {
+              email = found;
+              sourceUrl = o.link ?? "";
+              break;
+            }
+          }
+          // Fallback: scan everything (knowledgeGraph etc.)
+          if (!email) {
+            const blob = JSON.stringify(organic) + JSON.stringify(d.knowledgeGraph ?? {});
+            email = pickEmail(blob, domain);
+            if (email && organic[0]?.link) sourceUrl = organic[0].link;
+          }
           if (email) source = "Google";
-          if (payload.revealPhone && !phone) phone = pickPhone(blob);
+          if (payload.revealPhone && !phone) {
+            const blob = JSON.stringify(organic) + JSON.stringify(d.knowledgeGraph ?? {});
+            phone = pickPhone(blob);
+          }
         }
       } catch {
         /* leave locked */
       }
     }
 
-    results.push({ id: p.id, email, phone, source });
+    results.push({ id: p.id, email, phone, source, sourceUrl });
   }
   return json({ demo: false, results });
 }
