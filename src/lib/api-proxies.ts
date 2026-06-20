@@ -133,6 +133,11 @@ interface ScrapeFilters {
   industry?: string;
   seniorities?: string[];
   perPage?: number;
+  employeeRanges?: string[];
+  minRevenue?: number;
+  locationScope?: "person" | "company" | "both";
+  requireEmail?: boolean;
+  requirePhone?: boolean;
 }
 
 async function apolloSearch(request: Request, env: Env): Promise<Response> {
@@ -166,11 +171,21 @@ async function apolloSearch(request: Request, env: Env): Promise<Response> {
 
   const baseBody: Record<string, unknown> = {};
   if (filters.location?.trim()) {
-    baseBody.person_locations = [filters.location.trim()];
-    baseBody.organization_locations = [filters.location.trim()];
+    const loc = [filters.location.trim()];
+    const scope = filters.locationScope ?? "both";
+    if (scope === "person" || scope === "both") baseBody.person_locations = loc;
+    if (scope === "company" || scope === "both") baseBody.organization_locations = loc;
   }
   if (titles.length) baseBody.person_titles = titles;
   if (filters.seniorities?.length) baseBody.person_seniorities = filters.seniorities;
+  // Company size (e.g. ["1,10","11,20"]) — great for targeting local SMBs.
+  if (filters.employeeRanges?.length) {
+    baseBody.organization_num_employees_ranges = filters.employeeRanges;
+  }
+  // Minimum company revenue (USD).
+  if (filters.minRevenue && filters.minRevenue > 0) {
+    baseBody.revenue_range = { min: filters.minRevenue };
+  }
 
   const queries = keywords.length ? keywords : [""]; // at least one (no keyword) query
   // Per-keyword target so a multi-keyword search still lands near `wanted` total.
@@ -220,7 +235,15 @@ async function apolloSearch(request: Request, env: Env): Promise<Response> {
 
   // If we got ANY live contacts, return them live — even if some calls failed.
   if (byId.size > 0) {
-    const people = Array.from(byId.values()).slice(0, wanted).map(normalizePerson);
+    let collected = Array.from(byId.values());
+    // Targeting: keep only reachable contacts when requested.
+    if (filters.requireEmail) collected = collected.filter((p) => p.has_email === true);
+    if (filters.requirePhone)
+      collected = collected.filter(
+        (p) => p.has_direct_phone === true || p.has_direct_phone === "Yes",
+      );
+    const people = collected.slice(0, wanted).map(normalizePerson);
+    if (!people.length) return json({ demo: true, reason: "no_results" });
     return json({ demo: false, people });
   }
   // Nothing came back. Surface the reason so the banner can explain it.
@@ -589,6 +612,8 @@ interface ApolloPerson {
   seniority?: string;
   email?: string;
   email_status?: string;
+  has_email?: boolean;
+  has_direct_phone?: boolean | string;
   linkedin_url?: string;
   city?: string;
   state?: string;

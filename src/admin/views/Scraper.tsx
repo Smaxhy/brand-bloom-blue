@@ -18,7 +18,6 @@ import {
   X,
   Trash2,
 } from "lucide-react";
-
 import {
   type AdminData,
   type RawBusiness,
@@ -62,6 +61,26 @@ function saveScraperState(s: PersistedScraperState) {
   }
 }
 
+const SIZE_PRESETS: { id: string; label: string }[] = [
+  { id: "1,10", label: "1–10" },
+  { id: "11,20", label: "11–20" },
+  { id: "21,50", label: "21–50" },
+  { id: "51,100", label: "51–100" },
+  { id: "101,200", label: "101–200" },
+  { id: "201,500", label: "201–500" },
+  { id: "501,1000", label: "501–1k" },
+  { id: "1001,1000000", label: "1k+" },
+];
+
+const REVENUE_OPTS: { v: number; label: string }[] = [
+  { v: 0, label: "Any revenue" },
+  { v: 100000, label: "$100k+" },
+  { v: 500000, label: "$500k+" },
+  { v: 1000000, label: "$1M+" },
+  { v: 5000000, label: "$5M+" },
+  { v: 10000000, label: "$10M+" },
+];
+
 const KEYWORD_PRESETS = [
   "Real Estate",
   "Real Estate Agency",
@@ -102,6 +121,11 @@ export function Scraper({
     industry: "",
     seniorities: ["owner", "c_suite", "director"],
     perPage: 25,
+    employeeRanges: [],
+    minRevenue: 0,
+    locationScope: "both",
+    requireEmail: false,
+    requirePhone: false,
   });
   const [geo, setGeo] = useState<GeocodeResult | null>(null);
   const [geoBusy, setGeoBusy] = useState(false);
@@ -258,6 +282,16 @@ export function Scraper({
         ? f.seniorities.filter((s) => s !== id)
         : [...f.seniorities, id],
     }));
+  }
+
+  function toggleEmployeeRange(id: string) {
+    setFilters((f) => {
+      const cur = f.employeeRanges ?? [];
+      return {
+        ...f,
+        employeeRanges: cur.includes(id) ? cur.filter((r) => r !== id) : [...cur, id],
+      };
+    });
   }
 
   async function locate() {
@@ -461,6 +495,87 @@ export function Scraper({
               </div>
             </div>
 
+            <div>
+              <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
+                Company size <span className="font-normal">(employees — great for local SMBs)</span>
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {SIZE_PRESETS.map((sz) => {
+                  const on = (filters.employeeRanges ?? []).includes(sz.id);
+                  return (
+                    <button
+                      key={sz.id}
+                      onClick={() => toggleEmployeeRange(sz.id)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        on
+                          ? "border-transparent bg-primary text-primary-foreground"
+                          : "border-border bg-background text-muted-foreground hover:bg-secondary"
+                      }`}
+                    >
+                      {sz.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Min company revenue">
+                <select
+                  className={inputCls}
+                  value={filters.minRevenue ?? 0}
+                  onChange={(e) => setFilters({ ...filters, minRevenue: Number(e.target.value) })}
+                >
+                  {REVENUE_OPTS.map((r) => (
+                    <option key={r.v} value={r.v}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Match location by">
+                <select
+                  className={inputCls}
+                  value={filters.locationScope ?? "both"}
+                  onChange={(e) =>
+                    setFilters({ ...filters, locationScope: e.target.value as "person" | "company" | "both" })
+                  }
+                >
+                  <option value="both">Person & company HQ</option>
+                  <option value="company">Company HQ only</option>
+                  <option value="person">Person's location only</option>
+                </select>
+              </Field>
+            </div>
+
+            <div>
+              <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
+                Reachability <span className="font-normal">(only pull leads you can actually contact)</span>
+              </span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setFilters({ ...filters, requireEmail: !filters.requireEmail })}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    filters.requireEmail
+                      ? "border-transparent bg-[var(--brand-coral)] text-white"
+                      : "border-border bg-background text-muted-foreground hover:bg-secondary"
+                  }`}
+                >
+                  Has email
+                </button>
+                <button
+                  onClick={() => setFilters({ ...filters, requirePhone: !filters.requirePhone })}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    filters.requirePhone
+                      ? "border-transparent bg-[var(--brand-coral)] text-white"
+                      : "border-border bg-background text-muted-foreground hover:bg-secondary"
+                  }`}
+                >
+                  Has direct phone
+                </button>
+              </div>
+            </div>
+
             <div className="flex flex-wrap items-end gap-3 pt-1">
               <Field label="Results to pull">
                 <select
@@ -581,8 +696,6 @@ export function Scraper({
               <Btn onClick={sendToRaw}>
                 <ArrowRightCircle className="h-4 w-4" /> Accept {selectedPeople.length} → Raw Data
               </Btn>
-
-
             </div>
           </div>
 
@@ -704,7 +817,6 @@ export function Scraper({
                     <X className="h-4 w-4" />
                   </button>
                 </div>
-
               );
             })}
           </div>
