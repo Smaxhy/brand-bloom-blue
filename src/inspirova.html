@@ -513,6 +513,23 @@
     });
   })();
 
+  /* ---- timeline scroll reveal ---- */
+  (function(){
+    var steps=document.querySelectorAll("#timeline .step"); if(!steps.length) return;
+    if(!("IntersectionObserver" in window)){ steps.forEach(function(s){s.classList.add("in");}); return; }
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){
+          var i=Array.prototype.indexOf.call(steps,e.target);
+          e.target.style.transitionDelay=(Math.min(i,4)*120)+"ms";
+          e.target.classList.add("in");
+          io.unobserve(e.target);
+        }
+      });
+    },{threshold:.2});
+    steps.forEach(function(s){io.observe(s);});
+  })();
+
   /* ---- mobile menu ---- */
   (function(){
     var b=document.getElementById("menuBtn"), n=document.getElementById("navlinks");
