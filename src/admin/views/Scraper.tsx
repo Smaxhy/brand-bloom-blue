@@ -106,17 +106,49 @@ export function Scraper({
   const [geo, setGeo] = useState<GeocodeResult | null>(null);
   const [geoBusy, setGeoBusy] = useState(false);
   const [scrapeBusy, setScrapeBusy] = useState(false);
-  const [results, setResults] = useState<ScrapedPerson[]>([]);
-  const [selected, setSelected] = useState<Record<string, boolean>>({});
-  const [banner, setBanner] = useState<{ live: boolean; text: string } | null>(null);
+  const persisted = loadScraperState();
+  const [results, setResults] = useState<ScrapedPerson[]>(persisted?.results ?? []);
+  const [selected, setSelected] = useState<Record<string, boolean>>(persisted?.selected ?? {});
+  const [banner, setBanner] = useState<{ live: boolean; text: string } | null>(persisted?.banner ?? null);
   const [pushed, setPushed] = useState(0);
   const [revealPhone, setRevealPhone] = useState(false);
   const [enrichBusy, setEnrichBusy] = useState(false);
   const [enrichProgress, setEnrichProgress] = useState({ done: 0, total: 0 });
   // id -> which source revealed the email ("Apollo" | "Hunter" | "Google" | "demo")
-  const [emailSource, setEmailSource] = useState<Record<string, string>>({});
+  const [emailSource, setEmailSource] = useState<Record<string, string>>(persisted?.emailSource ?? {});
   // id -> URL where the email was found (Hunter source / Google result link)
-  const [emailSourceUrl, setEmailSourceUrl] = useState<Record<string, string>>({});
+  const [emailSourceUrl, setEmailSourceUrl] = useState<Record<string, string>>(persisted?.emailSourceUrl ?? {});
+
+  // Persist scraper results across refreshes so accept/deny can be done later.
+  useEffect(() => {
+    saveScraperState({ results, selected, emailSource, emailSourceUrl, banner });
+  }, [results, selected, emailSource, emailSourceUrl, banner]);
+
+  function denySelected() {
+    const ids = new Set(Object.keys(selected).filter((id) => selected[id]));
+    if (!ids.size) return;
+    setResults((prev) => prev.filter((p) => !ids.has(p.id)));
+    setSelected({});
+  }
+
+  function denyOne(id: string) {
+    setResults((prev) => prev.filter((p) => p.id !== id));
+    setSelected((s) => {
+      const { [id]: _omit, ...rest } = s;
+      return rest;
+    });
+  }
+
+  function clearAllResults() {
+    if (!results.length) return;
+    if (typeof window !== "undefined" && !window.confirm(`Remove all ${results.length} scraped contacts?`)) return;
+    setResults([]);
+    setSelected({});
+    setEmailSource({});
+    setEmailSourceUrl({});
+    setBanner(null);
+  }
+
 
   function splitName(name: string): { first: string; last: string } {
     const parts = name.trim().split(/\s+/);
