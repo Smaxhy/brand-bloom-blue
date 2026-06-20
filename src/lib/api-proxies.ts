@@ -90,9 +90,12 @@ interface ScrapeFilters {
 
 async function apolloSearch(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") return json({ error: "POST only" }, 405);
-  const key = env.APOLLO_API_KEY;
+  const key =
+    env.APOLLO_API_KEY ||
+    (typeof process !== "undefined" ? process.env?.APOLLO_API_KEY : undefined);
   // No key configured -> tell the client to use demo data.
   if (!key) return json({ demo: true });
+
 
   let filters: ScrapeFilters = {};
   try {
