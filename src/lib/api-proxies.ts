@@ -10,8 +10,8 @@
  *   APOLLO_API_KEY   – Apollo.io master API key (Settings → Integrations → API)
  *   GHL_API_KEY      – GoHighLevel private integration token (optional)
  *
- * If APOLLO_API_KEY is missing, /api/apollo/search returns { demo:true } and the
- * front-end falls back to sample data, so the UI stays usable before go-live.
+ * If APOLLO_API_KEY is missing or Apollo rejects the request, /api/apollo/search
+ * returns the real error so the admin scraper can show what needs fixing.
  */
 
 type Env = Record<string, string | undefined>;
@@ -102,8 +102,15 @@ interface ScrapeFilters {
 async function apolloSearch(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") return json({ error: "POST only" }, 405);
   const key = getSecret(env, "APOLLO_API_KEY");
-  // No key configured -> tell the client to use demo data.
-  if (!key) return json({ demo: true });
+  if (!key) {
+    return json(
+      {
+        error: "APOLLO_API_KEY is not available to the live scraper runtime.",
+        detail: "The secret is missing from the deployed backend environment or the deployment has not picked it up yet.",
+      },
+      500,
+    );
+  }
 
   let filters: ScrapeFilters = {};
   try {
@@ -161,7 +168,13 @@ async function apolloSearch(request: Request, env: Env): Promise<Response> {
         if (!res.ok) {
           if (page === 1 && byId.size === 0) {
             const text = await res.text();
-            return json({ error: `apollo ${res.status}`, detail: text.slice(0, 300) }, 502);
+            return json(
+              {
+                error: `Apollo API returned ${res.status} ${res.statusText}`.trim(),
+                detail: text.slice(0, 1000),
+              },
+              502,
+            );
           }
           break;
         }
