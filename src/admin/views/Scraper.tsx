@@ -80,8 +80,10 @@ export function Scraper({
   const [revealPhone, setRevealPhone] = useState(false);
   const [enrichBusy, setEnrichBusy] = useState(false);
   const [enrichProgress, setEnrichProgress] = useState({ done: 0, total: 0 });
-  // id -> which source revealed the email ("Apollo" | "Hunter" | "demo")
+  // id -> which source revealed the email ("Apollo" | "Hunter" | "Google" | "demo")
   const [emailSource, setEmailSource] = useState<Record<string, string>>({});
+  // id -> URL where the email was found (Hunter source / Google result link)
+  const [emailSourceUrl, setEmailSourceUrl] = useState<Record<string, string>>({});
 
   function splitName(name: string): { first: string; last: string } {
     const parts = name.trim().split(/\s+/);
