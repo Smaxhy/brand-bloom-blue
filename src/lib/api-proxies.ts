@@ -261,15 +261,13 @@ async function enrich(request: Request, env: Env): Promise<Response> {
   const people = (payload.people ?? []).slice(0, 10);
   if (!people.length) return json({ results: [] });
 
+  const hunterKey = secret(env, "HUNTER_API_KEY");
   const serperKey = secret(env, "SERPAPI_API_KEY");
 
-  // Google is the reveal engine, powered by the data Apollo already found.
-  // Without a Serper key we can't search Google, so return demo emails so the
-  // flow stays usable, and flag why.
-  if (!serperKey) {
+  if (!hunterKey && !serperKey) {
     return json({
       demo: true,
-      reason: "missing_serper",
+      reason: "missing_reveal_keys",
       results: people.map((p) => ({ id: p.id, email: demoEmail(p), phone: "", source: "demo" })),
     });
   }
@@ -277,36 +275,68 @@ async function enrich(request: Request, env: Env): Promise<Response> {
   const results: { id?: string; email: string; phone: string; source: string }[] = [];
   for (const p of people) {
     const domain = cleanDomain(p.domain);
-    // Apollo's data (name + company + domain) makes Google's search precise.
-    const q = [
-      p.name ? `"${p.name}"` : "",
-      p.organizationName ? `"${p.organizationName}"` : "",
-      domain ? `"@${domain}"` : "",
-      payload.revealPhone ? "email OR phone" : "email",
-    ]
-      .filter(Boolean)
-      .join(" ");
     let email = "";
     let phone = "";
-    try {
-      const res = await fetch("https://google.serper.dev/search", {
-        method: "POST",
-        headers: { "X-API-KEY": serperKey, "Content-Type": "application/json" },
-        body: JSON.stringify({ q, num: 10 }),
-      });
-      if (res.ok) {
-        const d = (await res.json()) as {
-          organic?: { title?: string; snippet?: string; link?: string }[];
-          knowledgeGraph?: Record<string, unknown>;
-        };
-        const blob = JSON.stringify(d.organic ?? []) + JSON.stringify(d.knowledgeGraph ?? {});
-        email = pickEmail(blob, domain);
-        if (payload.revealPhone) phone = pickPhone(blob);
+    let source = "";
+
+    // 1) Hunter email-finder — most reliable for name + domain → email
+    if (hunterKey && domain) {
+      const first = p.firstName || p.name?.split(" ")[0] || "";
+      const last = p.lastName || p.name?.split(" ").slice(-1)[0] || "";
+      if (first && last) {
+        try {
+          const u = new URL("https://api.hunter.io/v2/email-finder");
+          u.searchParams.set("domain", domain);
+          u.searchParams.set("first_name", first);
+          u.searchParams.set("last_name", last);
+          u.searchParams.set("api_key", hunterKey);
+          const res = await fetch(u.toString());
+          if (res.ok) {
+            const d = (await res.json()) as { data?: { email?: string; phone_number?: string } };
+            if (d.data?.email) {
+              email = d.data.email;
+              source = "Hunter";
+              if (payload.revealPhone && d.data.phone_number) phone = d.data.phone_number;
+            }
+          }
+        } catch {
+          /* fall through to Serper */
+        }
       }
-    } catch {
-      /* skip this one, leave it locked */
     }
-    results.push({ id: p.id, email, phone, source: email ? "Google" : "" });
+
+    // 2) Serper fallback — scrape Google
+    if (!email && serperKey) {
+      const q = [
+        p.name ? `"${p.name}"` : "",
+        p.organizationName ? `"${p.organizationName}"` : "",
+        domain ? `"@${domain}"` : "",
+        payload.revealPhone ? "email OR phone" : "email",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      try {
+        const res = await fetch("https://google.serper.dev/search", {
+          method: "POST",
+          headers: { "X-API-KEY": serperKey, "Content-Type": "application/json" },
+          body: JSON.stringify({ q, num: 10 }),
+        });
+        if (res.ok) {
+          const d = (await res.json()) as {
+            organic?: { title?: string; snippet?: string; link?: string }[];
+            knowledgeGraph?: Record<string, unknown>;
+          };
+          const blob = JSON.stringify(d.organic ?? []) + JSON.stringify(d.knowledgeGraph ?? {});
+          email = pickEmail(blob, domain);
+          if (email) source = "Google";
+          if (payload.revealPhone && !phone) phone = pickPhone(blob);
+        }
+      } catch {
+        /* leave locked */
+      }
+    }
+
+    results.push({ id: p.id, email, phone, source });
   }
   return json({ demo: false, results });
 }
