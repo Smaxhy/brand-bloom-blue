@@ -41,11 +41,11 @@ export function Leads({ data }: { data: AdminData; update: (fn: (p: AdminData) =
   const accepted = data.raw.filter((r) => r.status === "accepted").length;
 
   const channels = [
-    { ch: "Meta Ads", leads: 42, cpl: 14 },
-    { ch: "Google", leads: 28, cpl: 19 },
-    { ch: "Cold Email", leads: 64, cpl: 6 },
-    { ch: "Referral", leads: 11, cpl: 0 },
-    { ch: "Organic", leads: 23, cpl: 3 },
+    { ch: "Meta Ads",   leads: 42 },
+    { ch: "Google",     leads: 28 },
+    { ch: "Cold Email", leads: 64 },
+    { ch: "Referral",   leads: 11 },
+    { ch: "Organic",    leads: 23 },
   ];
 
   return (
