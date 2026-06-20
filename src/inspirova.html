@@ -622,7 +622,7 @@
           +'<input type="checkbox" data-i="'+i+'"'+(s.checked?" checked":"")+'>'
           +'<div class="svc-body">'
             +'<div class="svc-top"><span class="svc-name">'+s.name+'</span>'
-            +'<span class="svc-price">'+euro(s.price)+'<small>'+(s.billing==="monthly"?" /mo":" setup")+'</small></span></div>'
+            +'<span class="svc-price">'+euro(s.price)+'<small>'+(s.billing==="monthly"?" /mo":" upfront")+'</small></span></div>'
             +'<div class="svc-desc">'+s.desc+'</div>'
           +'</div></label>';
       }).join("");
@@ -634,12 +634,11 @@
       });
     }
     function calc(){
-      var monthly=0,setup=0,selected=[];
-      SERVICES.forEach(function(s){ if(!s.checked) return; selected.push(s.id); if(s.billing==="monthly") monthly+=s.price; else setup+=s.price; });
+      var monthly=0,upfront=0,selected=[];
+      SERVICES.forEach(function(s){ if(!s.checked) return; selected.push(s.id); if(s.billing==="monthly") monthly+=s.price; else upfront+=s.price; });
       document.getElementById("sumMonthly").textContent=euro(monthly);
-      document.getElementById("sumSetup").textContent=euro(setup);
-      document.getElementById("sumTotal").textContent=euro(monthly+setup);
-      window.__inspQuote={ selected:selected, monthly:monthly, setup:setup, total:monthly+setup, names:selected.map(nameById) };
+      document.getElementById("sumTotal").textContent=euro(monthly+upfront);
+      window.__inspQuote={ selected:selected, monthly:monthly, upfront:upfront, total:monthly+upfront, names:selected.map(nameById) };
     }
     renderBundles(); render(); calc();
   })();
