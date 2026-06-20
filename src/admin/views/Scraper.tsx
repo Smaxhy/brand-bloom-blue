@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Radar,
   MapPin,
@@ -15,6 +15,8 @@ import {
   Square,
   Building2,
   Download,
+  X,
+  Trash2,
 } from "lucide-react";
 import {
   type AdminData,
@@ -29,6 +31,35 @@ import {
   uid,
 } from "../store";
 import { Panel, Field, inputCls, Btn } from "../ui";
+
+const SCRAPER_STATE_KEY = "inspirova.admin.scraper.state";
+
+interface PersistedScraperState {
+  results: ScrapedPerson[];
+  selected: Record<string, boolean>;
+  emailSource: Record<string, string>;
+  emailSourceUrl: Record<string, string>;
+  banner: { live: boolean; text: string } | null;
+}
+
+function loadScraperState(): PersistedScraperState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(SCRAPER_STATE_KEY);
+    return raw ? (JSON.parse(raw) as PersistedScraperState) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveScraperState(s: PersistedScraperState) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SCRAPER_STATE_KEY, JSON.stringify(s));
+  } catch {
+    /* ignore */
+  }
+}
 
 const SIZE_PRESETS: { id: string; label: string }[] = [
   { id: "1,10", label: "1–10" },
