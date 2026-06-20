@@ -461,11 +461,11 @@
 
       <div class="totals">
         <div class="totals-row"><span class="k">Monthly</span><span class="v" id="sumMonthly">€0,00</span><span class="sub">/month, recurring</span></div>
-        <div class="totals-row"><span class="k">One-time setup</span><span class="v" id="sumSetup">€0,00</span><span class="sub">due at start</span></div>
-        <div class="totals-row total"><span class="k">First-month total</span><span class="v" id="sumTotal">€0,00</span><span class="sub">setup + 1st month</span></div>
+        <div class="totals-row total"><span class="k">Upfront payment</span><span class="v" id="sumTotal">€0,00</span><span class="sub">first month + setup</span></div>
       </div>
 
       <p class="fineprint">
+        All payments are upfront. First invoice includes your first month plus any setup fees.
         Additional fees may apply when integrating with existing CRMs or third-party tools.
         You manage your own ad spend directly with the ad platforms.
         Monthly rolling contracts, you can cancel anytime. No refunds.
@@ -574,13 +574,13 @@
     if(!grid||!bundlesGrid) return;
 
     var SERVICES=[
-      {id:"ads_setup",      name:"Ads Setup",                 price:1000, billing:"one-time", desc:"Ad accounts, audiences & launch-ready first creative.", checked:false},
+      {id:"ads_setup",      name:"Ads Setup",                 price:1000, billing:"upfront", desc:"Ad accounts, audiences & launch-ready first creative.", checked:false},
       {id:"ads_management", name:"Ads Management / Creation", price:500,  billing:"monthly",  desc:"Ongoing Meta / Google / TikTok ads & creative.",        checked:false},
-      {id:"video_creation", name:"Video Creation",            price:100,  billing:"one-time", desc:"Short-form ad / content video, per video.",            checked:false},
+      {id:"video_creation", name:"Video Creation",            price:100,  billing:"upfront", desc:"Short-form ad / content video, per video.",            checked:false},
       {id:"email_sms",      name:"Email & SMS Automations",   price:750,  billing:"monthly",  desc:"Flows, broadcasts and SMS automations.",                checked:false},
-      {id:"website",        name:"Website Design / Creation", price:300,  billing:"one-time", desc:"Conversion-focused website, per site.",                checked:false},
-      {id:"pixel_ecom",     name:"E-commerce Pixel Setup",    price:150,  billing:"one-time", desc:"Pixel + server-side tracking for e-commerce.",          checked:false},
-      {id:"pixel_leadgen",  name:"Lead-gen Pixel Setup",      price:150,  billing:"one-time", desc:"Pixel + form/lead tracking for service businesses.",   checked:false}
+      {id:"website",        name:"Website Design / Creation", price:300,  billing:"upfront", desc:"Conversion-focused website, per site.",                checked:false},
+      {id:"pixel_ecom",     name:"E-commerce Pixel Setup",    price:150,  billing:"upfront", desc:"Pixel + server-side tracking for e-commerce.",          checked:false},
+      {id:"pixel_leadgen",  name:"Lead-gen Pixel Setup",      price:150,  billing:"upfront", desc:"Pixel + form/lead tracking for service businesses.",   checked:false}
     ];
 
     var BUNDLES=[
@@ -600,8 +600,8 @@
           +(b.badge?'<div class="bundle-badge">'+b.badge+'</div>':'')
           +'<div class="bundle-name">'+b.name+'</div>'
           +'<div class="bundle-tag">'+b.tag+'</div>'
-          +'<div class="bundle-price">'+euro0(b.first)+'<small> first month</small></div>'
-          +(b.recurring>0?'<div class="bundle-sub">then '+euro0(b.recurring)+' / month</div>':'<div class="bundle-sub">one-time</div>')
+          +'<div class="bundle-price">'+euro0(b.first)+'<small> upfront</small></div>'
+          +(b.recurring>0?'<div class="bundle-sub">then '+euro0(b.recurring)+' / month</div>':'<div class="bundle-sub">paid upfront</div>')
           +'<ul class="bundle-list">'+items+'</ul>'
           +'<button class="btn btn-primary bundle-btn" type="button">Select bundle</button>'
         +'</div>';
@@ -622,7 +622,7 @@
           +'<input type="checkbox" data-i="'+i+'"'+(s.checked?" checked":"")+'>'
           +'<div class="svc-body">'
             +'<div class="svc-top"><span class="svc-name">'+s.name+'</span>'
-            +'<span class="svc-price">'+euro(s.price)+'<small>'+(s.billing==="monthly"?" /mo":" setup")+'</small></span></div>'
+            +'<span class="svc-price">'+euro(s.price)+'<small>'+(s.billing==="monthly"?" /mo":" upfront")+'</small></span></div>'
             +'<div class="svc-desc">'+s.desc+'</div>'
           +'</div></label>';
       }).join("");
@@ -634,12 +634,11 @@
       });
     }
     function calc(){
-      var monthly=0,setup=0,selected=[];
-      SERVICES.forEach(function(s){ if(!s.checked) return; selected.push(s.id); if(s.billing==="monthly") monthly+=s.price; else setup+=s.price; });
+      var monthly=0,upfront=0,selected=[];
+      SERVICES.forEach(function(s){ if(!s.checked) return; selected.push(s.id); if(s.billing==="monthly") monthly+=s.price; else upfront+=s.price; });
       document.getElementById("sumMonthly").textContent=euro(monthly);
-      document.getElementById("sumSetup").textContent=euro(setup);
-      document.getElementById("sumTotal").textContent=euro(monthly+setup);
-      window.__inspQuote={ selected:selected, monthly:monthly, setup:setup, total:monthly+setup, names:selected.map(nameById) };
+      document.getElementById("sumTotal").textContent=euro(monthly+upfront);
+      window.__inspQuote={ selected:selected, monthly:monthly, upfront:upfront, total:monthly+upfront, names:selected.map(nameById) };
     }
     renderBundles(); render(); calc();
   })();
@@ -676,7 +675,7 @@
         template: q.selected.length ? "Custom selection" : "Quote request",
         notes: "Personal quote requested from inspirovamarketing.com."
               + (q.names.length ? "\nServices: " + q.names.join(", ") : "")
-              + "\nMonthly: €"+q.monthly+" · Setup: €"+q.setup+" · Total: €"+q.total
+              + "\nMonthly: €"+q.monthly+" · Upfront: €"+q.upfront+" · Total: €"+q.total
               + (notes ? "\n\nClient note: "+notes : ""),
         createdAt: now,
         updatedAt: now
