@@ -19,6 +19,20 @@ import {
   Trash2,
 } from "lucide-react";
 
+import {
+  type AdminData,
+  type RawBusiness,
+  type ScrapeFilters,
+  type ScrapedPerson,
+  type GeocodeResult,
+  SENIORITIES,
+  apolloSearch,
+  geocodeLocation,
+  enrichContacts,
+  uid,
+} from "../store";
+import { Panel, Field, inputCls, Btn } from "../ui";
+
 const SCRAPER_STATE_KEY = "inspirova.admin.scraper.state";
 
 interface PersistedScraperState {
@@ -47,19 +61,6 @@ function saveScraperState(s: PersistedScraperState) {
     /* ignore */
   }
 }
-import {
-  type AdminData,
-  type RawBusiness,
-  type ScrapeFilters,
-  type ScrapedPerson,
-  type GeocodeResult,
-  SENIORITIES,
-  apolloSearch,
-  geocodeLocation,
-  enrichContacts,
-  uid,
-} from "../store";
-import { Panel, Field, inputCls, Btn } from "../ui";
 
 const KEYWORD_PRESETS = [
   "Real Estate",
