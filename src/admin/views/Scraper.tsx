@@ -114,7 +114,7 @@ export function Scraper({
     setEnrichBusy(true);
     setEnrichProgress({ done: 0, total: list.length });
 
-    const updates: Record<string, { email: string; phone: string; source: string }> = {};
+    const updates: Record<string, { email: string; phone: string; source: string; sourceUrl: string }> = {};
     // Process in batches of 10 (Apollo bulk limit) to stay within Worker limits.
     for (let i = 0; i < list.length; i += 10) {
       const chunk = list.slice(i, i + 10);
@@ -132,7 +132,7 @@ export function Scraper({
       });
       const res = await enrichContacts(payload, revealPhone);
       res.forEach((r) => {
-        if (r.id) updates[r.id] = { email: r.email, phone: r.phone, source: r.source };
+        if (r.id) updates[r.id] = { email: r.email, phone: r.phone, source: r.source, sourceUrl: r.sourceUrl };
       });
       setEnrichProgress({ done: Math.min(i + chunk.length, list.length), total: list.length });
     }
@@ -153,6 +153,13 @@ export function Scraper({
       const next = { ...prev };
       Object.entries(updates).forEach(([id, u]) => {
         if (u.email) next[id] = u.source || "Apollo";
+      });
+      return next;
+    });
+    setEmailSourceUrl((prev) => {
+      const next = { ...prev };
+      Object.entries(updates).forEach(([id, u]) => {
+        if (u.email && u.sourceUrl) next[id] = u.sourceUrl;
       });
       return next;
     });
