@@ -32,6 +32,8 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
 
   if (path === "/api/geocode") return geocode(url, env);
   if (path === "/api/apollo/search") return apolloSearch(request, env);
+  if (path === "/api/enrich") return enrich(request, env);
+  if (path === "/api/hunter/domain") return hunterDomain(url, env);
   if (path === "/api/ghl/send") return ghlSend(request, env);
 
   return null;
@@ -90,12 +92,9 @@ interface ScrapeFilters {
 
 async function apolloSearch(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") return json({ error: "POST only" }, 405);
-  const key =
-    env.APOLLO_API_KEY ||
-    (typeof process !== "undefined" ? process.env?.APOLLO_API_KEY : undefined);
+  const key = env.APOLLO_API_KEY;
   // No key configured -> tell the client to use demo data.
   if (!key) return json({ demo: true });
-
 
   let filters: ScrapeFilters = {};
   try {
@@ -104,46 +103,239 @@ async function apolloSearch(request: Request, env: Env): Promise<Response> {
     return json({ error: "invalid json" }, 400);
   }
 
-  const perPage = Math.min(Math.max(filters.perPage ?? 10, 1), 25);
+  // Total contacts the user wants (cap 500 to keep credit use + Worker time sane).
+  const wanted = Math.min(Math.max(filters.perPage ?? 25, 1), 500);
   const titles = (filters.titles ?? "")
     .split(",")
     .map((t) => t.trim())
     .filter(Boolean);
 
-  // Apollo "mixed_people/search" accepts a JSON body of filters.
-  const body: Record<string, unknown> = {
-    page: 1,
-    per_page: perPage,
-  };
+  const baseBody: Record<string, unknown> = {};
   if (filters.location?.trim()) {
-    body.person_locations = [filters.location.trim()];
-    body.organization_locations = [filters.location.trim()];
+    baseBody.person_locations = [filters.location.trim()];
+    baseBody.organization_locations = [filters.location.trim()];
   }
-  if (titles.length) body.person_titles = titles;
-  if (filters.seniorities?.length) body.person_seniorities = filters.seniorities;
-  if (filters.industry?.trim()) body.q_keywords = filters.industry.trim();
+  if (titles.length) baseBody.person_titles = titles;
+  if (filters.seniorities?.length) baseBody.person_seniorities = filters.seniorities;
+  if (filters.industry?.trim()) baseBody.q_keywords = filters.industry.trim();
 
+  // Apollo returns max 100/page, so loop pages until we have `wanted` (or run out).
+  const PER_PAGE = 100;
+  const pages = Math.ceil(wanted / PER_PAGE);
+  const collected: ApolloPerson[] = [];
   try {
-    const res = await fetch("https://api.apollo.io/api/v1/mixed_people/api_search", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache",
-        Accept: "application/json",
-        "X-Api-Key": key,
-      },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      return json({ error: `apollo ${res.status}`, detail: text.slice(0, 300) }, 502);
+    for (let page = 1; page <= pages; page++) {
+      const res = await fetch("https://api.apollo.io/api/v1/mixed_people/api_search", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
+          Accept: "application/json",
+          "X-Api-Key": key,
+        },
+        body: JSON.stringify({ ...baseBody, page, per_page: PER_PAGE }),
+      });
+      if (!res.ok) {
+        // If the very first page fails, surface the error; otherwise keep what we have.
+        if (page === 1) {
+          const text = await res.text();
+          return json({ error: `apollo ${res.status}`, detail: text.slice(0, 300) }, 502);
+        }
+        break;
+      }
+      const data = (await res.json()) as { people?: ApolloPerson[] };
+      const batch = data.people ?? [];
+      collected.push(...batch);
+      if (batch.length < PER_PAGE) break; // no more results
+      if (collected.length >= wanted) break;
     }
-    const data = (await res.json()) as { people?: ApolloPerson[] };
-    const people = (data.people ?? []).map(normalizePerson);
+    const people = collected.slice(0, wanted).map(normalizePerson);
     return json({ demo: false, people });
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }
+}
+
+/* --------------------------------------------------------------------- */
+/* Enrichment waterfall — Apollo bulk_match, then Hunter.io fallback       */
+/* --------------------------------------------------------------------- */
+
+interface EnrichInput {
+  id?: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  domain?: string; // company website / domain
+  organizationName?: string;
+  linkedin?: string;
+}
+
+async function enrich(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") return json({ error: "POST only" }, 405);
+  let payload: { people?: EnrichInput[]; revealPhone?: boolean } = {};
+  try {
+    payload = (await request.json()) as typeof payload;
+  } catch {
+    return json({ error: "invalid json" }, 400);
+  }
+  const people = (payload.people ?? []).slice(0, 10); // 1 Apollo bulk call = max 10
+  if (!people.length) return json({ results: [] });
+
+  const apolloKey = env.APOLLO_API_KEY;
+  const hunterKey = env.HUNTER_API_KEY;
+
+  // No keys at all -> demo: synthesise plausible emails so the flow is usable.
+  if (!apolloKey && !hunterKey) {
+    return json({
+      demo: true,
+      results: people.map((p) => ({
+        id: p.id,
+        email: demoEmail(p),
+        phone: "",
+        source: "demo",
+      })),
+    });
+  }
+
+  // Start with empty results keyed by id/index.
+  const results: { id?: string; email: string; phone: string; source: string }[] = people.map((p) => ({
+    id: p.id,
+    email: "",
+    phone: "",
+    source: "",
+  }));
+
+  // 1) Apollo bulk enrichment (best for Apollo-sourced contacts).
+  if (apolloKey) {
+    try {
+      const details = people.map((p) => ({
+        id: p.id,
+        first_name: p.firstName,
+        last_name: p.lastName,
+        name: p.name,
+        organization_name: p.organizationName,
+        domain: p.domain,
+        linkedin_url: p.linkedin,
+      }));
+      const url = new URL("https://api.apollo.io/api/v1/people/bulk_match");
+      url.searchParams.set("reveal_personal_emails", "true");
+      if (payload.revealPhone) url.searchParams.set("reveal_phone_number", "true");
+      const res = await fetch(url.toString(), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
+          Accept: "application/json",
+          "X-Api-Key": apolloKey,
+        },
+        body: JSON.stringify({
+          details,
+          reveal_personal_emails: true,
+          reveal_phone_number: !!payload.revealPhone,
+        }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { matches?: (ApolloPerson | null)[] };
+        (data.matches ?? []).forEach((m, i) => {
+          if (!m || !results[i]) return;
+          const email = m.email && !isLocked(m.email) ? m.email : "";
+          const phone =
+            m.phone_numbers?.[0]?.sanitized_number || m.phone_numbers?.[0]?.raw_number || "";
+          if (email) {
+            results[i].email = email;
+            results[i].source = "Apollo";
+          }
+          if (phone) results[i].phone = phone;
+        });
+      }
+    } catch {
+      /* fall through to Hunter */
+    }
+  }
+
+  // 2) Hunter.io fallback for anyone still missing an email (searches the web by domain).
+  if (hunterKey) {
+    for (let i = 0; i < people.length; i++) {
+      if (results[i].email) continue;
+      const p = people[i];
+      const domain = cleanDomain(p.domain);
+      if (!domain) continue;
+      try {
+        const u = new URL("https://api.hunter.io/v2/email-finder");
+        u.searchParams.set("domain", domain);
+        if (p.firstName) u.searchParams.set("first_name", p.firstName);
+        if (p.lastName) u.searchParams.set("last_name", p.lastName);
+        u.searchParams.set("api_key", hunterKey);
+        const res = await fetch(u.toString());
+        if (res.ok) {
+          const d = (await res.json()) as { data?: { email?: string } };
+          if (d.data?.email) {
+            results[i].email = d.data.email;
+            results[i].source = "Hunter";
+          }
+        }
+      } catch {
+        /* skip this one */
+      }
+    }
+  }
+
+  return json({ demo: false, results });
+}
+
+/* --------------------------------------------------------------------- */
+/* Hunter.io — find every public email at a company domain                 */
+/* --------------------------------------------------------------------- */
+
+async function hunterDomain(url: URL, env: Env): Promise<Response> {
+  const key = env.HUNTER_API_KEY;
+  const domain = cleanDomain(url.searchParams.get("domain") ?? "");
+  if (!domain) return json({ error: "missing domain" }, 400);
+  if (!key) return json({ demo: true, emails: [] });
+  try {
+    const u = new URL("https://api.hunter.io/v2/domain-search");
+    u.searchParams.set("domain", domain);
+    u.searchParams.set("limit", url.searchParams.get("limit") ?? "10");
+    const sen = url.searchParams.get("seniority");
+    if (sen) u.searchParams.set("seniority", sen);
+    u.searchParams.set("api_key", key);
+    const res = await fetch(u.toString());
+    if (!res.ok) return json({ error: `hunter ${res.status}` }, 502);
+    const d = (await res.json()) as {
+      data?: { emails?: Array<Record<string, unknown>> };
+    };
+    const emails = (d.data?.emails ?? []).map((e) => ({
+      email: String(e.value ?? ""),
+      name: [e.first_name, e.last_name].filter(Boolean).join(" "),
+      title: String(e.position ?? ""),
+      seniority: String(e.seniority ?? ""),
+      department: String(e.department ?? ""),
+      confidence: Number(e.confidence ?? 0),
+    }));
+    return json({ demo: false, emails });
+  } catch (e) {
+    return json({ error: (e as Error).message }, 500);
+  }
+}
+
+function isLocked(email: string): boolean {
+  return /not_unlocked|email_not_unlocked|@domain\.com$|locked/i.test(email);
+}
+
+function cleanDomain(s: string | undefined): string {
+  if (!s) return "";
+  return s
+    .replace(/^https?:\/\//i, "")
+    .replace(/^www\./i, "")
+    .replace(/\/.*$/, "")
+    .trim();
+}
+
+function demoEmail(p: EnrichInput): string {
+  const first = (p.firstName || p.name?.split(" ")[0] || "contact").toLowerCase();
+  const last = (p.lastName || p.name?.split(" ").slice(-1)[0] || "info").toLowerCase();
+  const dom = cleanDomain(p.domain) || "example.com";
+  return `${first}.${last}@${dom}`.replace(/\s+/g, "");
 }
 
 interface ApolloPerson {
