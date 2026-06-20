@@ -441,36 +441,46 @@
     n&&n.querySelectorAll("a").forEach(function(a){a.addEventListener("click",function(){n.classList.remove("open");});});
   })();
 
-  /* ---- pricing calculator ---- */
+  /* ---- pricing service picker ---- */
   (function(){
-    var leads=document.getElementById("leads"), camps=document.getElementById("camps");
-    if(!leads) return;
+    var grid=document.getElementById("servicesGrid");
+    if(!grid) return;
+    var SERVICES=[
+      {id:"ads_management", name:"Ads Management",        price:500,  billing:"monthly",  desc:"Ongoing Meta / Google / TikTok ads management.", checked:true},
+      {id:"ads_setup",      name:"Ads Setup",             price:500,  billing:"one-time", desc:"Accounts, pixel, audiences & first creative set up.", checked:true},
+      {id:"website_build",  name:"Website Build",         price:2500, billing:"one-time", desc:"Conversion-focused site or Shopify store build.", checked:false},
+      {id:"email_sms",      name:"Email & SMS Marketing", price:500,  billing:"monthly",  desc:"Flows, broadcasts and SMS campaigns.", checked:false},
+      {id:"service_fee",    name:"Service Fee",           price:500,  billing:"monthly",  desc:"Standard monthly service / strategy fee.", checked:true}
+    ];
     var euro=function(v){return "€"+v.toLocaleString("nl-BE",{minimumFractionDigits:2,maximumFractionDigits:2});};
-    var euro0=function(v){return "€"+Math.round(v).toLocaleString("nl-BE");};
-    function calc(){
-      var L=+leads.value, C=+camps.value;
-      document.getElementById("leadsVal").textContent=L;
-      document.getElementById("campsVal").textContent=C;
-      var poor=Math.max(1,Math.round(L*0.12));
-      // Inspirova
-      var usService=350, usPerLead=60*L, usRefund=poor*60;
-      var usTotal=usService+usPerLead+ (C-2)*40 - 0; // simple model
-      var usPpl=(usTotal)/Math.max(1,L);
-      // Competition
-      var themWebsite=937.5, themSetup=781.25*C, themAds=175*C, themLost=poor*35;
-      var themTotal=themWebsite+themSetup+themAds+themLost;
-      var themPpl=themTotal/Math.max(1,L);
-      var save=Math.max(0,Math.round((1-usPpl/themPpl)*100));
-      document.getElementById("usPpl").textContent=euro0(usPpl);
-      document.getElementById("themPpl").textContent=euro0(themPpl);
-      document.getElementById("savePct").textContent=save+"%";
-      document.getElementById("usPoor").textContent=poor;
-      document.getElementById("themPoor").textContent=poor;
-      document.getElementById("usTotal").textContent=euro(usTotal);
-      document.getElementById("themTotal").textContent=euro(themTotal);
+
+    function render(){
+      grid.innerHTML=SERVICES.map(function(s,i){
+        return '<label class="svc'+(s.checked?" on":"")+'">'
+          +'<input type="checkbox" data-i="'+i+'"'+(s.checked?" checked":"")+'>'
+          +'<div class="svc-body">'
+            +'<div class="svc-top"><span class="svc-name">'+s.name+'</span>'
+            +'<span class="svc-price">'+euro(s.price)+'<small>'+(s.billing==="monthly"?" /mo":" setup")+'</small></span></div>'
+            +'<div class="svc-desc">'+s.desc+'</div>'
+          +'</div></label>';
+      }).join("");
+      grid.querySelectorAll("input").forEach(function(cb){
+        cb.addEventListener("change",function(){
+          SERVICES[+cb.dataset.i].checked=cb.checked;
+          render(); calc();
+        });
+      });
     }
-    leads.addEventListener("input",calc); camps.addEventListener("input",calc); calc();
+    function calc(){
+      var monthly=0,setup=0;
+      SERVICES.forEach(function(s){ if(!s.checked) return; if(s.billing==="monthly") monthly+=s.price; else setup+=s.price; });
+      document.getElementById("sumMonthly").textContent=euro(monthly);
+      document.getElementById("sumSetup").textContent=euro(setup);
+      document.getElementById("sumTotal").textContent=euro(monthly+setup);
+    }
+    render(); calc();
   })();
+
 </script>
 </body>
 </html>
