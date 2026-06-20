@@ -1,0 +1,14 @@
+# Copy this file to ".dev.vars" for local development (vite dev).
+# In production, set these with: wrangler secret put NAME
+#
+# These power the same-origin API proxies in src/lib/api-proxies.ts.
+# The browser never sees them — only the Cloudflare Worker does.
+
+# Apollo.io master API key — powers the Data Scraper.
+# Get it in Apollo: Settings -> Integrations -> API.
+# Without it, the scraper runs in Demo mode with sample data.
+APOLLO_API_KEY=
+
+# GoHighLevel private integration token (optional) — powers live email sending.
+# Without it, the Email / GHL tab simulates sends.
+GHL_API_KEY=

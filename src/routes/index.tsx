@@ -18,19 +18,28 @@ function HomePage() {
   const renderedHtml = siteHtml.replaceAll("__LOGO__", logo).replace(
     "</body>",
     `<script>
-      document.querySelectorAll('a[href="/results"]').forEach(function(link) {
+      // Route any internal link (e.g. /results, /admin) through the parent SPA
+      // so navigation is instant. The target="_top" on the anchors is a fallback
+      // if JavaScript is unavailable.
+      document.querySelectorAll('a[href^="/"]').forEach(function(link) {
+        var path = link.getAttribute('href');
         link.addEventListener('click', function(event) {
           event.preventDefault();
-          window.parent.postMessage({ type: 'inspirova:navigate', path: '/results' }, '*');
+          window.parent.postMessage({ type: 'inspirova:navigate', path: path }, '*');
         });
       });
     </script></body>`,
   );
 
   useEffect(() => {
+    const allowedPaths = ["/results", "/admin"];
     const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === "inspirova:navigate" && event.data.path === "/results") {
-        navigate({ to: "/results" });
+      if (
+        event.data?.type === "inspirova:navigate" &&
+        typeof event.data.path === "string" &&
+        allowedPaths.includes(event.data.path)
+      ) {
+        navigate({ to: event.data.path });
       }
     };
 
