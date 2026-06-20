@@ -473,18 +473,54 @@
     n&&n.querySelectorAll("a").forEach(function(a){a.addEventListener("click",function(){n.classList.remove("open");});});
   })();
 
-  /* ---- pricing service picker ---- */
+  /* ---- pricing service picker + bundles ---- */
   (function(){
     var grid=document.getElementById("servicesGrid");
-    if(!grid) return;
+    var bundlesGrid=document.getElementById("bundlesGrid");
+    if(!grid||!bundlesGrid) return;
+
     var SERVICES=[
-      {id:"ads_management", name:"Ads Management",        price:500,  billing:"monthly",  desc:"Ongoing Meta / Google / TikTok ads management.", checked:true},
-      {id:"ads_setup",      name:"Ads Setup",             price:500,  billing:"one-time", desc:"Accounts, pixel, audiences & first creative set up.", checked:true},
-      {id:"website_build",  name:"Website Build",         price:2500, billing:"one-time", desc:"Conversion-focused site or Shopify store build.", checked:false},
-      {id:"email_sms",      name:"Email & SMS Marketing", price:500,  billing:"monthly",  desc:"Flows, broadcasts and SMS campaigns.", checked:false},
-      {id:"service_fee",    name:"Service Fee",           price:500,  billing:"monthly",  desc:"Standard monthly service / strategy fee.", checked:true}
+      {id:"ads_setup",      name:"Ads Setup",                 price:1000, billing:"one-time", desc:"Ad accounts, audiences & launch-ready first creative.", checked:false},
+      {id:"ads_management", name:"Ads Management / Creation", price:500,  billing:"monthly",  desc:"Ongoing Meta / Google / TikTok ads & creative.",        checked:false},
+      {id:"video_creation", name:"Video Creation",            price:100,  billing:"one-time", desc:"Short-form ad / content video — per video.",            checked:false},
+      {id:"email_sms",      name:"Email & SMS Automations",   price:750,  billing:"monthly",  desc:"Flows, broadcasts and SMS automations.",                checked:false},
+      {id:"website",        name:"Website Design / Creation", price:300,  billing:"one-time", desc:"Conversion-focused website — per site.",                checked:false},
+      {id:"pixel_ecom",     name:"E-commerce Pixel Setup",    price:150,  billing:"one-time", desc:"Pixel + server-side tracking for e-commerce.",          checked:false},
+      {id:"pixel_leadgen",  name:"Lead-gen Pixel Setup",      price:150,  billing:"one-time", desc:"Pixel + form/lead tracking for service businesses.",   checked:false}
     ];
+
+    var BUNDLES=[
+      { id:"deluxe",   name:"Deluxe Package",   tag:"Everything — site, automations & management.", first:2500, recurring:750, includes:["website","ads_setup","ads_management","email_sms","pixel_ecom"], badge:"Most popular" },
+      { id:"growth",   name:"Growth Package",   tag:"Ads setup, ongoing management & tracking.",     first:1200, recurring:500, includes:["ads_setup","ads_management","pixel_ecom"], badge:"" },
+      { id:"creation", name:"Creation Package", tag:"Ads setup, creative & video production.",       first:750,  recurring:0,   includes:["ads_setup","video_creation"], badge:"" }
+    ];
+
     var euro=function(v){return "€"+v.toLocaleString("nl-BE",{minimumFractionDigits:2,maximumFractionDigits:2});};
+    var euro0=function(v){return "€"+Math.round(v).toLocaleString("nl-BE");};
+    var nameById=function(id){var s=SERVICES.find(function(x){return x.id===id;}); return s?s.name:id;};
+
+    function renderBundles(){
+      bundlesGrid.innerHTML=BUNDLES.map(function(b){
+        var items=b.includes.map(function(i){return '<li>'+nameById(i)+'</li>';}).join("");
+        return '<div class="bundle'+(b.badge?" featured":"")+'" data-id="'+b.id+'">'
+          +(b.badge?'<div class="bundle-badge">'+b.badge+'</div>':'')
+          +'<div class="bundle-name">'+b.name+'</div>'
+          +'<div class="bundle-tag">'+b.tag+'</div>'
+          +'<div class="bundle-price">'+euro0(b.first)+'<small> first month</small></div>'
+          +(b.recurring>0?'<div class="bundle-sub">then '+euro0(b.recurring)+' / month</div>':'<div class="bundle-sub">one-time</div>')
+          +'<ul class="bundle-list">'+items+'</ul>'
+          +'<button class="btn btn-primary bundle-btn" type="button">Select bundle</button>'
+        +'</div>';
+      }).join("");
+      bundlesGrid.querySelectorAll(".bundle").forEach(function(card){
+        card.querySelector(".bundle-btn").addEventListener("click",function(){
+          var b=BUNDLES.find(function(x){return x.id===card.dataset.id;});
+          SERVICES.forEach(function(s){ s.checked = b.includes.indexOf(s.id)!==-1; });
+          render(); calc();
+          document.getElementById("servicesGrid").scrollIntoView({behavior:"smooth",block:"center"});
+        });
+      });
+    }
 
     function render(){
       grid.innerHTML=SERVICES.map(function(s,i){
@@ -510,7 +546,7 @@
       document.getElementById("sumSetup").textContent=euro(setup);
       document.getElementById("sumTotal").textContent=euro(monthly+setup);
     }
-    render(); calc();
+    renderBundles(); render(); calc();
   })();
 
 </script>
