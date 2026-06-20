@@ -116,6 +116,11 @@ const caseStudies = [
 ];
 
 function ResultsPage() {
+  useEffect(() => {
+    document.documentElement.classList.add("dark");
+    return () => document.documentElement.classList.remove("dark");
+  }, []);
+
   return (
     <main className="min-h-screen">
       <header className="fixed top-0 z-50 w-full border-b border-border/50 bg-background/70 backdrop-blur-xl">
