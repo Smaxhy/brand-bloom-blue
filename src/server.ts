@@ -71,7 +71,13 @@ export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
       // Same-origin API proxies (Apollo scraper, geocoding, GHL) run first.
-      const apiResponse = await handleApiRequest(request, (env ?? {}) as Record<string, string | undefined>);
+      // Merge Worker bindings (env) with process.env so Lovable-managed secrets
+      // (which land in process.env) are visible to the proxy handlers.
+      const mergedEnv = {
+        ...(typeof process !== "undefined" ? (process.env as Record<string, string | undefined>) : {}),
+        ...((env ?? {}) as Record<string, string | undefined>),
+      };
+      const apiResponse = await handleApiRequest(request, mergedEnv);
       if (apiResponse) return apiResponse;
 
       const handler = await getServerEntry();
