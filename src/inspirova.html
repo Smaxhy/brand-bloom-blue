@@ -600,8 +600,8 @@
           +(b.badge?'<div class="bundle-badge">'+b.badge+'</div>':'')
           +'<div class="bundle-name">'+b.name+'</div>'
           +'<div class="bundle-tag">'+b.tag+'</div>'
-          +'<div class="bundle-price">'+euro0(b.first)+'<small> first month</small></div>'
-          +(b.recurring>0?'<div class="bundle-sub">then '+euro0(b.recurring)+' / month</div>':'<div class="bundle-sub">one-time</div>')
+          +'<div class="bundle-price">'+euro0(b.first)+'<small> upfront</small></div>'
+          +(b.recurring>0?'<div class="bundle-sub">then '+euro0(b.recurring)+' / month</div>':'<div class="bundle-sub">paid upfront</div>')
           +'<ul class="bundle-list">'+items+'</ul>'
           +'<button class="btn btn-primary bundle-btn" type="button">Select bundle</button>'
         +'</div>';
