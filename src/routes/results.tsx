@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect } from "react";
 import logo from "@/assets/inspirova-logo.png";
 import proof1 from "@/assets/proof-1.png";
 import proof2 from "@/assets/proof-2.png";
@@ -115,6 +116,11 @@ const caseStudies = [
 ];
 
 function ResultsPage() {
+  useEffect(() => {
+    document.documentElement.classList.add("dark");
+    return () => document.documentElement.classList.remove("dark");
+  }, []);
+
   return (
     <main className="min-h-screen">
       <header className="fixed top-0 z-50 w-full border-b border-border/50 bg-background/70 backdrop-blur-xl">
@@ -135,10 +141,10 @@ function ResultsPage() {
       <section className="relative overflow-hidden pt-32 pb-20 md:pt-44 md:pb-28">
         <div
           aria-hidden
-          className="absolute inset-0 -z-10 opacity-60"
+          className="absolute inset-0 -z-10"
           style={{
             background:
-              "radial-gradient(60% 50% at 50% 0%, color-mix(in oklab, var(--brand-purple) 22%, transparent) 0%, transparent 70%), radial-gradient(40% 40% at 80% 20%, color-mix(in oklab, var(--brand-blue) 25%, transparent) 0%, transparent 70%)",
+              "radial-gradient(60% 50% at 15% 10%, rgba(124,92,255,.42) 0%, transparent 60%), radial-gradient(55% 45% at 90% 90%, rgba(99,102,241,.36) 0%, transparent 65%), radial-gradient(45% 45% at 50% 100%, rgba(168,139,255,.22) 0%, transparent 70%), linear-gradient(180deg,#08060F 0%,#0C0820 55%,#08060F 100%)",
           }}
         />
         <div className="mx-auto max-w-6xl px-6 text-center">

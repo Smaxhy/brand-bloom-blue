@@ -24,6 +24,27 @@
   --shadow-brand: 0 18px 40px -18px color-mix(in oklab, var(--brand-violet) 52%, transparent); --shadow-soft: 0 18px 60px -40px color-mix(in oklab, var(--brand-ink) 30%, transparent);
 }
 
+.dark {
+  --background: #08060F;
+  --foreground: #FFFFFF;
+  --card: #120A2C;
+  --card-foreground: #FFFFFF;
+  --popover: #0C0820;
+  --popover-foreground: #FFFFFF;
+  --primary: #7C5CFF;
+  --primary-foreground: #FFFFFF;
+  --secondary: rgba(255,255,255,.06);
+  --secondary-foreground: #FFFFFF;
+  --muted: rgba(255,255,255,.06);
+  --muted-foreground: rgba(255,255,255,.7);
+  --accent: #FF8366;
+  --accent-foreground: #FFFFFF;
+  --border: rgba(255,255,255,.08);
+  --input: rgba(255,255,255,.08);
+  --ring: #7C5CFF;
+  --shadow-soft: 0 18px 60px -40px rgba(124,92,255,.25);
+}
+
 @layer base {
   * { border-color: var(--color-border); }
   html { scroll-behavior: smooth; }
