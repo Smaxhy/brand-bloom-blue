@@ -461,7 +461,7 @@
 
       <div class="totals">
         <div class="totals-row"><span class="k">Monthly</span><span class="v" id="sumMonthly">€0,00</span><span class="sub">/month, recurring</span></div>
-        <div class="totals-row total"><span class="k">Upfront payment</span><span class="v" id="sumTotal">€0,00</span><span class="sub">first month + setup</span></div>
+        <div class="totals-row total"><span class="k">First month</span><span class="v" id="sumTotal">€0,00</span><span class="sub">first month + setup</span></div>
       </div>
 
       <p class="fineprint">
@@ -600,8 +600,8 @@
           +(b.badge?'<div class="bundle-badge">'+b.badge+'</div>':'')
           +'<div class="bundle-name">'+b.name+'</div>'
           +'<div class="bundle-tag">'+b.tag+'</div>'
-          +'<div class="bundle-price">'+euro0(b.first)+'<small> upfront</small></div>'
-          +(b.recurring>0?'<div class="bundle-sub">then '+euro0(b.recurring)+' / month</div>':'<div class="bundle-sub">paid upfront</div>')
+          +'<div class="bundle-price">'+euro0(b.first)+'<small> first month</small></div>'
+          +(b.recurring>0?'<div class="bundle-sub">then '+euro0(b.recurring)+' / month</div>':'<div class="bundle-sub">paid first month</div>')
           +'<ul class="bundle-list">'+items+'</ul>'
           +'<button class="btn btn-primary bundle-btn" type="button">Select bundle</button>'
         +'</div>';
@@ -622,7 +622,7 @@
           +'<input type="checkbox" data-i="'+i+'"'+(s.checked?" checked":"")+'>'
           +'<div class="svc-body">'
             +'<div class="svc-top"><span class="svc-name">'+s.name+'</span>'
-            +'<span class="svc-price">'+euro(s.price)+'<small>'+(s.billing==="monthly"?" /mo":" upfront")+'</small></span></div>'
+            +'<span class="svc-price">'+euro(s.price)+'<small>'+(s.billing==="monthly"?" /mo":" first month")+'</small></span></div>'
             +'<div class="svc-desc">'+s.desc+'</div>'
           +'</div></label>';
       }).join("");
@@ -675,7 +675,7 @@
         template: q.selected.length ? "Custom selection" : "Quote request",
         notes: "Personal quote requested from inspirovamarketing.com."
               + (q.names.length ? "\nServices: " + q.names.join(", ") : "")
-              + "\nMonthly: €"+q.monthly+" · Upfront: €"+q.upfront+" · Total: €"+q.total
+              + "\nMonthly: €"+q.monthly+" · First month: €"+q.upfront+" · Total: €"+q.total
               + (notes ? "\n\nClient note: "+notes : ""),
         createdAt: now,
         updatedAt: now
