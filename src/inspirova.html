@@ -112,23 +112,15 @@
     letter-spacing:-.01em;transition:color .25s,transform .25s}
   .logos span:hover{color:var(--mist);transform:translateY(-2px)}
 
-  /* ---------- brand moment ---------- */
-  .brand-moment{position:relative;padding:110px 0 100px;color:#fff;overflow:hidden;
+  /* ---------- brand transition (clean overlay) ---------- */
+  .brand-moment{position:relative;height:160px;overflow:hidden;
+    background:linear-gradient(180deg,var(--ink) 0%,#0B0828 50%,var(--ink) 100%)}
+  .brand-moment::before{content:"";position:absolute;inset:0;
     background:
-      radial-gradient(65% 55% at 25% 15%, rgba(99,102,241,.40) 0%, transparent 60%),
-      radial-gradient(60% 50% at 80% 85%, rgba(124,92,255,.42) 0%, transparent 65%),
-      radial-gradient(50% 50% at 50% 100%, rgba(79,70,229,.28) 0%, transparent 70%),
-      linear-gradient(180deg,#08060F 0%,#0B0828 50%,#08060F 100%)}
-  .brand-moment::before{content:"";position:absolute;inset:-2px 0 auto 0;height:140px;
-    background:linear-gradient(180deg,var(--ink) 0%,transparent 100%);pointer-events:none;z-index:1}
-  .brand-moment::after{content:"";position:absolute;inset:auto 0 -2px 0;height:140px;
-    background:linear-gradient(0deg,var(--ink) 0%,transparent 100%);pointer-events:none;z-index:1}
-  .brand-moment .wrap{position:relative;z-index:2;text-align:center}
-  .brand-moment h2{font-family:var(--display);font-weight:800;letter-spacing:-.03em;
-    font-size:clamp(3.2rem,10vw,7.5rem);line-height:1;
-    background:linear-gradient(100deg,#818cf8 0%,#a78bfa 30%,#c084fc 60%,#f472b6 100%);
-    -webkit-background-clip:text;background-clip:text;color:transparent}
-  .brand-moment p{margin-top:16px;font-size:clamp(.95rem,1.8vw,1.25rem);color:rgba(255,255,255,.78);font-weight:500}
+      radial-gradient(60% 80% at 50% 50%, rgba(124,92,255,.25) 0%, transparent 70%),
+      radial-gradient(40% 60% at 20% 50%, rgba(99,102,241,.18) 0%, transparent 70%);
+    pointer-events:none}
+
 
   /* ---------- feature split ---------- */
   .feat{background:var(--surface-dark);color:#fff;
@@ -321,7 +313,7 @@
 <header>
   <div class="wrap">
     <div class="nav-shell">
-      <a class="brand" href="#top"><img class="logo-mark" src="/__l5e/assets-v1/8a61493c-c722-46c0-9c10-d5314cd269a6/inspirova-logo.png" alt="Inspirova"></a>
+      <a class="brand" href="#top" aria-label="Inspirova"></a>
       <nav class="nav-links" id="navlinks">
         <a href="#services" class="active">Marketing</a>
         <a href="#how">How it works</a>
@@ -356,20 +348,16 @@
       <div class="orbit" id="orbit" aria-hidden="true">
         <div class="orbit-ring"></div>
         <div class="orbit-ring inner"></div>
-        <div class="orbit-core"><img src="/__l5e/assets-v1/8a61493c-c722-46c0-9c10-d5314cd269a6/inspirova-logo.png" alt="Inspirova"></div>
+        <div class="orbit-core"><img src="/__l5e/assets-v1/f6802d94-5a31-48da-bb14-5dd0d871a27c/inspirova-full.png" alt="Inspirova"></div>
         <!-- nodes positioned by JS -->
       </div>
     </div>
   </div>
 </section>
 
-<!-- ============ BRAND MOMENT ============ -->
-<section class="brand-moment">
-  <div class="wrap">
-    <h2>Inspirova</h2>
-    <p>Built to inspire</p>
-  </div>
-</section>
+<!-- ============ BRAND TRANSITION ============ -->
+<div class="brand-moment" aria-hidden="true"></div>
+
 
 <!-- ============ FEATURE SPLIT ============ -->
 <section class="feat" id="services">
