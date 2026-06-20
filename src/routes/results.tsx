@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect } from "react";
 import logo from "@/assets/inspirova-logo.png";
 import proof1 from "@/assets/proof-1.png";
 import proof2 from "@/assets/proof-2.png";
