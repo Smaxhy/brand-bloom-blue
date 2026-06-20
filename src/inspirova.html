@@ -75,7 +75,7 @@
     border-radius:50% 50% 0 0/100% 100% 0 0}
   .hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:40px;align-items:center}
   .hero h1{font-family:var(--display);font-weight:800;letter-spacing:-.03em;line-height:1.02;font-size:clamp(2.4rem,5.4vw,4rem)}
-  .hero h1 .lime{color:#C6F24E}
+  .hero h1 .lime{color:#A88BFF}
   .hero p.sub{margin-top:22px;max-width:46ch;font-size:clamp(1rem,1.3vw,1.15rem);color:rgba(255,255,255,.86)}
   .hero-cta{margin-top:34px;display:flex;gap:14px;flex-wrap:wrap}
 
@@ -94,7 +94,7 @@
   .node svg{width:24px;height:24px}
   .node small{position:absolute;top:60px;left:50%;transform:translateX(-50%);font-size:.62rem;font-weight:600;
     color:rgba(255,255,255,.92);white-space:nowrap;letter-spacing:.01em}
-  .node.lime{color:#5a9a14}
+  .node.lime{color:#7C3AED}
   @keyframes corepulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
   @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
 
@@ -113,7 +113,7 @@
   .feat::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:80px;background:var(--ink);border-radius:50% 50% 0 0/100% 100% 0 0}
   .feat-grid{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center}
   .feat h2{font-family:var(--display);font-weight:800;letter-spacing:-.03em;line-height:1.04;font-size:clamp(2rem,4.4vw,3.1rem)}
-  .feat h2 .lime{color:#C6F24E}
+  .feat h2 .lime{color:#A88BFF}
   .feat p{margin-top:20px;color:rgba(255,255,255,.85);max-width:48ch}
   .feat .accent{margin-top:22px;font-weight:600;color:#fff}
   .cards{display:grid;grid-template-columns:1fr 1fr;gap:20px}
@@ -151,9 +151,9 @@
   .pricing{background:linear-gradient(160deg,var(--violet) 0%,var(--violet-bright) 60%,#8b6bff 100%);color:#fff;
     padding:100px 0 0;position:relative}
   .pricing-head{text-align:center;max-width:760px;margin:0 auto 10px}
-  .pricing-head .eye{font-family:var(--mono);font-weight:700;letter-spacing:.2em;font-size:.72rem;color:#C6F24E}
+  .pricing-head .eye{font-family:var(--mono);font-weight:700;letter-spacing:.2em;font-size:.72rem;color:#A88BFF}
   .pricing-head h2{font-family:var(--display);font-weight:800;letter-spacing:-.03em;font-size:clamp(2rem,4.6vw,3.2rem);margin-top:14px}
-  .pricing-head h2 .lime{color:#C6F24E}
+  .pricing-head h2 .lime{color:#A88BFF}
   .pricing-head p{margin-top:16px;color:rgba(255,255,255,.85)}
   .calc-card{margin-top:54px;background:#fff;color:var(--mist);border-radius:34px 34px 0 0;
     box-shadow:0 -30px 60px -40px rgba(0,0,0,.4);padding:54px clamp(20px,4vw,56px) 70px}
@@ -161,10 +161,30 @@
   .calc-col h3{text-align:center;font-family:var(--display);font-weight:800;letter-spacing:.04em;color:var(--mist)}
   .calc-col .ppl{text-align:center;margin-top:14px;font-weight:600;color:var(--violet-bright);font-size:.96rem}
   .calc-col .big{text-align:center;font-family:var(--display);font-weight:800;font-size:clamp(2.4rem,5vw,3.4rem);margin-top:4px}
-  .calc-col.us .big{color:#7BC52B}
+  .calc-col.us .big{color:var(--violet-bright)}
   .save{text-align:center;margin-top:6px}
   .save .lbl{font-weight:700;letter-spacing:.16em;font-size:.72rem;color:var(--violet-bright)}
-  .save .pct{font-family:var(--display);font-weight:800;font-size:clamp(3rem,8vw,5rem);color:#7BC52B;line-height:1}
+  .save .pct{font-family:var(--display);font-weight:800;font-size:clamp(3rem,8vw,5rem);color:var(--violet-bright);line-height:1}
+  .services-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+  .svc{display:flex;gap:12px;border:1.5px solid var(--line-strong);border-radius:16px;padding:14px 16px;background:#fff;cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s}
+  .svc:hover{border-color:var(--violet-bright)}
+  .svc.on{border-color:var(--violet);background:color-mix(in oklab, var(--violet) 6%, #fff);box-shadow:0 8px 24px -16px var(--glow)}
+  .svc input{margin-top:4px;accent-color:var(--violet)}
+  .svc-body{flex:1;min-width:0}
+  .svc-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .svc-name{font-weight:700;color:var(--mist);font-size:.95rem}
+  .svc-price{font-family:var(--display);font-weight:800;color:var(--violet-bright);font-size:1rem}
+  .svc-price small{font-weight:500;color:var(--muted);font-size:.7rem;margin-left:2px}
+  .svc-desc{margin-top:4px;font-size:.8rem;color:var(--muted);line-height:1.4}
+  .totals{margin-top:24px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .totals-row{border:1.5px solid var(--line-strong);border-radius:14px;padding:14px 18px;display:flex;flex-direction:column;gap:2px}
+  .totals-row .k{font-weight:700;color:var(--violet-bright);font-size:.78rem;letter-spacing:.06em;text-transform:uppercase}
+  .totals-row .v{font-family:var(--display);font-weight:800;font-size:1.5rem;color:var(--mist)}
+  .totals-row .sub{font-size:.72rem;color:var(--muted)}
+  .totals-row.total{background:var(--mist);color:#fff;border-color:var(--mist)}
+  .totals-row.total .k{color:rgba(255,255,255,.7)}
+  .totals-row.total .v{color:#fff}
+  .totals-row.total .sub{color:rgba(255,255,255,.7)}
   .sliders{margin-top:30px}
   .slider-row{margin-bottom:26px}
   .slider-row label{display:flex;justify-content:space-between;font-weight:700;font-size:.92rem;margin-bottom:10px}
@@ -190,7 +210,7 @@
   .foot-links a{font-size:.9rem;transition:color .2s}.foot-links a:hover{color:var(--mist)}
 
   @media (max-width:880px){
-    .hero-grid,.feat-grid,.calc-grid,.breakdown{grid-template-columns:1fr}
+    .hero-grid,.feat-grid,.calc-grid,.breakdown,.totals{grid-template-columns:1fr}
     .cards{grid-template-columns:1fr 1fr}
     .logos{grid-template-columns:repeat(3,1fr)}
     .nav-links{display:none}
@@ -348,40 +368,24 @@
 <section class="pricing" id="pricing">
   <div class="wrap pricing-head">
     <div class="eye">PRICING</div>
-    <h2>Why choose <span class="lime">Inspirova</span>, in numbers</h2>
-    <p>We make growing your brand simple and affordable. See exactly what you'd pay with us versus a typical agency.</p>
+    <h2>Pick the services you need.<br><span class="lime">Transparent pricing, no fluff.</span></h2>
+    <p>Whether you run an e-commerce brand or a service business, build a package that fits. No cost-per-lead nonsense — just clear setup fees and monthly retainers.</p>
   </div>
 
   <div class="wrap">
     <div class="calc-card">
-      <div class="calc-grid">
-        <div class="calc-col us">
-          <h3>INSPIROVA</h3>
-          <div class="ppl">Real cost per qualified lead</div>
-          <div class="big" id="usPpl">€151</div>
-        </div>
-        <div class="calc-col them">
-          <h3>TYPICAL AGENCY</h3>
-          <div class="ppl">Real cost per qualified lead</div>
-          <div class="big" id="themPpl">€892</div>
-        </div>
+      <div class="services-grid" id="servicesGrid">
+        <!-- service cards injected by JS -->
       </div>
 
-      <div class="save">
-        <div class="lbl">YOU SAVE</div>
-        <div class="pct" id="savePct">83%</div>
+      <div class="totals">
+        <div class="totals-row"><span class="k">Monthly</span><span class="v" id="sumMonthly">€0,00</span><span class="sub">/month, recurring</span></div>
+        <div class="totals-row"><span class="k">One-time setup</span><span class="v" id="sumSetup">€0,00</span><span class="sub">due at start</span></div>
+        <div class="totals-row total"><span class="k">First-month total</span><span class="v" id="sumTotal">€0,00</span><span class="sub">setup + 1st month</span></div>
       </div>
 
       <div class="calc-grid" style="margin-top:34px">
         <div class="sliders">
-          <div class="slider-row">
-            <label>Leads per month <span id="leadsVal">5</span></label>
-            <input type="range" id="leads" min="2" max="40" value="5">
-          </div>
-          <div class="slider-row">
-            <label>Campaigns per month <span id="campsVal">2</span></label>
-            <input type="range" id="camps" min="1" max="8" value="2">
-          </div>
           <div class="form-grid">
             <input type="text" placeholder="Company">
             <input type="text" placeholder="First name">
@@ -395,22 +399,12 @@
 
         <div class="breakdown">
           <div class="bd-col">
-            <h4>INSPIROVA</h4>
-            <div class="bd-row"><div class="k">Service fee</div><div class="v">€350,00</div></div>
-            <div class="bd-row"><div class="k">Cost per lead</div><div class="v">€300,00</div></div>
-            <div class="bd-row"><div class="k">Poor leads</div><div class="v" id="usPoor">2</div></div>
-            <div class="bd-row"><div class="k">Refund on poor leads</div><div class="v">€-120,00</div></div>
-            <div class="bd-row"><div class="k">Money lost on poor leads</div><div class="v">€0,00</div></div>
-            <div class="bd-row total"><div class="k">Monthly total</div><div class="v" id="usTotal">€530,00</div></div>
-          </div>
-          <div class="bd-col">
-            <h4>TYPICAL AGENCY</h4>
-            <div class="bd-row"><div class="k">Website(s)</div><div class="v">€937,50</div></div>
-            <div class="bd-row"><div class="k">Set up &amp; monitor</div><div class="v">€1.562,50</div></div>
-            <div class="bd-row"><div class="k">Ad budget</div><div class="v">€175,00</div></div>
-            <div class="bd-row"><div class="k">Poor leads</div><div class="v" id="themPoor">2</div></div>
-            <div class="bd-row"><div class="k">Money lost on poor leads</div><div class="v">€70,00</div></div>
-            <div class="bd-row total"><div class="k">Monthly total</div><div class="v" id="themTotal">€2.675,00</div></div>
+            <h4>WHAT'S INCLUDED</h4>
+            <div class="bd-row"><div class="k">Strategy &amp; reporting calls</div><div class="v">Monthly</div></div>
+            <div class="bd-row"><div class="k">Dedicated account manager</div><div class="v">Yes</div></div>
+            <div class="bd-row"><div class="k">Creative production</div><div class="v">Included</div></div>
+            <div class="bd-row"><div class="k">No long-term contracts</div><div class="v">30-day rolling</div></div>
+            <div class="bd-row total"><div class="k">Service fee</div><div class="v">€500 / month</div></div>
           </div>
         </div>
       </div>
@@ -467,36 +461,46 @@
     n&&n.querySelectorAll("a").forEach(function(a){a.addEventListener("click",function(){n.classList.remove("open");});});
   })();
 
-  /* ---- pricing calculator ---- */
+  /* ---- pricing service picker ---- */
   (function(){
-    var leads=document.getElementById("leads"), camps=document.getElementById("camps");
-    if(!leads) return;
+    var grid=document.getElementById("servicesGrid");
+    if(!grid) return;
+    var SERVICES=[
+      {id:"ads_management", name:"Ads Management",        price:500,  billing:"monthly",  desc:"Ongoing Meta / Google / TikTok ads management.", checked:true},
+      {id:"ads_setup",      name:"Ads Setup",             price:500,  billing:"one-time", desc:"Accounts, pixel, audiences & first creative set up.", checked:true},
+      {id:"website_build",  name:"Website Build",         price:2500, billing:"one-time", desc:"Conversion-focused site or Shopify store build.", checked:false},
+      {id:"email_sms",      name:"Email & SMS Marketing", price:500,  billing:"monthly",  desc:"Flows, broadcasts and SMS campaigns.", checked:false},
+      {id:"service_fee",    name:"Service Fee",           price:500,  billing:"monthly",  desc:"Standard monthly service / strategy fee.", checked:true}
+    ];
     var euro=function(v){return "€"+v.toLocaleString("nl-BE",{minimumFractionDigits:2,maximumFractionDigits:2});};
-    var euro0=function(v){return "€"+Math.round(v).toLocaleString("nl-BE");};
-    function calc(){
-      var L=+leads.value, C=+camps.value;
-      document.getElementById("leadsVal").textContent=L;
-      document.getElementById("campsVal").textContent=C;
-      var poor=Math.max(1,Math.round(L*0.12));
-      // Inspirova
-      var usService=350, usPerLead=60*L, usRefund=poor*60;
-      var usTotal=usService+usPerLead+ (C-2)*40 - 0; // simple model
-      var usPpl=(usTotal)/Math.max(1,L);
-      // Competition
-      var themWebsite=937.5, themSetup=781.25*C, themAds=175*C, themLost=poor*35;
-      var themTotal=themWebsite+themSetup+themAds+themLost;
-      var themPpl=themTotal/Math.max(1,L);
-      var save=Math.max(0,Math.round((1-usPpl/themPpl)*100));
-      document.getElementById("usPpl").textContent=euro0(usPpl);
-      document.getElementById("themPpl").textContent=euro0(themPpl);
-      document.getElementById("savePct").textContent=save+"%";
-      document.getElementById("usPoor").textContent=poor;
-      document.getElementById("themPoor").textContent=poor;
-      document.getElementById("usTotal").textContent=euro(usTotal);
-      document.getElementById("themTotal").textContent=euro(themTotal);
+
+    function render(){
+      grid.innerHTML=SERVICES.map(function(s,i){
+        return '<label class="svc'+(s.checked?" on":"")+'">'
+          +'<input type="checkbox" data-i="'+i+'"'+(s.checked?" checked":"")+'>'
+          +'<div class="svc-body">'
+            +'<div class="svc-top"><span class="svc-name">'+s.name+'</span>'
+            +'<span class="svc-price">'+euro(s.price)+'<small>'+(s.billing==="monthly"?" /mo":" setup")+'</small></span></div>'
+            +'<div class="svc-desc">'+s.desc+'</div>'
+          +'</div></label>';
+      }).join("");
+      grid.querySelectorAll("input").forEach(function(cb){
+        cb.addEventListener("change",function(){
+          SERVICES[+cb.dataset.i].checked=cb.checked;
+          render(); calc();
+        });
+      });
     }
-    leads.addEventListener("input",calc); camps.addEventListener("input",calc); calc();
+    function calc(){
+      var monthly=0,setup=0;
+      SERVICES.forEach(function(s){ if(!s.checked) return; if(s.billing==="monthly") monthly+=s.price; else setup+=s.price; });
+      document.getElementById("sumMonthly").textContent=euro(monthly);
+      document.getElementById("sumSetup").textContent=euro(setup);
+      document.getElementById("sumTotal").textContent=euro(monthly+setup);
+    }
+    render(); calc();
   })();
+
 </script>
 </body>
 </html>

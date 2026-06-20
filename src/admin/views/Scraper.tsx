@@ -237,13 +237,13 @@ export function Scraper({
         <div
           className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${
             banner.live
-              ? "border-[oklch(.7_.18_150/.4)] bg-[oklch(.7_.18_150/.08)] text-[oklch(.4_.12_150)]"
+              ? "border-[color-mix(in oklab, var(--brand-violet) 40%, transparent)] bg-[color-mix(in oklab, var(--brand-violet) 10%, transparent)] text-[var(--brand-violet)]"
               : "border-[oklch(.7_.16_60/.4)] bg-[oklch(.8_.16_80/.1)] text-[oklch(.45_.1_70)]"
           }`}
         >
           <span
             className={`rounded-full px-2 py-0.5 text-[.65rem] font-bold uppercase tracking-wider ${
-              banner.live ? "bg-[oklch(.7_.18_150)] text-white" : "bg-[oklch(.75_.16_70)] text-white"
+              banner.live ? "bg-[var(--brand-violet)] text-white" : "bg-[oklch(.75_.16_70)] text-white"
             }`}
           >
             {banner.live ? "Live" : "Demo"}
@@ -282,7 +282,7 @@ export function Scraper({
 
           {pushed > 0 && (
             <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-secondary px-3 py-2.5 text-sm">
-              <CheckSquare className="h-4 w-4 text-[oklch(.6_.15_150)]" />
+              <CheckSquare className="h-4 w-4 text-[var(--brand-violet)]" />
               Added {pushed} contact(s) to your raw-data queue.
               <button onClick={() => go("raw")} className="font-semibold text-primary underline-offset-2 hover:underline">
                 Open Raw Data →

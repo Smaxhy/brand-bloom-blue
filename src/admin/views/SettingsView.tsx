@@ -47,7 +47,7 @@ export function SettingsView({
         </div>
         <div className="mt-4 flex items-center gap-3">
           <Btn onClick={save}><Save className="h-4 w-4" /> Save settings</Btn>
-          {saved && <span className="text-sm text-[oklch(.55_.15_150)]">Saved ✓</span>}
+          {saved && <span className="text-sm text-[var(--brand-violet)]">Saved ✓</span>}
         </div>
         <p className="mt-4 rounded-lg bg-secondary px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
           For security, GHL keys shouldn't sit in front-end code in production. The panel calls{" "}

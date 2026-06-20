@@ -38,6 +38,7 @@ export function RawData({
           value: 0,
           stage: "new",
           source: r.source || "Scraped",
+          services: [],
           template: "",
           notes: `From raw data · ${r.city} · ${r.industry}${r.contactTitle ? ` · ${r.contactTitle}` : ""}`,
           createdAt: Date.now(),
@@ -147,11 +148,11 @@ export function RawData({
                     className="rounded-full px-2.5 py-1 text-xs font-medium"
                     style={{
                       background:
-                        r.status === "accepted" ? "color-mix(in oklab, oklch(.7 .18 150) 18%, transparent)"
+                        r.status === "accepted" ? "color-mix(in oklab, var(--brand-violet) 18%, transparent)"
                         : r.status === "rejected" ? "color-mix(in oklab, var(--destructive) 14%, transparent)"
                         : "var(--secondary)",
                       color:
-                        r.status === "accepted" ? "oklch(.45 .15 150)"
+                        r.status === "accepted" ? "var(--brand-violet)"
                         : r.status === "rejected" ? "var(--destructive)"
                         : "var(--muted-foreground)",
                     }}
@@ -162,7 +163,7 @@ export function RawData({
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-1">
                     {r.status !== "accepted" && (
-                      <button onClick={() => setStatus(r.id, "accepted")} className="grid h-7 w-7 place-items-center rounded-md text-[oklch(.55_.15_150)] hover:bg-[oklch(.7_.18_150)]/15" title="Accept">
+                      <button onClick={() => setStatus(r.id, "accepted")} className="grid h-7 w-7 place-items-center rounded-md text-[var(--brand-violet)] hover:bg-[var(--brand-violet)]/15" title="Accept">
                         <Check className="h-4 w-4" />
                       </button>
                     )}

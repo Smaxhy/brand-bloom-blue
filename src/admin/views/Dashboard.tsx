@@ -44,7 +44,7 @@ export function Dashboard({
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Net Cashflow" value={fmtEuro(net)} hint={`${fmtEuro(income)} in · ${fmtEuro(expense)} out`} icon={Wallet} accent="oklch(.7 .18 150)" />
+        <StatCard label="Net Cashflow" value={fmtEuro(net)} hint={`${fmtEuro(income)} in · ${fmtEuro(expense)} out`} icon={Wallet} accent="var(--brand-violet)" />
         <StatCard label="Monthly Recurring" value={fmtEuro(mrr)} hint={`${data.clients.filter((c) => c.status === "active").length} active clients`} icon={Users} accent="var(--brand-violet)" />
         <StatCard label="Open Pipeline" value={fmtEuro(pipelineValue)} hint={`${data.deals.filter((d) => d.stage !== "won" && d.stage !== "lost").length} live deals`} icon={GitBranch} accent="var(--brand-coral)" />
         <StatCard label="New Raw Leads" value={String(newLeads)} hint="Awaiting review" icon={Sparkles} accent="oklch(.66 .19 250)" />
@@ -57,7 +57,7 @@ export function Dashboard({
               <h3 className="font-display text-lg font-bold">Cashflow</h3>
               <p className="text-xs text-muted-foreground">Running net balance over recorded transactions</p>
             </div>
-            <span className="flex items-center gap-1 text-sm font-semibold text-[oklch(.6_.18_150)]">
+            <span className="flex items-center gap-1 text-sm font-semibold text-[var(--brand-violet)]">
               <TrendingUp className="h-4 w-4" /> {fmtEuro(net)}
             </span>
           </div>

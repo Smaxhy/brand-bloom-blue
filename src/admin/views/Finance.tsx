@@ -62,7 +62,7 @@ export function Finance({
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Total Income" value={fmtEuro(income)} icon={ArrowUpRight} accent="oklch(.7 .18 150)" />
+        <StatCard label="Total Income" value={fmtEuro(income)} icon={ArrowUpRight} accent="var(--brand-violet)" />
         <StatCard label="Total Expense" value={fmtEuro(expense)} icon={ArrowDownRight} accent="var(--brand-coral)" />
         <StatCard label="Net Profit" value={fmtEuro(income - expense)} icon={Wallet} accent="var(--brand-violet)" />
       </div>
@@ -76,7 +76,7 @@ export function Finance({
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
               <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickLine={false} axisLine={false} />
               <Tooltip formatter={(v: number) => fmtEuro(v)} contentStyle={{ borderRadius: 12, border: "1px solid var(--border)", fontSize: 12 }} />
-              <Bar dataKey="income" radius={[6, 6, 0, 0]} fill="oklch(.7 .18 150)" />
+              <Bar dataKey="income" radius={[6, 6, 0, 0]} fill="var(--brand-violet)" />
               <Bar dataKey="expense" radius={[6, 6, 0, 0]} fill="var(--brand-coral)" />
             </BarChart>
           </ResponsiveContainer>
@@ -104,7 +104,7 @@ export function Finance({
                 <td className="px-5 py-3 text-muted-foreground">{t.date}</td>
                 <td className="px-5 py-3 font-medium">{t.label}</td>
                 <td className="hidden px-5 py-3 sm:table-cell"><span className="rounded-full bg-secondary px-2.5 py-1 text-xs">{t.category || "—"}</span></td>
-                <td className={`px-5 py-3 text-right font-bold ${t.type === "income" ? "text-[oklch(.55_.15_150)]" : "text-destructive"}`}>
+                <td className={`px-5 py-3 text-right font-bold ${t.type === "income" ? "text-[var(--brand-violet)]" : "text-destructive"}`}>
                   {t.type === "income" ? "+" : "−"}{fmtEuro(t.amount)}
                 </td>
                 <td className="px-5 py-3 text-right">
