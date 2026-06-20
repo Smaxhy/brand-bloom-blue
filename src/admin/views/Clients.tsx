@@ -119,6 +119,7 @@ export function Clients({
               <Field label="Contact"><input className={inputCls} value={editing.contact} onChange={(e) => setEditing({ ...editing, contact: e.target.value })} /></Field>
               <Field label="Email"><input className={inputCls} value={editing.email} onChange={(e) => setEditing({ ...editing, email: e.target.value })} /></Field>
               <Field label="Phone"><input className={inputCls} value={editing.phone} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} /></Field>
+            </div>
             <Field label="Services">
               <div className="grid gap-2 sm:grid-cols-2">
                 {SERVICES.map((s) => {
