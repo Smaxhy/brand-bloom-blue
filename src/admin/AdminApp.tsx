@@ -173,7 +173,7 @@ export function AdminApp() {
           </button>
           <h1 className="font-display text-xl font-bold tracking-tight">{current.label}</h1>
           <span className="ml-auto hidden items-center gap-2 rounded-full bg-secondary px-3 py-1.5 text-xs text-muted-foreground sm:flex">
-            <span className="h-2 w-2 rounded-full bg-[var(--brand-violet)]" /> Signed in as InspirovaManagement
+            <span className="h-2 w-2 rounded-full bg-[oklch(.7_.18_150)]" /> Signed in as InspirovaManagement
           </span>
         </header>
 

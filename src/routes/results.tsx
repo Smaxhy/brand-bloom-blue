@@ -1,5 +1,4 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect } from "react";
 import logo from "@/assets/inspirova-logo.png";
 import proof1 from "@/assets/proof-1.png";
 import proof2 from "@/assets/proof-2.png";
@@ -116,11 +115,6 @@ const caseStudies = [
 ];
 
 function ResultsPage() {
-  useEffect(() => {
-    document.documentElement.classList.add("dark");
-    return () => document.documentElement.classList.remove("dark");
-  }, []);
-
   return (
     <main className="min-h-screen">
       <header className="fixed top-0 z-50 w-full border-b border-border/50 bg-background/70 backdrop-blur-xl">
@@ -141,10 +135,10 @@ function ResultsPage() {
       <section className="relative overflow-hidden pt-32 pb-20 md:pt-44 md:pb-28">
         <div
           aria-hidden
-          className="absolute inset-0 -z-10"
+          className="absolute inset-0 -z-10 opacity-60"
           style={{
             background:
-              "radial-gradient(60% 50% at 15% 10%, rgba(124,92,255,.42) 0%, transparent 60%), radial-gradient(55% 45% at 90% 90%, rgba(99,102,241,.36) 0%, transparent 65%), radial-gradient(45% 45% at 50% 100%, rgba(168,139,255,.22) 0%, transparent 70%), linear-gradient(180deg,#08060F 0%,#0C0820 55%,#08060F 100%)",
+              "radial-gradient(60% 50% at 50% 0%, color-mix(in oklab, var(--brand-purple) 22%, transparent) 0%, transparent 70%), radial-gradient(40% 40% at 80% 20%, color-mix(in oklab, var(--brand-blue) 25%, transparent) 0%, transparent 70%)",
           }}
         />
         <div className="mx-auto max-w-6xl px-6 text-center">
@@ -232,6 +226,42 @@ function ResultsPage() {
         </div>
       </section>
 
+      <section className="py-24 md:py-32">
+        <div className="mx-auto max-w-3xl px-6 text-center">
+          <h2 className="text-4xl font-semibold tracking-tight md:text-6xl">
+            Want to be the <span className="text-gradient-brand">next case study?</span>
+          </h2>
+          <p className="mx-auto mt-6 max-w-xl text-lg text-muted-foreground">
+            Slide into the DMs. We'll come back with a plan tailored to your brand.
+          </p>
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+            <a
+              href="https://instagram.com/max.grchv"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-brand px-6 py-3 text-sm font-medium text-white shadow-glow transition-transform hover:scale-[1.03]"
+            >
+              DM @max.grchv
+            </a>
+            <Link
+              to="/"
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+            >
+              <ArrowLeft className="h-4 w-4" /> Back home
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t border-border py-10">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 text-sm text-muted-foreground md:flex-row">
+          <div className="flex items-center gap-2">
+            <img src={logo} alt="" className="h-6 w-6 rounded object-cover" />
+            <span>© {new Date().getFullYear()} Inspirova Marketing</span>
+          </div>
+          <div>Built to market.</div>
+        </div>
+      </footer>
     </main>
   );
 }

@@ -29,6 +29,31 @@ import {
 } from "../store";
 import { Panel, Field, inputCls, Btn } from "../ui";
 
+const KEYWORD_PRESETS = [
+  "Real Estate",
+  "Real Estate Agency",
+  "Property Management",
+  "Realtor",
+  "Store",
+  "Retail Store",
+  "Boutique",
+  "Tree",
+  "Tree Specialists",
+  "Tree Care",
+  "Tree Removal",
+  "Arborist",
+  "Landscaping",
+  "Roofing",
+  "Construction",
+  "Plumbing",
+  "HVAC",
+  "Dental",
+  "Restaurant",
+  "Salon",
+  "Fitness",
+  "Auto Repair",
+];
+
 export function Scraper({
   data,
   update,
@@ -43,7 +68,7 @@ export function Scraper({
     titles: "",
     industry: "",
     seniorities: ["owner", "c_suite", "director"],
-    perPage: 10,
+    perPage: 100,
   });
   const [geo, setGeo] = useState<GeocodeResult | null>(null);
   const [geoBusy, setGeoBusy] = useState(false);
@@ -61,6 +86,24 @@ export function Scraper({
   function splitName(name: string): { first: string; last: string } {
     const parts = name.trim().split(/\s+/);
     return { first: parts[0] || "", last: parts.length > 1 ? parts.slice(1).join(" ") : "" };
+  }
+
+  // Keywords are stored in filters.industry as a comma-separated string.
+  const activeKeywords = filters.industry
+    .split(",")
+    .map((k) => k.trim().toLowerCase())
+    .filter(Boolean);
+
+  function toggleKeyword(kw: string) {
+    const list = filters.industry
+      .split(",")
+      .map((k) => k.trim())
+      .filter(Boolean);
+    const exists = list.some((k) => k.toLowerCase() === kw.toLowerCase());
+    const next = exists
+      ? list.filter((k) => k.toLowerCase() !== kw.toLowerCase())
+      : [...list, kw];
+    setFilters({ ...filters, industry: next.join(", ") });
   }
 
   async function revealEmails(targets: ScrapedPerson[]) {
@@ -86,7 +129,7 @@ export function Scraper({
         };
       });
       const res = await enrichContacts(payload, revealPhone);
-      res.forEach((r: { id?: string; email: string; phone: string; source: string }) => {
+      res.forEach((r) => {
         if (r.id) updates[r.id] = { email: r.email, phone: r.phone, source: r.source };
       });
       setEnrichProgress({ done: Math.min(i + chunk.length, list.length), total: list.length });
@@ -179,10 +222,10 @@ export function Scraper({
       {/* intro */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Enter a city, region or address. Inspirova locates it on the map and pulls the
-          decision-makers (owners, C-suite, directors) at businesses there — names, titles,
-          company, website and LinkedIn — from Apollo.io. Pull up to 500 at once, then reveal
-          emails on demand (Apollo + Hunter.io web search). Accept the good ones into your raw-data
+          Enter a city, region or address and tap the keywords you want (Real Estate, Tree, Store…).
+          Inspirova locates it on the map and pulls the decision-makers at matching businesses there
+          — names, titles, company, website and LinkedIn. Pull up to 500 at once, then reveal emails
+          on demand across Apollo, Hunter.io and Google. Accept the good ones into your raw-data
           queue.
         </p>
       </div>
@@ -216,14 +259,38 @@ export function Scraper({
                   placeholder="CEO, Owner, Marketing Manager"
                 />
               </Field>
-              <Field label="Industry / keyword (optional)">
+              <Field label="Keywords (comma-separated)">
                 <input
                   className={inputCls}
                   value={filters.industry}
                   onChange={(e) => setFilters({ ...filters, industry: e.target.value })}
-                  placeholder="Real estate, hospitality…"
+                  placeholder="Real Estate, Tree, Store…"
                 />
               </Field>
+            </div>
+
+            <div>
+              <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
+                Quick keywords <span className="font-normal">(tap to add — searched as a union)</span>
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {KEYWORD_PRESETS.map((kw) => {
+                  const on = activeKeywords.includes(kw.toLowerCase());
+                  return (
+                    <button
+                      key={kw}
+                      onClick={() => toggleKeyword(kw)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        on
+                          ? "border-transparent bg-[var(--brand-coral)] text-white"
+                          : "border-border bg-background text-muted-foreground hover:bg-secondary"
+                      }`}
+                    >
+                      {kw}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div>
@@ -365,10 +432,11 @@ export function Scraper({
           </div>
 
           <p className="mb-4 text-xs text-muted-foreground">
-            Reveal pulls emails from Apollo first, then falls back to Hunter.io (web search) for any
-            it can't unlock. Email reveals use your Apollo email credits (unlimited under fair use on
-            paid plans); phone numbers use mobile credits (limited each month), so leave "+ phones"
-            off unless you need them. EU contacts' personal emails may stay hidden under GDPR.
+            Reveal waterfalls across sources: Apollo first, then Hunter.io, then Google (web search)
+            for anything still locked. Email reveals use your Apollo email credits (unlimited under
+            fair use on paid plans); phone numbers use mobile credits (limited each month), so leave
+            "+ phones" off unless you need them. EU contacts' personal emails may stay hidden under
+            GDPR.
           </p>
 
           {pushed > 0 && (

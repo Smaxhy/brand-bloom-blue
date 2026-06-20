@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Plus, Pencil, Trash2, Mail, Phone, MapPin } from "lucide-react";
-import { type AdminData, type Client, SERVICES, totalsForServices, uid, fmtEuro } from "../store";
+import { type AdminData, type Client, uid, fmtEuro } from "../store";
 import { Panel, Modal, Field, inputCls, Btn } from "../ui";
 
 const empty = (): Client => ({
@@ -11,19 +11,11 @@ const empty = (): Client => ({
   phone: "",
   address: "",
   plan: "",
-  services: [],
   monthly: 0,
-  setupFee: 0,
   status: "active",
   notes: "",
   since: Date.now(),
 });
-
-function toggleClientService(c: Client, id: string): Client {
-  const services = c.services.includes(id) ? c.services.filter((s) => s !== id) : [...c.services, id];
-  const t = totalsForServices(services);
-  return { ...c, services, monthly: t.monthly, setupFee: t.setup };
-}
 
 export function Clients({
   data,
@@ -78,8 +70,8 @@ export function Clients({
               <span
                 className="rounded-full px-2.5 py-1 text-[.65rem] font-semibold capitalize"
                 style={{
-                  background: c.status === "active" ? "color-mix(in oklab, var(--brand-violet) 16%, transparent)" : c.status === "paused" ? "var(--secondary)" : "color-mix(in oklab, var(--destructive) 12%, transparent)",
-                  color: c.status === "active" ? "var(--brand-violet)" : c.status === "churned" ? "var(--destructive)" : "var(--muted-foreground)",
+                  background: c.status === "active" ? "color-mix(in oklab, oklch(.7 .18 150) 16%, transparent)" : c.status === "paused" ? "var(--secondary)" : "color-mix(in oklab, var(--destructive) 12%, transparent)",
+                  color: c.status === "active" ? "oklch(.45 .15 150)" : c.status === "churned" ? "var(--destructive)" : "var(--muted-foreground)",
                 }}
               >
                 {c.status}
@@ -119,28 +111,8 @@ export function Clients({
               <Field label="Contact"><input className={inputCls} value={editing.contact} onChange={(e) => setEditing({ ...editing, contact: e.target.value })} /></Field>
               <Field label="Email"><input className={inputCls} value={editing.email} onChange={(e) => setEditing({ ...editing, email: e.target.value })} /></Field>
               <Field label="Phone"><input className={inputCls} value={editing.phone} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} /></Field>
-            </div>
-            <Field label="Services">
-              <div className="grid gap-2 sm:grid-cols-2">
-                {SERVICES.map((s) => {
-                  const checked = editing.services.includes(s.id);
-                  return (
-                    <label key={s.id} className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 text-sm transition-colors ${checked ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}>
-                      <input type="checkbox" className="mt-0.5" checked={checked} onChange={() => setEditing(toggleClientService(editing, s.id))} />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium">{s.name}</span>
-                          <span className="font-display text-sm font-bold text-primary">{fmtEuro(s.price)}<span className="text-[.65rem] font-normal text-muted-foreground">{s.billing === "monthly" ? "/mo" : " setup"}</span></span>
-                        </div>
-                        <div className="text-xs text-muted-foreground">{s.desc}</div>
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Plan / package name"><input className={inputCls} value={editing.plan} onChange={(e) => setEditing({ ...editing, plan: e.target.value })} /></Field>
+              <Field label="Plan"><input className={inputCls} value={editing.plan} onChange={(e) => setEditing({ ...editing, plan: e.target.value })} /></Field>
+              <Field label="Monthly (€)"><input type="number" className={inputCls} value={editing.monthly} onChange={(e) => setEditing({ ...editing, monthly: Number(e.target.value) })} /></Field>
               <Field label="Status">
                 <select className={inputCls} value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value as Client["status"] })}>
                   <option value="active">Active</option>
@@ -148,8 +120,6 @@ export function Clients({
                   <option value="churned">Churned</option>
                 </select>
               </Field>
-              <Field label="Monthly (€)"><input type="number" className={inputCls} value={editing.monthly} onChange={(e) => setEditing({ ...editing, monthly: Number(e.target.value) })} /></Field>
-              <Field label="Setup fee (€)"><input type="number" className={inputCls} value={editing.setupFee} onChange={(e) => setEditing({ ...editing, setupFee: Number(e.target.value) })} /></Field>
             </div>
             <Field label="Address"><input className={inputCls} value={editing.address} onChange={(e) => setEditing({ ...editing, address: e.target.value })} /></Field>
             <Field label="Notes"><textarea className={`${inputCls} min-h-[72px]`} value={editing.notes} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} /></Field>

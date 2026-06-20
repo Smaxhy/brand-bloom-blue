@@ -110,6 +110,15 @@ async function apolloSearch(request: Request, env: Env): Promise<Response> {
     .map((t) => t.trim())
     .filter(Boolean);
 
+  // Keywords can be a comma-separated list (e.g. "Real Estate, Tree, Store").
+  // Each is searched separately and the results are merged + de-duplicated so
+  // you get a union across all the niches you picked.
+  const keywords = (filters.industry ?? "")
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean)
+    .slice(0, 6); // bound credit + Worker time
+
   const baseBody: Record<string, unknown> = {};
   if (filters.location?.trim()) {
     baseBody.person_locations = [filters.location.trim()];
@@ -117,39 +126,48 @@ async function apolloSearch(request: Request, env: Env): Promise<Response> {
   }
   if (titles.length) baseBody.person_titles = titles;
   if (filters.seniorities?.length) baseBody.person_seniorities = filters.seniorities;
-  if (filters.industry?.trim()) baseBody.q_keywords = filters.industry.trim();
 
-  // Apollo returns max 100/page, so loop pages until we have `wanted` (or run out).
+  const queries = keywords.length ? keywords : [""]; // at least one (no keyword) query
+  // Per-keyword target so a multi-keyword search still lands near `wanted` total.
+  const perQuery = Math.min(Math.ceil(wanted / queries.length) + 25, wanted, 200);
   const PER_PAGE = 100;
-  const pages = Math.ceil(wanted / PER_PAGE);
-  const collected: ApolloPerson[] = [];
+
+  const byId = new Map<string, ApolloPerson>();
   try {
-    for (let page = 1; page <= pages; page++) {
-      const res = await fetch("https://api.apollo.io/api/v1/mixed_people/api_search", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache",
-          Accept: "application/json",
-          "X-Api-Key": key,
-        },
-        body: JSON.stringify({ ...baseBody, page, per_page: PER_PAGE }),
-      });
-      if (!res.ok) {
-        // If the very first page fails, surface the error; otherwise keep what we have.
-        if (page === 1) {
-          const text = await res.text();
-          return json({ error: `apollo ${res.status}`, detail: text.slice(0, 300) }, 502);
+    for (const kw of queries) {
+      const body = { ...baseBody } as Record<string, unknown>;
+      if (kw) body.q_keywords = kw;
+      const pages = Math.ceil(perQuery / PER_PAGE);
+      for (let page = 1; page <= pages; page++) {
+        const res = await fetch("https://api.apollo.io/api/v1/mixed_people/search", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
+            Accept: "application/json",
+            "X-Api-Key": key,
+          },
+          body: JSON.stringify({ ...body, page, per_page: PER_PAGE }),
+        });
+        if (!res.ok) {
+          if (page === 1 && byId.size === 0) {
+            const text = await res.text();
+            return json({ error: `apollo ${res.status}`, detail: text.slice(0, 300) }, 502);
+          }
+          break;
         }
-        break;
+        const data = (await res.json()) as { people?: ApolloPerson[] };
+        const batch = data.people ?? [];
+        for (const p of batch) {
+          const id = p.id || `${p.first_name}_${p.last_name}_${p.organization?.name}`;
+          if (!byId.has(id)) byId.set(id, p);
+        }
+        if (batch.length < PER_PAGE) break;
+        if (byId.size >= wanted) break;
       }
-      const data = (await res.json()) as { people?: ApolloPerson[] };
-      const batch = data.people ?? [];
-      collected.push(...batch);
-      if (batch.length < PER_PAGE) break; // no more results
-      if (collected.length >= wanted) break;
+      if (byId.size >= wanted) break;
     }
-    const people = collected.slice(0, wanted).map(normalizePerson);
+    const people = Array.from(byId.values()).slice(0, wanted).map(normalizePerson);
     return json({ demo: false, people });
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
@@ -280,7 +298,65 @@ async function enrich(request: Request, env: Env): Promise<Response> {
     }
   }
 
+  // 3) Google (via Serper.dev) fallback — searches the whole web. For anyone
+  //    still missing an email, query Google for the person + company and pull
+  //    any address out of the result snippets.
+  const serperKey = env.SERPER_API_KEY;
+  if (serperKey) {
+    for (let i = 0; i < people.length; i++) {
+      if (results[i].email) continue;
+      const p = people[i];
+      const domain = cleanDomain(p.domain);
+      const q = [
+        p.name ? `"${p.name}"` : "",
+        p.organizationName ? `"${p.organizationName}"` : "",
+        domain ? `OR "@${domain}"` : "",
+        "email",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      try {
+        const res = await fetch("https://google.serper.dev/search", {
+          method: "POST",
+          headers: { "X-API-KEY": serperKey, "Content-Type": "application/json" },
+          body: JSON.stringify({ q, num: 10 }),
+        });
+        if (res.ok) {
+          const d = (await res.json()) as {
+            organic?: { title?: string; snippet?: string; link?: string }[];
+            knowledgeGraph?: Record<string, unknown>;
+          };
+          const blob = JSON.stringify(d.organic ?? []) + JSON.stringify(d.knowledgeGraph ?? {});
+          const email = pickEmail(blob, domain);
+          if (email) {
+            results[i].email = email;
+            results[i].source = "Google";
+          }
+        }
+      } catch {
+        /* skip this one */
+      }
+    }
+  }
+
   return json({ demo: false, results });
+}
+
+const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+
+/** Pull the best email out of a text blob, preferring one on the company domain. */
+function pickEmail(text: string, domain?: string): string {
+  const found = (text.match(EMAIL_RE) ?? [])
+    .map((e) => e.toLowerCase())
+    // drop obvious junk / image filenames mistaken as emails
+    .filter((e) => !/\.(png|jpg|jpeg|gif|webp|svg)$/i.test(e))
+    .filter((e) => !/(example|sentry|wixpress|domain)\.com$/i.test(e));
+  if (!found.length) return "";
+  if (domain) {
+    const onDomain = found.find((e) => e.endsWith("@" + domain.toLowerCase()));
+    if (onDomain) return onDomain;
+  }
+  return found[0];
 }
 
 /* --------------------------------------------------------------------- */
