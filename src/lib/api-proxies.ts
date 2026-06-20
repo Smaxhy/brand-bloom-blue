@@ -60,7 +60,7 @@ async function diag(env: Env): Promise<Response> {
   };
   if (apolloKey) {
     try {
-      const res = await fetch("https://api.apollo.io/api/v1/mixed_people/search", {
+      const res = await fetch("https://api.apollo.io/api/v1/mixed_people/api_search", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -186,7 +186,7 @@ async function apolloSearch(request: Request, env: Env): Promise<Response> {
     const pages = Math.ceil(perQuery / PER_PAGE);
     for (let page = 1; page <= pages; page++) {
       try {
-        const res = await fetch("https://api.apollo.io/api/v1/mixed_people/search", {
+        const res = await fetch("https://api.apollo.io/api/v1/mixed_people/api_search", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
