@@ -499,6 +499,52 @@ export function demoScrape(filters: ScrapeFilters): ScrapedPerson[] {
   return out;
 }
 
+export interface EnrichResult {
+  id?: string;
+  email: string;
+  phone: string;
+  source: string; // "Apollo" | "Hunter" | "demo" | ""
+}
+
+/**
+ * Reveal emails (and optionally phones) for a batch of contacts. Runs a
+ * waterfall on the server: Apollo enrichment first, then Hunter.io for anyone
+ * still missing. Process at most 10 people per call (Apollo bulk limit).
+ */
+export async function enrichContacts(
+  people: {
+    id: string;
+    name: string;
+    firstName?: string;
+    lastName?: string;
+    domain: string;
+    organizationName?: string;
+    linkedin?: string;
+  }[],
+  revealPhone = false,
+): Promise<EnrichResult[]> {
+  try {
+    const res = await fetch("/api/enrich", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ people, revealPhone }),
+    });
+    if (res.ok) {
+      const j = (await res.json()) as { results?: EnrichResult[] };
+      if (Array.isArray(j.results)) return j.results;
+    }
+  } catch {
+    /* ignore */
+  }
+  // Demo fallback: synthesise emails locally.
+  return people.map((p) => {
+    const dom = p.domain.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "") || "example.com";
+    const f = (p.firstName || p.name.split(" ")[0] || "contact").toLowerCase();
+    const l = (p.lastName || p.name.split(" ").slice(-1)[0] || "info").toLowerCase();
+    return { id: p.id, email: `${f}.${l}@${dom}`, phone: "", source: "demo" };
+  });
+}
+
 export function fmtEuro(n: number): string {
   return new Intl.NumberFormat("nl-BE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 }

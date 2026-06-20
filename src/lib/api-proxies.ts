@@ -125,7 +125,7 @@ async function apolloSearch(request: Request, env: Env): Promise<Response> {
   const collected: ApolloPerson[] = [];
   try {
     for (let page = 1; page <= pages; page++) {
-      const res = await fetch("https://api.apollo.io/api/v1/mixed_people/search", {
+      const res = await fetch("https://api.apollo.io/api/v1/mixed_people/api_search", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
