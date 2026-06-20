@@ -53,14 +53,16 @@
     background-size:200% 200%;background-position:0% 50%;color:#fff;
     padding:16px 30px;font-size:1rem;letter-spacing:.01em;
     box-shadow:0 14px 40px -10px var(--glow),inset 0 1px 0 rgba(255,255,255,.25);
-    transition:transform .25s var(--ease),box-shadow .35s var(--ease),background-position .6s var(--ease)}
+    transition:transform .25s var(--ease),box-shadow .35s var(--ease),background-position .6s var(--ease);
+    -webkit-transform:translateZ(0);transform:translateZ(0);backface-visibility:hidden}
   .btn-primary::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;
     background:linear-gradient(120deg,transparent 30%,rgba(255,255,255,.35) 50%,transparent 70%);
-    transform:translateX(-120%);transition:transform .7s var(--ease)}
-  .btn-primary:hover{transform:translateY(-2px);background-position:100% 50%;
+    transform:translateX(-120%);transition:transform .7s var(--ease);
+    -webkit-transform:translateX(-120%) translateZ(0);backface-visibility:hidden}
+  .btn-primary:hover{-webkit-transform:translateZ(0) translateY(-2px);transform:translateZ(0) translateY(-2px);background-position:100% 50%;
     box-shadow:0 22px 55px -12px var(--glow),0 0 0 1px rgba(255,255,255,.08) inset}
   .btn-primary:hover::before{transform:translateX(120%)}
-  .btn-primary:active{transform:translateY(0)}
+  .btn-primary:active{-webkit-transform:translateZ(0) translateY(0);transform:translateZ(0) translateY(0)}
   .btn-outline{border-color:rgba(255,255,255,.2);color:#fff;background:rgba(255,255,255,.04);backdrop-filter:blur(8px)}
   .btn-outline:hover{transform:translateY(-2px);border-color:var(--violet-bright);color:var(--violet-bright)}
   .btn-white{background:#fff;color:#1a0b3d;box-shadow:0 12px 30px -12px rgba(124,92,255,.6)}
