@@ -50,7 +50,7 @@ async function diag(env: Env): Promise<Response> {
     apolloKeyPresent: !!apolloKey,
     apolloKeyLength: apolloKey ? apolloKey.length : 0,
     hunterKeyPresent: !!env.HUNTER_API_KEY,
-    serperKeyPresent: !!env.SERPER_API_KEY,
+    serperKeyPresent: !!env.SERPAPI_API_KEY,
     ghlKeyPresent: !!env.GHL_API_KEY,
   };
   if (apolloKey) {
@@ -256,7 +256,7 @@ async function enrich(request: Request, env: Env): Promise<Response> {
   const people = (payload.people ?? []).slice(0, 10);
   if (!people.length) return json({ results: [] });
 
-  const serperKey = env.SERPER_API_KEY;
+  const serperKey = env.SERPAPI_API_KEY;
 
   // Google is the reveal engine, powered by the data Apollo already found.
   // Without a Serper key we can't search Google, so return demo emails so the
