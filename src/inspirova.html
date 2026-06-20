@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Inspirova — Marketing That Scales Brands</title>
-<meta name="description" content="Inspirova gives ambitious brands the ads, automation, creative and CRM systems they need to turn attention into revenue — at the lowest cost per result." />
-<meta property="og:title" content="Inspirova — Marketing That Scales Brands" />
-<meta property="og:description" content="Paid ads, email & SMS, websites, AI automation and CRM — one compounding growth system." />
+<title>Inspirova, Marketing That Scales Brands</title>
+<meta name="description" content="Inspirova gives ambitious brands the ads, automation, creative and CRM systems they need to turn attention into revenue, at the lowest cost per result." />
+<meta property="og:title" content="Inspirova, Marketing That Scales Brands" />
+<meta property="og:description" content="Paid ads, email & SMS, websites, AI automation and CRM, one compounding growth system." />
 <meta property="og:type" content="website" />
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -88,10 +88,10 @@
   .orbit{position:relative;width:min(460px,86vw);aspect-ratio:1;margin-inline:auto}
   .orbit-ring{position:absolute;inset:8%;border:1px dashed rgba(255,255,255,.28);border-radius:50%}
   .orbit-ring.inner{inset:24%;border-color:rgba(255,255,255,.18)}
-  .orbit-core{position:absolute;inset:30%;border-radius:28px;
-    background:rgba(255,255,255,.96);
-    box-shadow:0 0 0 14px rgba(255,255,255,.14),0 0 80px rgba(124,92,255,.55);
-    display:grid;place-items:center;animation:corepulse 4s var(--ease) infinite;overflow:hidden;padding:14%}
+  .orbit-core{position:absolute;inset:18%;border-radius:28px;
+    background:transparent;
+    filter:drop-shadow(0 0 60px rgba(124,92,255,.55)) drop-shadow(0 0 30px rgba(99,102,241,.4));
+    display:grid;place-items:center;animation:corepulse 4s var(--ease) infinite;overflow:visible;padding:0}
   .orbit-core img{width:100%;height:100%;object-fit:contain;display:block}
   .node{position:absolute;top:50%;left:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:16px;
     background:#fff;display:grid;place-items:center;color:var(--violet);
@@ -112,23 +112,15 @@
     letter-spacing:-.01em;transition:color .25s,transform .25s}
   .logos span:hover{color:var(--mist);transform:translateY(-2px)}
 
-  /* ---------- brand moment ---------- */
-  .brand-moment{position:relative;padding:110px 0 100px;color:#fff;overflow:hidden;
+  /* ---------- brand transition (clean overlay) ---------- */
+  .brand-moment{position:relative;height:160px;overflow:hidden;
+    background:linear-gradient(180deg,var(--ink) 0%,#0B0828 50%,var(--ink) 100%)}
+  .brand-moment::before{content:"";position:absolute;inset:0;
     background:
-      radial-gradient(65% 55% at 25% 15%, rgba(99,102,241,.40) 0%, transparent 60%),
-      radial-gradient(60% 50% at 80% 85%, rgba(124,92,255,.42) 0%, transparent 65%),
-      radial-gradient(50% 50% at 50% 100%, rgba(79,70,229,.28) 0%, transparent 70%),
-      linear-gradient(180deg,#08060F 0%,#0B0828 50%,#08060F 100%)}
-  .brand-moment::before{content:"";position:absolute;inset:-2px 0 auto 0;height:140px;
-    background:linear-gradient(180deg,var(--ink) 0%,transparent 100%);pointer-events:none;z-index:1}
-  .brand-moment::after{content:"";position:absolute;inset:auto 0 -2px 0;height:140px;
-    background:linear-gradient(0deg,var(--ink) 0%,transparent 100%);pointer-events:none;z-index:1}
-  .brand-moment .wrap{position:relative;z-index:2;text-align:center}
-  .brand-moment h2{font-family:var(--display);font-weight:800;letter-spacing:-.03em;
-    font-size:clamp(3.2rem,10vw,7.5rem);line-height:1;
-    background:linear-gradient(100deg,#818cf8 0%,#a78bfa 30%,#c084fc 60%,#f472b6 100%);
-    -webkit-background-clip:text;background-clip:text;color:transparent}
-  .brand-moment p{margin-top:16px;font-size:clamp(.95rem,1.8vw,1.25rem);color:rgba(255,255,255,.78);font-weight:500}
+      radial-gradient(60% 80% at 50% 50%, rgba(124,92,255,.25) 0%, transparent 70%),
+      radial-gradient(40% 60% at 20% 50%, rgba(99,102,241,.18) 0%, transparent 70%);
+    pointer-events:none}
+
 
   /* ---------- feature split ---------- */
   .feat{background:var(--surface-dark);color:#fff;
@@ -321,7 +313,7 @@
 <header>
   <div class="wrap">
     <div class="nav-shell">
-      <a class="brand" href="#top"><img class="logo-mark" src="/__l5e/assets-v1/8a61493c-c722-46c0-9c10-d5314cd269a6/inspirova-logo.png" alt="Inspirova"></a>
+      <a class="brand" href="#top" aria-label="Inspirova"></a>
       <nav class="nav-links" id="navlinks">
         <a href="#services" class="active">Marketing</a>
         <a href="#how">How it works</a>
@@ -345,7 +337,7 @@
     <div class="hero-grid">
       <div>
         <h1>Grow your <span class="lime">business</span> with Inspirova's high-converting marketing system</h1>
-        <p class="sub">We give ambitious brands the ads, automation, creative and CRM systems they need to turn attention into revenue — at the lowest possible cost per result.</p>
+        <p class="sub">We give ambitious brands the ads, automation, creative and CRM systems they need to turn attention into revenue, at the lowest possible cost per result.</p>
         <div class="hero-cta">
           <a href="#pricing" class="btn btn-white">See your numbers <span class="arr">→</span></a>
           <a href="/results" target="_top" class="btn btn-pill-ghost">Our results</a>
@@ -356,20 +348,16 @@
       <div class="orbit" id="orbit" aria-hidden="true">
         <div class="orbit-ring"></div>
         <div class="orbit-ring inner"></div>
-        <div class="orbit-core"><img src="/__l5e/assets-v1/8a61493c-c722-46c0-9c10-d5314cd269a6/inspirova-logo.png" alt="Inspirova"></div>
+        <div class="orbit-core"><img src="/__l5e/assets-v1/f6802d94-5a31-48da-bb14-5dd0d871a27c/inspirova-full.png" alt="Inspirova"></div>
         <!-- nodes positioned by JS -->
       </div>
     </div>
   </div>
 </section>
 
-<!-- ============ BRAND MOMENT ============ -->
-<section class="brand-moment">
-  <div class="wrap">
-    <h2>Inspirova</h2>
-    <p>Built to inspire</p>
-  </div>
-</section>
+<!-- ============ BRAND TRANSITION ============ -->
+<div class="brand-moment" aria-hidden="true"></div>
+
 
 <!-- ============ FEATURE SPLIT ============ -->
 <section class="feat" id="services">
@@ -377,7 +365,7 @@
     <div class="feat-grid">
       <div>
         <h2><span class="lime">High-converting</span> marketing tailored to your growth</h2>
-        <p>At Inspirova we make finding your next customer simple. We build quality lead engines backed by a performance mindset — and only bring you prospects who've shown clear intent to buy.</p>
+        <p>At Inspirova we make finding your next customer simple. We build quality lead engines backed by a performance mindset, and only bring you prospects who've shown clear intent to buy.</p>
         <p class="accent">Our blended methods make your business grow efficiently, without the guesswork.</p>
         <a href="#pricing" class="btn btn-white" style="margin-top:28px">Pricing <span class="arr">→</span></a>
       </div>
@@ -413,7 +401,7 @@
     <div class="how-head">
       <div class="how-eye">HERE'S HOW WE DO IT</div>
       <h2>Five steps from <span class="grad">first call</span><br>to <span class="grad">compounding revenue</span>.</h2>
-      <p>A clean, transparent system — no fluff, no jargon. Just the path from cold prospect to loyal customer.</p>
+      <p>A clean, transparent system, no fluff, no jargon. Just the path from cold prospect to loyal customer.</p>
     </div>
     <div class="timeline" id="timeline">
       <div class="tl-spine"></div>
@@ -433,7 +421,7 @@
     <div class="step right">
       <div class="spacer"></div>
       <div class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12V7a2 2 0 0 1 2-2h5l7 7-7 7H7a2 2 0 0 1-2-2v-1"/><circle cx="9" cy="9" r="1"/></svg></div>
-      <div class="txt"><h3>Step 3 · Launch campaign</h3><p>Once you're happy, we launch a precisely targeted campaign across multiple channels — generating first-class leads at unexpectedly low cost.</p></div>
+      <div class="txt"><h3>Step 3 · Launch campaign</h3><p>Once you're happy, we launch a precisely targeted campaign across multiple channels, generating first-class leads at unexpectedly low cost.</p></div>
     </div>
 
     <div class="step left">
@@ -445,7 +433,7 @@
     <div class="step right">
       <div class="spacer"></div>
       <div class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V8M6 20v-6M18 20V4"/></svg></div>
-      <div class="txt"><h3>Step 5 · Scale what works</h3><p>We double down on the winners and expand the system — compounding your reach, your pipeline and your revenue month over month.</p></div>
+      <div class="txt"><h3>Step 5 · Scale what works</h3><p>We double down on the winners and expand the system, compounding your reach, your pipeline and your revenue month over month.</p></div>
     </div>
     </div>
   </div>
@@ -455,7 +443,7 @@
 <section class="pricing" id="pricing">
   <div class="wrap pricing-head">
     <div class="eye">PRICING</div>
-    <h2>Choose a bundle — or craft your own.<br><span class="lime">Transparent pricing. Monthly terms. Cancel anytime.</span></h2>
+    <h2>Choose a bundle, or craft your own.<br><span class="lime">Transparent pricing. Monthly terms. Cancel anytime.</span></h2>
     <p>From e-commerce stores to service businesses, pick a ready-made bundle below or select exactly what you need. You control your ad spend directly. No long-term contracts, no hidden fees.</p>
   </div>
 
@@ -480,7 +468,7 @@
       <p class="fineprint">
         Additional fees may apply when integrating with existing CRMs or third-party tools.
         You manage your own ad spend directly with the ad platforms.
-        Monthly rolling contracts — you can cancel anytime. No refunds.
+        Monthly rolling contracts, you can cancel anytime. No refunds.
       </p>
 
       <div class="calc-grid" style="margin-top:34px">
@@ -588,15 +576,15 @@
     var SERVICES=[
       {id:"ads_setup",      name:"Ads Setup",                 price:1000, billing:"one-time", desc:"Ad accounts, audiences & launch-ready first creative.", checked:false},
       {id:"ads_management", name:"Ads Management / Creation", price:500,  billing:"monthly",  desc:"Ongoing Meta / Google / TikTok ads & creative.",        checked:false},
-      {id:"video_creation", name:"Video Creation",            price:100,  billing:"one-time", desc:"Short-form ad / content video — per video.",            checked:false},
+      {id:"video_creation", name:"Video Creation",            price:100,  billing:"one-time", desc:"Short-form ad / content video, per video.",            checked:false},
       {id:"email_sms",      name:"Email & SMS Automations",   price:750,  billing:"monthly",  desc:"Flows, broadcasts and SMS automations.",                checked:false},
-      {id:"website",        name:"Website Design / Creation", price:300,  billing:"one-time", desc:"Conversion-focused website — per site.",                checked:false},
+      {id:"website",        name:"Website Design / Creation", price:300,  billing:"one-time", desc:"Conversion-focused website, per site.",                checked:false},
       {id:"pixel_ecom",     name:"E-commerce Pixel Setup",    price:150,  billing:"one-time", desc:"Pixel + server-side tracking for e-commerce.",          checked:false},
       {id:"pixel_leadgen",  name:"Lead-gen Pixel Setup",      price:150,  billing:"one-time", desc:"Pixel + form/lead tracking for service businesses.",   checked:false}
     ];
 
     var BUNDLES=[
-      { id:"deluxe",   name:"Deluxe Package",   tag:"Everything — site, automations & management.", first:2500, recurring:750, includes:["website","ads_setup","ads_management","email_sms","pixel_ecom"], badge:"Most popular" },
+      { id:"deluxe",   name:"Deluxe Package",   tag:"Everything, site, automations & management.", first:2500, recurring:750, includes:["website","ads_setup","ads_management","email_sms","pixel_ecom"], badge:"Most popular" },
       { id:"growth",   name:"Growth Package",   tag:"Ads setup, ongoing management & tracking.",     first:1200, recurring:500, includes:["ads_setup","ads_management","pixel_ecom"], badge:"" },
       { id:"creation", name:"Creation Package", tag:"Ads setup, creative & video production.",       first:750,  recurring:0,   includes:["ads_setup","video_creation"], badge:"" }
     ];
@@ -683,7 +671,7 @@
         phone: phone,
         value: q.total,
         stage: "new",
-        source: "Website — Quote Request",
+        source: "Website, Quote Request",
         services: q.selected,
         template: q.selected.length ? "Custom selection" : "Quote request",
         notes: "Personal quote requested from inspirovamarketing.com."
@@ -700,7 +688,7 @@
         if(!Array.isArray(data.deals)) data.deals=[];
         data.deals.unshift(deal);
         localStorage.setItem(STORE_KEY, JSON.stringify(data));
-        setMsg("Thanks! Your quote request has been sent — we'll be in touch within 24h.",true);
+        setMsg("Thanks! Your quote request has been sent, we'll be in touch within 24h.",true);
         ["qCompany","qFirst","qLast","qEmail","qPhone","qNotes"].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=""; });
         if(consent) consent.checked=false;
       }catch(err){
