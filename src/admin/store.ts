@@ -415,21 +415,31 @@ export async function geocodeLocation(q: string): Promise<GeocodeResult | null> 
  * and we generate realistic sample leads so the whole flow stays usable.
  */
 export async function apolloSearch(filters: ScrapeFilters): Promise<ScrapeResponse> {
+  let fallbackMessage = "Demo mode — showing sample contact(s). Apollo live search is unavailable right now.";
   try {
     const res = await fetch("/api/apollo/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(filters),
     });
+    const j = (await res.json().catch(() => null)) as {
+      demo?: boolean;
+      people?: ScrapedPerson[];
+      error?: string;
+      detail?: string;
+    } | null;
     if (res.ok) {
-      const j = (await res.json()) as { demo?: boolean; people?: ScrapedPerson[] };
-      if (!j.demo && Array.isArray(j.people)) {
+      if (j && !j.demo && Array.isArray(j.people)) {
         return {
           live: true,
           people: j.people,
           message: `Found ${j.people.length} contact(s) via Apollo.io.`,
         };
       }
+      fallbackMessage = "Demo mode — APOLLO_API_KEY is not available to the live Apollo proxy yet.";
+    } else if (j?.detail || j?.error) {
+      const detail = j.detail ? ` ${j.detail}` : "";
+      fallbackMessage = `Demo mode — Apollo live search returned ${j.error ?? `HTTP ${res.status}`}.${detail}`;
     }
   } catch {
     /* fall through to demo */
@@ -438,7 +448,7 @@ export async function apolloSearch(filters: ScrapeFilters): Promise<ScrapeRespon
   return {
     live: false,
     people,
-    message: `Demo mode — showing ${people.length} sample contact(s). Deploy the Apollo proxy + set APOLLO_API_KEY to scrape live data.`,
+    message: fallbackMessage.replace("sample contact(s)", `${people.length} sample contact(s)`),
   };
 }
 
