@@ -485,6 +485,9 @@ export function Scraper({
               >
                 {selectedPeople.length === results.length ? "Clear all" : "Select all"}
               </Btn>
+              <Btn variant="ghost" onClick={() => exportCSV(selectedPeople)}>
+                <Download className="h-4 w-4" /> Download CSV
+              </Btn>
               <Btn onClick={sendToRaw}>
                 <ArrowRightCircle className="h-4 w-4" /> Send {selectedPeople.length} to Raw Data
               </Btn>
