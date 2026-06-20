@@ -365,22 +365,27 @@ export function Scraper({
 
       {/* Banner */}
       {banner && (
-        <div
-          className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${
-            banner.live
-              ? "border-[oklch(.7_.18_150/.4)] bg-[oklch(.7_.18_150/.08)] text-[oklch(.4_.12_150)]"
-              : "border-[oklch(.7_.16_60/.4)] bg-[oklch(.8_.16_80/.1)] text-[oklch(.45_.1_70)]"
-          }`}
-        >
-          <span
-            className={`rounded-full px-2 py-0.5 text-[.65rem] font-bold uppercase tracking-wider ${
-              banner.live ? "bg-[oklch(.7_.18_150)] text-white" : "bg-[oklch(.75_.16_70)] text-white"
-            }`}
-          >
-            {banner.live ? "Live" : "Demo"}
-          </span>
-          {banner.text}
-        </div>
+        (() => {
+          const isError = !banner.live;
+          return (
+            <div
+              className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${
+                isError
+                  ? "border-destructive/40 bg-destructive/10 text-destructive"
+                  : "border-[oklch(.7_.18_150/.4)] bg-[oklch(.7_.18_150/.08)] text-[oklch(.4_.12_150)]"
+              }`}
+            >
+              <span
+                className={`rounded-full px-2 py-0.5 text-[.65rem] font-bold uppercase tracking-wider ${
+                  isError ? "bg-destructive text-destructive-foreground" : "bg-[oklch(.7_.18_150)] text-white"
+                }`}
+              >
+                {isError ? "Error" : "Live"}
+              </span>
+              {banner.text}
+            </div>
+          );
+        })()
       )}
 
       {/* Results */}
