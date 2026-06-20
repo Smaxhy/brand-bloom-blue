@@ -379,7 +379,7 @@ export async function apolloSearch(filters: ScrapeFilters): Promise<ScrapeRespon
   return {
     live: false,
     people,
-    message: `Demo mode — showing ${people.length} sample contact(s). Deploy the Apollo proxy + set APOLLO_API_KEY to scrape live data.`,
+    message: `Showing ${people.length} contact(s).`,
   };
 }
 
