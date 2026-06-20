@@ -348,40 +348,24 @@
 <section class="pricing" id="pricing">
   <div class="wrap pricing-head">
     <div class="eye">PRICING</div>
-    <h2>Why choose <span class="lime">Inspirova</span>, in numbers</h2>
-    <p>We make growing your brand simple and affordable. See exactly what you'd pay with us versus a typical agency.</p>
+    <h2>Pick the services you need.<br><span class="lime">Transparent pricing, no fluff.</span></h2>
+    <p>Whether you run an e-commerce brand or a service business, build a package that fits. No cost-per-lead nonsense — just clear setup fees and monthly retainers.</p>
   </div>
 
   <div class="wrap">
     <div class="calc-card">
-      <div class="calc-grid">
-        <div class="calc-col us">
-          <h3>INSPIROVA</h3>
-          <div class="ppl">Real cost per qualified lead</div>
-          <div class="big" id="usPpl">€151</div>
-        </div>
-        <div class="calc-col them">
-          <h3>TYPICAL AGENCY</h3>
-          <div class="ppl">Real cost per qualified lead</div>
-          <div class="big" id="themPpl">€892</div>
-        </div>
+      <div class="services-grid" id="servicesGrid">
+        <!-- service cards injected by JS -->
       </div>
 
-      <div class="save">
-        <div class="lbl">YOU SAVE</div>
-        <div class="pct" id="savePct">83%</div>
+      <div class="totals">
+        <div class="totals-row"><span class="k">Monthly</span><span class="v" id="sumMonthly">€0,00</span><span class="sub">/month, recurring</span></div>
+        <div class="totals-row"><span class="k">One-time setup</span><span class="v" id="sumSetup">€0,00</span><span class="sub">due at start</span></div>
+        <div class="totals-row total"><span class="k">First-month total</span><span class="v" id="sumTotal">€0,00</span><span class="sub">setup + 1st month</span></div>
       </div>
 
       <div class="calc-grid" style="margin-top:34px">
         <div class="sliders">
-          <div class="slider-row">
-            <label>Leads per month <span id="leadsVal">5</span></label>
-            <input type="range" id="leads" min="2" max="40" value="5">
-          </div>
-          <div class="slider-row">
-            <label>Campaigns per month <span id="campsVal">2</span></label>
-            <input type="range" id="camps" min="1" max="8" value="2">
-          </div>
           <div class="form-grid">
             <input type="text" placeholder="Company">
             <input type="text" placeholder="First name">
@@ -395,22 +379,12 @@
 
         <div class="breakdown">
           <div class="bd-col">
-            <h4>INSPIROVA</h4>
-            <div class="bd-row"><div class="k">Service fee</div><div class="v">€350,00</div></div>
-            <div class="bd-row"><div class="k">Cost per lead</div><div class="v">€300,00</div></div>
-            <div class="bd-row"><div class="k">Poor leads</div><div class="v" id="usPoor">2</div></div>
-            <div class="bd-row"><div class="k">Refund on poor leads</div><div class="v">€-120,00</div></div>
-            <div class="bd-row"><div class="k">Money lost on poor leads</div><div class="v">€0,00</div></div>
-            <div class="bd-row total"><div class="k">Monthly total</div><div class="v" id="usTotal">€530,00</div></div>
-          </div>
-          <div class="bd-col">
-            <h4>TYPICAL AGENCY</h4>
-            <div class="bd-row"><div class="k">Website(s)</div><div class="v">€937,50</div></div>
-            <div class="bd-row"><div class="k">Set up &amp; monitor</div><div class="v">€1.562,50</div></div>
-            <div class="bd-row"><div class="k">Ad budget</div><div class="v">€175,00</div></div>
-            <div class="bd-row"><div class="k">Poor leads</div><div class="v" id="themPoor">2</div></div>
-            <div class="bd-row"><div class="k">Money lost on poor leads</div><div class="v">€70,00</div></div>
-            <div class="bd-row total"><div class="k">Monthly total</div><div class="v" id="themTotal">€2.675,00</div></div>
+            <h4>WHAT'S INCLUDED</h4>
+            <div class="bd-row"><div class="k">Strategy &amp; reporting calls</div><div class="v">Monthly</div></div>
+            <div class="bd-row"><div class="k">Dedicated account manager</div><div class="v">Yes</div></div>
+            <div class="bd-row"><div class="k">Creative production</div><div class="v">Included</div></div>
+            <div class="bd-row"><div class="k">No long-term contracts</div><div class="v">30-day rolling</div></div>
+            <div class="bd-row total"><div class="k">Service fee</div><div class="v">€500 / month</div></div>
           </div>
         </div>
       </div>
