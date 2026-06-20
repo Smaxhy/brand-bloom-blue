@@ -1,0 +1,136 @@
+import { X } from "lucide-react";
+import { useEffect } from "react";
+
+export function Panel({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`rounded-2xl border border-border bg-card p-5 shadow-[0_18px_60px_-46px_var(--brand-ink)] ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+export function StatCard({
+  label,
+  value,
+  hint,
+  accent,
+  icon: Icon,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  accent?: string;
+  icon?: React.ElementType;
+}) {
+  return (
+    <Panel className="relative overflow-hidden">
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="text-[.68rem] font-semibold uppercase tracking-[.12em] text-muted-foreground">{label}</div>
+          <div className="mt-2 font-display text-3xl font-bold tracking-tight">{value}</div>
+          {hint && <div className="mt-1 text-xs text-muted-foreground">{hint}</div>}
+        </div>
+        {Icon && (
+          <div
+            className="grid h-10 w-10 place-items-center rounded-xl text-white"
+            style={{ background: accent ?? "var(--brand-violet)" }}
+          >
+            <Icon className="h-5 w-5" />
+          </div>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+export function Modal({
+  open,
+  onClose,
+  title,
+  children,
+  wide,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+  wide?: boolean;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [open, onClose]);
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-sm">
+      <div
+        className={`mt-10 w-full ${wide ? "max-w-2xl" : "max-w-md"} rounded-2xl border border-border bg-card p-6 shadow-xl`}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="font-display text-lg font-bold">{title}</h3>
+          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-secondary">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+export function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+export const inputCls =
+  "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary";
+
+export function Btn({
+  children,
+  onClick,
+  variant = "primary",
+  className = "",
+  type = "button",
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  variant?: "primary" | "ghost" | "soft" | "danger";
+  className?: string;
+  type?: "button" | "submit";
+}) {
+  const styles = {
+    primary: "bg-primary text-primary-foreground hover:bg-primary/90",
+    ghost: "border border-border bg-background text-foreground hover:bg-secondary",
+    soft: "bg-secondary text-foreground hover:bg-secondary/70",
+    danger: "bg-destructive/10 text-destructive hover:bg-destructive/20",
+  }[variant];
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold transition-colors ${styles} ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
