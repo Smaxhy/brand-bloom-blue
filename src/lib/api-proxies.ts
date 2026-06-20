@@ -261,10 +261,12 @@ async function enrich(request: Request, env: Env): Promise<Response> {
   const people = (payload.people ?? []).slice(0, 10);
   if (!people.length) return json({ results: [] });
 
+  const apolloKey = secret(env, "APOLLO_API_KEY");
   const hunterKey = secret(env, "HUNTER_API_KEY");
-  const serperKey = secret(env, "SERPAPI_API_KEY");
+  // Google key: accept either name. SerpApi.com or Serper.dev (auto-detected).
+  const googleKey = secret(env, "SERPAPI_API_KEY") || secret(env, "SERPER_API_KEY");
 
-  if (!hunterKey && !serperKey) {
+  if (!apolloKey && !hunterKey && !googleKey) {
     return json({
       demo: true,
       reason: "missing_reveal_keys",
@@ -272,28 +274,62 @@ async function enrich(request: Request, env: Env): Promise<Response> {
         id: p.id,
         email: demoEmail(p),
         phone: "",
+        website: cleanDomain(p.domain),
         source: "demo",
         sourceUrl: "",
       })),
     });
   }
 
-  const results: {
-    id?: string;
-    email: string;
-    phone: string;
-    source: string;
-    sourceUrl: string;
-  }[] = [];
-  for (const p of people) {
-    const domain = cleanDomain(p.domain);
-    let email = "";
-    let phone = "";
-    let source = "";
-    let sourceUrl = "";
+  // Seed each result with the website Apollo's search already gave us.
+  const results = people.map((p) => ({
+    id: p.id,
+    email: "",
+    phone: "",
+    website: cleanDomain(p.domain),
+    source: "",
+    sourceUrl: "",
+  }));
+  const byId = new Map(results.map((r) => [r.id, r]));
 
-    // 1) Hunter email-finder — most reliable for name + domain → email
-    if (hunterKey && domain) {
+  // 1) Apollo enrichment (Professional plan): emails + websites + phones, one batch call.
+  if (apolloKey) {
+    try {
+      const matches = await apolloBulkMatch(apolloKey, people, !!payload.revealPhone);
+      matches.forEach((m, i) => {
+        const r = byId.get(people[i].id);
+        if (!r || !m) return;
+        if (m.email) {
+          r.email = m.email;
+          r.source = "Apollo";
+        }
+        if (m.website && !r.website) r.website = m.website;
+        if (m.phone && payload.revealPhone) r.phone = m.phone;
+      });
+    } catch {
+      /* fall through to Google/Hunter */
+    }
+  }
+
+  // 2) Per-contact gap-filling with Google (SerpApi/Serper) + Hunter.
+  for (let i = 0; i < people.length; i++) {
+    const p = people[i];
+    const r = byId.get(p.id);
+    if (!r) continue;
+
+    // 2a) Find the company website via Google if we still don't have one.
+    if (!r.website && googleKey && p.organizationName) {
+      try {
+        const site = await googleFindWebsite(googleKey, p.organizationName);
+        if (site) r.website = site;
+      } catch {
+        /* skip */
+      }
+    }
+    const domain = cleanDomain(r.website);
+
+    // 2b) Email via Hunter (needs name + domain).
+    if (!r.email && hunterKey && domain) {
       const first = p.firstName || p.name?.split(" ")[0] || "";
       const last = p.lastName || p.name?.split(" ").slice(-1)[0] || "";
       if (first && last) {
@@ -306,27 +342,23 @@ async function enrich(request: Request, env: Env): Promise<Response> {
           const res = await fetch(u.toString());
           if (res.ok) {
             const d = (await res.json()) as {
-              data?: {
-                email?: string;
-                phone_number?: string;
-                sources?: { uri?: string }[];
-              };
+              data?: { email?: string; phone_number?: string; sources?: { uri?: string }[] };
             };
             if (d.data?.email) {
-              email = d.data.email;
-              source = "Hunter";
-              sourceUrl = d.data.sources?.find((s) => s.uri)?.uri ?? "";
-              if (payload.revealPhone && d.data.phone_number) phone = d.data.phone_number;
+              r.email = d.data.email;
+              r.source = "Hunter";
+              r.sourceUrl = d.data.sources?.find((s) => s.uri)?.uri ?? "";
+              if (payload.revealPhone && d.data.phone_number) r.phone = d.data.phone_number;
             }
           }
         } catch {
-          /* fall through to Serper */
+          /* fall through to Google */
         }
       }
     }
 
-    // 2) Serper fallback — scrape Google, track which result the email came from
-    if (!email && serperKey) {
+    // 2c) Email via Google search (last resort), tracking the source URL.
+    if (!r.email && googleKey) {
       const q = [
         p.name ? `"${p.name}"` : "",
         p.organizationName ? `"${p.organizationName}"` : "",
@@ -336,47 +368,135 @@ async function enrich(request: Request, env: Env): Promise<Response> {
         .filter(Boolean)
         .join(" ");
       try {
-        const res = await fetch("https://google.serper.dev/search", {
-          method: "POST",
-          headers: { "X-API-KEY": serperKey, "Content-Type": "application/json" },
-          body: JSON.stringify({ q, num: 10 }),
-        });
-        if (res.ok) {
-          const d = (await res.json()) as {
-            organic?: { title?: string; snippet?: string; link?: string }[];
-            knowledgeGraph?: Record<string, unknown>;
-          };
-          const organic = d.organic ?? [];
-          // Prefer the first organic hit that actually contains a matching email
-          for (const o of organic) {
-            const text = `${o.title ?? ""} ${o.snippet ?? ""}`;
-            const found = pickEmail(text, domain);
-            if (found) {
-              email = found;
-              sourceUrl = o.link ?? "";
-              break;
-            }
-          }
-          // Fallback: scan everything (knowledgeGraph etc.)
-          if (!email) {
-            const blob = JSON.stringify(organic) + JSON.stringify(d.knowledgeGraph ?? {});
-            email = pickEmail(blob, domain);
-            if (email && organic[0]?.link) sourceUrl = organic[0].link;
-          }
-          if (email) source = "Google";
-          if (payload.revealPhone && !phone) {
-            const blob = JSON.stringify(organic) + JSON.stringify(d.knowledgeGraph ?? {});
-            phone = pickPhone(blob);
-          }
+        const { blob, firstLink } = await googleSearch(googleKey, q);
+        const found = pickEmail(blob, domain);
+        if (found) {
+          r.email = found;
+          r.source = "Google";
+          r.sourceUrl = firstLink;
         }
+        if (payload.revealPhone && !r.phone) r.phone = pickPhone(blob);
       } catch {
         /* leave locked */
       }
     }
-
-    results.push({ id: p.id, email, phone, source, sourceUrl });
   }
+
   return json({ demo: false, results });
+}
+
+/** SerpApi.com keys are 64 hex chars; Serper.dev keys are ~40. */
+function isSerpApi(key: string): boolean {
+  return key.length >= 50;
+}
+
+/** Run a Google search via whichever provider the key belongs to. */
+async function googleSearch(key: string, q: string): Promise<{ blob: string; firstLink: string }> {
+  if (isSerpApi(key)) {
+    const u = new URL("https://serpapi.com/search.json");
+    u.searchParams.set("engine", "google");
+    u.searchParams.set("q", q);
+    u.searchParams.set("num", "10");
+    u.searchParams.set("api_key", key);
+    const res = await fetch(u.toString());
+    if (!res.ok) return { blob: "", firstLink: "" };
+    const d = (await res.json()) as {
+      organic_results?: { link?: string }[];
+      knowledge_graph?: unknown;
+      answer_box?: unknown;
+    };
+    const organic = d.organic_results ?? [];
+    return {
+      blob:
+        JSON.stringify(organic) +
+        JSON.stringify(d.knowledge_graph ?? {}) +
+        JSON.stringify(d.answer_box ?? {}),
+      firstLink: organic[0]?.link ?? "",
+    };
+  }
+  // Serper.dev
+  const res = await fetch("https://google.serper.dev/search", {
+    method: "POST",
+    headers: { "X-API-KEY": key, "Content-Type": "application/json" },
+    body: JSON.stringify({ q, num: 10 }),
+  });
+  if (!res.ok) return { blob: "", firstLink: "" };
+  const d = (await res.json()) as { organic?: { link?: string }[]; knowledgeGraph?: unknown };
+  const organic = d.organic ?? [];
+  return {
+    blob: JSON.stringify(organic) + JSON.stringify(d.knowledgeGraph ?? {}),
+    firstLink: organic[0]?.link ?? "",
+  };
+}
+
+const SOCIAL_RE =
+  /(facebook|instagram|linkedin|twitter|x\.com|youtube|yelp|wikipedia|crunchbase|bloomberg|indeed|glassdoor|tripadvisor|mapquest|yellowpages)\./i;
+
+/** Find a company's website domain via Google (skips social/directory links). */
+async function googleFindWebsite(key: string, company: string): Promise<string> {
+  const { blob, firstLink } = await googleSearch(key, `${company} official website`);
+  if (firstLink && !SOCIAL_RE.test(firstLink)) {
+    const dom = cleanDomain(firstLink);
+    if (dom && dom.includes(".")) return dom;
+  }
+  const links = blob.match(/https?:\/\/[^"\\ ]+/g) ?? [];
+  for (const l of links) {
+    if (SOCIAL_RE.test(l)) continue;
+    const dom = cleanDomain(l);
+    if (dom && dom.includes(".")) return dom;
+  }
+  return "";
+}
+
+/** Apollo bulk people enrichment — emails, websites and phones (Professional plan). */
+async function apolloBulkMatch(
+  key: string,
+  people: EnrichInput[],
+  revealPhone: boolean,
+): Promise<({ email: string; website: string; phone: string } | null)[]> {
+  const details = people.map((p) => ({
+    id: p.id,
+    first_name: p.firstName,
+    last_name: p.lastName,
+    name: p.name,
+    organization_name: p.organizationName,
+    domain: cleanDomain(p.domain) || undefined,
+    linkedin_url: p.linkedin,
+  }));
+  const url = new URL("https://api.apollo.io/api/v1/people/bulk_match");
+  url.searchParams.set("reveal_personal_emails", "true");
+  if (revealPhone) url.searchParams.set("reveal_phone_number", "true");
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-cache",
+      Accept: "application/json",
+      "X-Api-Key": key,
+    },
+    body: JSON.stringify({
+      details,
+      reveal_personal_emails: true,
+      reveal_phone_number: revealPhone,
+    }),
+  });
+  if (!res.ok) return people.map(() => null);
+  const data = (await res.json()) as { matches?: (ApolloPerson | null)[] };
+  return (data.matches ?? []).map((m) => {
+    if (!m) return null;
+    const rawEmail = m.email ?? "";
+    const locked =
+      !rawEmail ||
+      /not_unlocked|email_not_unlocked|locked/i.test(rawEmail) ||
+      m.email_status === "unavailable";
+    const org = m.organization ?? {};
+    const website = (org.website_url || org.primary_domain || "")
+      .replace(/^https?:\/\//, "")
+      .replace(/^www\./, "")
+      .replace(/\/.*$/, "");
+    const phone = m.phone_numbers?.[0]?.sanitized_number || m.phone_numbers?.[0]?.raw_number || "";
+    return { email: locked ? "" : rawEmail, website, phone };
+  });
 }
 
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
