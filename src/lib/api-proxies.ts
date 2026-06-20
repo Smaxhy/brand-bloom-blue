@@ -298,11 +298,11 @@ async function enrich(request: Request, env: Env): Promise<Response> {
     }
   }
 
-  // 3) Google (via Serper.dev) fallback — searches the whole web. For anyone
+  // 3) Google (via SerpAPI) fallback — searches the whole web. For anyone
   //    still missing an email, query Google for the person + company and pull
   //    any address out of the result snippets.
-  const serperKey = env.SERPER_API_KEY;
-  if (serperKey) {
+  const serpKey = env.SERPAPI_API_KEY;
+  if (serpKey) {
     for (let i = 0; i < people.length; i++) {
       if (results[i].email) continue;
       const p = people[i];
@@ -316,17 +316,15 @@ async function enrich(request: Request, env: Env): Promise<Response> {
         .filter(Boolean)
         .join(" ");
       try {
-        const res = await fetch("https://google.serper.dev/search", {
-          method: "POST",
-          headers: { "X-API-KEY": serperKey, "Content-Type": "application/json" },
-          body: JSON.stringify({ q, num: 10 }),
-        });
+        const url = `https://serpapi.com/search.json?engine=google&num=10&q=${encodeURIComponent(q)}&api_key=${encodeURIComponent(serpKey)}`;
+        const res = await fetch(url);
         if (res.ok) {
           const d = (await res.json()) as {
-            organic?: { title?: string; snippet?: string; link?: string }[];
-            knowledgeGraph?: Record<string, unknown>;
+            organic_results?: { title?: string; snippet?: string; link?: string }[];
+            knowledge_graph?: Record<string, unknown>;
           };
-          const blob = JSON.stringify(d.organic ?? []) + JSON.stringify(d.knowledgeGraph ?? {});
+          const blob =
+            JSON.stringify(d.organic_results ?? []) + JSON.stringify(d.knowledge_graph ?? {});
           const email = pickEmail(blob, domain);
           if (email) {
             results[i].email = email;

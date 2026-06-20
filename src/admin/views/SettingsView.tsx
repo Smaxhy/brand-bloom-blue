@@ -108,11 +108,10 @@ export function SettingsView({
             (free key at hunter.io → API).
           </li>
           <li className="rounded-lg bg-secondary px-3 py-2.5">
-            <strong>Google</strong> — searches the whole web for a contact's email. Google's own API
-            is closed to new users, so this uses <strong>Serper.dev</strong> (real Google results,
-            open to new users). Secret:{" "}
-            <code className="rounded bg-background px-1.5 py-0.5 text-xs">SERPER_API_KEY</code>{" "}
-            (free credits at serper.dev).
+            <strong>Google</strong> — searches the whole web for a contact's email via{" "}
+            <strong>SerpAPI</strong> (real Google results). Secret:{" "}
+            <code className="rounded bg-background px-1.5 py-0.5 text-xs">SERPAPI_API_KEY</code>{" "}
+            (get a key at serpapi.com).
           </li>
         </ul>
         <p className="mt-3 rounded-lg bg-secondary px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
