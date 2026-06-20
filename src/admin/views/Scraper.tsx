@@ -69,7 +69,7 @@ export function Scraper({
     titles: "",
     industry: "",
     seniorities: ["owner", "c_suite", "director"],
-    perPage: 100,
+    perPage: 25,
   });
   const [geo, setGeo] = useState<GeocodeResult | null>(null);
   const [geoBusy, setGeoBusy] = useState(false);
@@ -118,12 +118,16 @@ export function Scraper({
   }
 
   async function revealEmails(targets: ScrapedPerson[]) {
-    const list = targets.filter((p) => p.emailLocked || !p.email);
+    // Enrich anyone missing an email OR a website (Apollo finds both; Google/Hunter fill gaps).
+    const list = targets.filter((p) => p.emailLocked || !p.email || !p.website);
     if (!list.length) return;
     setEnrichBusy(true);
     setEnrichProgress({ done: 0, total: list.length });
 
-    const updates: Record<string, { email: string; phone: string; source: string; sourceUrl: string }> = {};
+    const updates: Record<
+      string,
+      { email: string; phone: string; website: string; source: string; sourceUrl: string }
+    > = {};
     // Process in batches of 10 (Apollo bulk limit) to stay within Worker limits.
     for (let i = 0; i < list.length; i += 10) {
       const chunk = list.slice(i, i + 10);
@@ -141,7 +145,14 @@ export function Scraper({
       });
       const res = await enrichContacts(payload, revealPhone);
       res.forEach((r) => {
-        if (r.id) updates[r.id] = { email: r.email, phone: r.phone, source: r.source, sourceUrl: r.sourceUrl };
+        if (r.id)
+          updates[r.id] = {
+            email: r.email,
+            phone: r.phone,
+            website: r.website,
+            source: r.source,
+            sourceUrl: r.sourceUrl,
+          };
       });
       setEnrichProgress({ done: Math.min(i + chunk.length, list.length), total: list.length });
     }
@@ -155,6 +166,7 @@ export function Scraper({
           email: u.email || p.email,
           emailLocked: u.email ? false : p.emailLocked,
           phone: u.phone || p.phone,
+          website: u.website || p.website,
         };
       }),
     );
@@ -204,6 +216,10 @@ export function Scraper({
     setSelected(Object.fromEntries(res.people.map((p) => [p.id, true])));
     setBanner({ live: res.live, text: res.message });
     setScrapeBusy(false);
+    // Automatically reveal emails + websites for the results we just found.
+    if (res.live && res.people.length) {
+      await revealEmails(res.people);
+    }
   }
 
   const selectedPeople = results.filter((p) => selected[p.id]);
@@ -283,10 +299,10 @@ export function Scraper({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-2xl text-sm text-muted-foreground">
           Enter a city, region or address and tap the keywords you want (Real Estate, Tree, Store…).
-          Apollo finds the decision-makers at matching businesses there — names, titles, company,
-          website and LinkedIn. Pull up to 500 at once, then reveal emails: Apollo's data powers a
-          Google search to find each contact's address. Accept the good ones into your raw-data
-          queue.
+          Apollo finds the decision-makers at matching businesses, then automatically enriches each
+          one — Apollo reveals emails, websites and phones (your Professional plan), and SerpApi +
+          Hunter fill any gaps in websites and emails. Pull up to 500 at once and accept the good
+          ones into your raw-data queue.
         </p>
       </div>
 
@@ -495,9 +511,10 @@ export function Scraper({
           </div>
 
           <p className="mb-4 text-xs text-muted-foreground">
-            Reveal uses the data Apollo found (name + company + domain) to run a precise Google
-            search and pull each contact's email. This needs a Serper key (the Google layer) — see
-            Settings. Phone is best-effort. EU contacts' info may be limited under GDPR.
+            Enrichment runs automatically after a search and you can re-run it here. Apollo reveals
+            emails + websites first; for anything missing, SerpApi searches Google for the website,
+            then Hunter and SerpApi find the email. Phone is best-effort. EU contacts' personal info
+            may be limited under GDPR.
           </p>
 
           {pushed > 0 && (
