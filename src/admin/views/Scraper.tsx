@@ -687,8 +687,14 @@ export function Scraper({
               <Btn variant="ghost" onClick={() => exportCSV(selectedPeople)}>
                 <Download className="h-4 w-4" /> Download CSV
               </Btn>
+              <Btn variant="danger" onClick={denySelected}>
+                <X className="h-4 w-4" /> Deny {selectedPeople.length}
+              </Btn>
+              <Btn variant="ghost" onClick={clearAllResults}>
+                <Trash2 className="h-4 w-4" /> Clear all
+              </Btn>
               <Btn onClick={sendToRaw}>
-                <ArrowRightCircle className="h-4 w-4" /> Send {selectedPeople.length} to Raw Data
+                <ArrowRightCircle className="h-4 w-4" /> Accept {selectedPeople.length} → Raw Data
               </Btn>
             </div>
           </div>
