@@ -50,13 +50,13 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
 /* --------------------------------------------------------------------- */
 
 async function diag(env: Env): Promise<Response> {
-  const apolloKey = env.APOLLO_API_KEY;
+  const apolloKey = secret(env, "APOLLO_API_KEY");
   const out: Record<string, unknown> = {
     apolloKeyPresent: !!apolloKey,
     apolloKeyLength: apolloKey ? apolloKey.length : 0,
-    hunterKeyPresent: !!env.HUNTER_API_KEY,
-    serperKeyPresent: !!env.SERPAPI_API_KEY,
-    ghlKeyPresent: !!env.GHL_API_KEY,
+    hunterKeyPresent: !!secret(env, "HUNTER_API_KEY"),
+    serperKeyPresent: !!secret(env, "SERPAPI_API_KEY"),
+    ghlKeyPresent: !!secret(env, "GHL_API_KEY"),
   };
   if (apolloKey) {
     try {
@@ -137,7 +137,7 @@ interface ScrapeFilters {
 
 async function apolloSearch(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") return json({ error: "POST only" }, 405);
-  const key = env.APOLLO_API_KEY;
+  const key = secret(env, "APOLLO_API_KEY");
   // No key configured -> tell the client to use demo data, with the reason.
   if (!key) return json({ demo: true, reason: "missing_key" });
 
@@ -261,7 +261,7 @@ async function enrich(request: Request, env: Env): Promise<Response> {
   const people = (payload.people ?? []).slice(0, 10);
   if (!people.length) return json({ results: [] });
 
-  const serperKey = env.SERPAPI_API_KEY;
+  const serperKey = secret(env, "SERPAPI_API_KEY");
 
   // Google is the reveal engine, powered by the data Apollo already found.
   // Without a Serper key we can't search Google, so return demo emails so the
@@ -346,7 +346,7 @@ function pickPhone(text: string): string {
 /* --------------------------------------------------------------------- */
 
 async function hunterDomain(url: URL, env: Env): Promise<Response> {
-  const key = env.HUNTER_API_KEY;
+  const key = secret(env, "HUNTER_API_KEY");
   const domain = cleanDomain(url.searchParams.get("domain") ?? "");
   if (!domain) return json({ error: "missing domain" }, 400);
   if (!key) return json({ demo: true, emails: [] });
@@ -471,7 +471,7 @@ async function ghlSend(request: Request, env: Env): Promise<Response> {
     return json({ error: "invalid json" }, 400);
   }
   // Prefer the server secret; fall back to a key passed from the client.
-  const key = env.GHL_API_KEY || payload.apiKey;
+  const key = secret(env, "GHL_API_KEY") || payload.apiKey;
   if (!key || !payload.locationId) {
     return json({ ok: true, simulated: true, message: "No GHL key on server — simulated." });
   }
