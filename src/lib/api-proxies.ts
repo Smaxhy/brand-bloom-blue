@@ -148,7 +148,7 @@ async function apolloSearch(request: Request, env: Env): Promise<Response> {
       if (kw) body.q_keywords = kw;
       const pages = Math.ceil(perQuery / PER_PAGE);
       for (let page = 1; page <= pages; page++) {
-        const res = await fetch("https://api.apollo.io/api/v1/mixed_people/search", {
+        const res = await fetch("https://api.apollo.io/api/v1/people/search", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
