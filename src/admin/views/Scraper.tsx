@@ -230,6 +230,48 @@ export function Scraper({
     setPushed(rows.length);
   }
 
+  function exportCSV(rows: ScrapedPerson[]) {
+    const header = [
+      "First Name",
+      "Last Name",
+      "Email",
+      "Phone",
+      "Title",
+      "Seniority",
+      "Company",
+      "Website",
+      "LinkedIn URL",
+      "City",
+      "Industry",
+    ];
+    const lines = rows.map((p) => {
+      const [first, ...rest] = p.name.trim().split(/\s+/);
+      const last = rest.join(" ");
+      const cells = [
+        first || "",
+        last || "",
+        p.email || "",
+        p.phone || "",
+        p.title || "",
+        p.seniority || "",
+        p.company || "",
+        p.website || "",
+        p.linkedin || "",
+        p.city || "",
+        p.industry || "",
+      ];
+      return cells.map((c) => `"${(c || "").replace(/"/g, '""')}"`).join(",");
+    });
+    const csv = [header.join(","), ...lines].join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `apollo-export-${rows.length}-contacts.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // OpenStreetMap embed (no key needed): bbox + marker
   const mapSrc = geo
     ? `https://www.openstreetmap.org/export/embed.html?bbox=${geo.bbox[2]}%2C${geo.bbox[0]}%2C${geo.bbox[3]}%2C${geo.bbox[1]}&layer=mapnik&marker=${geo.lat}%2C${geo.lng}`
