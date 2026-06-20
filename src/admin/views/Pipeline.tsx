@@ -192,12 +192,43 @@ export function Pipeline({
                 ))}
               </select>
             </Field>
+
+            <Field label="Services">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {SERVICES.map((s) => {
+                  const checked = editing.services.includes(s.id);
+                  return (
+                    <label key={s.id} className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 text-sm transition-colors ${checked ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}>
+                      <input type="checkbox" className="mt-0.5" checked={checked} onChange={() => setEditing(toggleService(editing, s.id))} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium">{s.name}</span>
+                          <span className="font-display text-sm font-bold text-primary">{fmtEuro(s.price)}<span className="text-[.65rem] font-normal text-muted-foreground">{s.billing === "monthly" ? "/mo" : " setup"}</span></span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">{s.desc}</div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+              {editing.services.length > 0 && (() => {
+                const t = totalsForServices(editing.services);
+                return (
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-secondary px-3 py-2 text-xs">
+                    <span><span className="text-muted-foreground">Monthly:</span> <strong>{fmtEuro(t.monthly)}/mo</strong></span>
+                    <span><span className="text-muted-foreground">Setup:</span> <strong>{fmtEuro(t.setup)}</strong></span>
+                    <span className="ml-auto"><span className="text-muted-foreground">First-month total:</span> <strong className="text-primary">{fmtEuro(t.total)}</strong></span>
+                  </div>
+                );
+              })()}
+            </Field>
+
             <div className="grid grid-cols-2 gap-3">
               <Field label="Company"><input className={inputCls} value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></Field>
               <Field label="Contact"><input className={inputCls} value={editing.contact} onChange={(e) => setEditing({ ...editing, contact: e.target.value })} /></Field>
               <Field label="Email"><input className={inputCls} value={editing.email} onChange={(e) => setEditing({ ...editing, email: e.target.value })} /></Field>
               <Field label="Phone"><input className={inputCls} value={editing.phone} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} /></Field>
-              <Field label="Value (€)"><input type="number" className={inputCls} value={editing.value} onChange={(e) => setEditing({ ...editing, value: Number(e.target.value) })} /></Field>
+              <Field label="Deal value (€)"><input type="number" className={inputCls} value={editing.value} onChange={(e) => setEditing({ ...editing, value: Number(e.target.value) })} /></Field>
               <Field label="Source"><input className={inputCls} value={editing.source} onChange={(e) => setEditing({ ...editing, source: e.target.value })} /></Field>
               <Field label="Stage">
                 <select className={inputCls} value={editing.stage} onChange={(e) => setEditing({ ...editing, stage: e.target.value as StageId })}>
@@ -206,6 +237,7 @@ export function Pipeline({
               </Field>
             </div>
             <Field label="Notes"><textarea className={`${inputCls} min-h-[72px]`} value={editing.notes} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} /></Field>
+
             <div className="flex justify-end gap-2 pt-1">
               <Btn variant="ghost" onClick={() => setEditing(null)}>Cancel</Btn>
               <Btn onClick={() => save(editing)}>Save deal</Btn>
