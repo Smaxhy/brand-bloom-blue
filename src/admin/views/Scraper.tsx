@@ -518,6 +518,17 @@ export function Scraper({
                               {emailSource[p.id]}
                             </span>
                           )}
+                          {emailSourceUrl[p.id] && (
+                            <a
+                              href={emailSourceUrl[p.id]}
+                              target="_blank"
+                              rel="noreferrer"
+                              title={emailSourceUrl[p.id]}
+                              className="shrink-0 truncate max-w-[10rem] text-[.65rem] text-primary underline underline-offset-2 hover:opacity-80"
+                            >
+                              {prettyHost(emailSourceUrl[p.id])}
+                            </a>
+                          )}
                         </span>
                       )}
                     </div>
