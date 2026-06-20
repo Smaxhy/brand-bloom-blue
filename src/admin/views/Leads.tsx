@@ -17,7 +17,7 @@ const COLORS = [
   "var(--brand-violet)",
   "var(--brand-coral)",
   "oklch(.66 .19 250)",
-  "var(--brand-violet)",
+  "oklch(.7 .18 150)",
   "var(--brand-light)",
   "oklch(.72 .15 60)",
 ];
@@ -41,18 +41,18 @@ export function Leads({ data }: { data: AdminData; update: (fn: (p: AdminData) =
   const accepted = data.raw.filter((r) => r.status === "accepted").length;
 
   const channels = [
-    { ch: "Meta Ads",   leads: 42 },
-    { ch: "Google",     leads: 28 },
-    { ch: "Cold Email", leads: 64 },
-    { ch: "Referral",   leads: 11 },
-    { ch: "Organic",    leads: 23 },
+    { ch: "Meta Ads", leads: 42, cpl: 14 },
+    { ch: "Google", leads: 28, cpl: 19 },
+    { ch: "Cold Email", leads: 64, cpl: 6 },
+    { ch: "Referral", leads: 11, cpl: 0 },
+    { ch: "Organic", leads: 23, cpl: 3 },
   ];
 
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total Leads" value={String(totalDeals + rawCount)} hint={`${totalDeals} in CRM · ${rawCount} raw`} icon={Sparkles} accent="var(--brand-violet)" />
-        <StatCard label="Win Rate" value={`${conv}%`} hint={`${won} deals won`} icon={Target} accent="var(--brand-violet)" />
+        <StatCard label="Win Rate" value={`${conv}%`} hint={`${won} deals won`} icon={Target} accent="oklch(.7 .18 150)" />
         <StatCard label="Accepted Raw" value={String(accepted)} hint="Ready for outreach" icon={Filter} accent="var(--brand-coral)" />
         <StatCard label="Avg. Deal Value" value={fmtEuro(totalDeals ? Math.round(data.deals.reduce((s, d) => s + d.value, 0) / totalDeals) : 0)} hint="Across all stages" icon={Megaphone} accent="oklch(.66 .19 250)" />
       </div>
@@ -105,7 +105,7 @@ export function Leads({ data }: { data: AdminData; update: (fn: (p: AdminData) =
 
       <Panel>
         <h3 className="mb-1 font-display text-lg font-bold">Channel performance</h3>
-        <p className="mb-4 text-xs text-muted-foreground">Leads by acquisition channel (last 30 days)</p>
+        <p className="mb-4 text-xs text-muted-foreground">Leads vs. cost per lead by acquisition channel</p>
         <div className="h-60">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={channels}>

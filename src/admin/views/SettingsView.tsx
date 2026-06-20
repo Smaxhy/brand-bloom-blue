@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Save, RotateCcw, KeyRound, Radar } from "lucide-react";
+import { Save, RotateCcw, KeyRound, Radar, Globe } from "lucide-react";
 import { type AdminData, resetData } from "../store";
 import { Panel, Field, inputCls, Btn } from "../ui";
 
@@ -47,7 +47,7 @@ export function SettingsView({
         </div>
         <div className="mt-4 flex items-center gap-3">
           <Btn onClick={save}><Save className="h-4 w-4" /> Save settings</Btn>
-          {saved && <span className="text-sm text-[var(--brand-violet)]">Saved ✓</span>}
+          {saved && <span className="text-sm text-[oklch(.55_.15_150)]">Saved ✓</span>}
         </div>
         <p className="mt-4 rounded-lg bg-secondary px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
           For security, GHL keys shouldn't sit in front-end code in production. The panel calls{" "}
@@ -79,9 +79,46 @@ export function SettingsView({
           <li>Redeploy. The scraper detects the key and starts returning live results.</li>
         </ol>
         <p className="mt-3 rounded-lg bg-secondary px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-          The map uses free OpenStreetMap geocoding (no key). Emails that Apollo returns locked stay
-          masked until you enrich them on your Apollo plan. Keep outreach GDPR-compliant: B2B
-          legitimate-interest only, always include an easy opt-out.
+          The map uses free OpenStreetMap geocoding (no key). Pulling records draws from your
+          monthly <strong>export credits</strong> (≈2,000 on Professional); revealing emails uses
+          email credits (unlimited under fair use); revealing phones uses <strong>mobile credits</strong>
+          (≈100/mo on Professional), so use phones sparingly. EU contacts' personal emails may stay
+          hidden under GDPR. Keep outreach to B2B legitimate-interest contacts with an easy opt-out.
+        </p>
+      </Panel>
+
+      <Panel>
+        <div className="mb-4 flex items-center gap-2">
+          <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-[var(--brand-coral)] to-[var(--brand-violet)] text-white"><Globe className="h-4 w-4" /></div>
+          <div>
+            <h3 className="font-display text-lg font-bold">More sources (web search)</h3>
+            <p className="text-xs text-muted-foreground">Widen email coverage beyond Apollo.</p>
+          </div>
+        </div>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          Reveal waterfalls across sources so you get the widest coverage: <strong>Apollo</strong> →
+          <strong> Hunter.io</strong> → <strong>Google</strong>. Each extra source is optional — add
+          its key as a Worker secret (same way you set the Apollo key) and redeploy.
+        </p>
+        <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+          <li className="rounded-lg bg-secondary px-3 py-2.5">
+            <strong>Hunter.io</strong> — searches the public web (78M+ domains) for emails at a
+            company's domain. Secret:{" "}
+            <code className="rounded bg-background px-1.5 py-0.5 text-xs">HUNTER_API_KEY</code>{" "}
+            (free key at hunter.io → API).
+          </li>
+          <li className="rounded-lg bg-secondary px-3 py-2.5">
+            <strong>Google</strong> — searches the whole web for a contact's email. Google's own API
+            is closed to new users, so this uses <strong>Serper.dev</strong> (real Google results,
+            open to new users). Secret:{" "}
+            <code className="rounded bg-background px-1.5 py-0.5 text-xs">SERPER_API_KEY</code>{" "}
+            (free credits at serper.dev).
+          </li>
+        </ul>
+        <p className="mt-3 rounded-lg bg-secondary px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+          Google results are public web snippets, so email matches are best-effort and should be
+          verified before bulk outreach. Keep all outreach to B2B legitimate-interest contacts with
+          an easy opt-out (GDPR).
         </p>
       </Panel>
 

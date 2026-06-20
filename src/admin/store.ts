@@ -25,14 +25,13 @@ export type StageId =
 
 export interface Deal {
   id: string;
-  name: string;
-  contact: string;
+  name: string; // company / contact name
+  contact: string; // person
   email: string;
   phone: string;
-  value: number; // total deal value €
+  value: number; // deal value €
   stage: StageId;
   source: string;
-  services: string[]; // selected service ids (see SERVICES)
   template?: string;
   notes: string;
   createdAt: number;
@@ -49,11 +48,12 @@ export interface RawBusiness {
   industry: string;
   status: "raw" | "accepted" | "rejected";
   scrapedAt: number;
+  // Optional fields populated by the Data Scraper (Apollo.io)
   contactName?: string;
   contactTitle?: string;
   seniority?: string;
   linkedin?: string;
-  source?: string;
+  source?: string; // e.g. "Apollo" | "Manual import"
 }
 
 export interface Client {
@@ -64,9 +64,7 @@ export interface Client {
   phone: string;
   address: string;
   plan: string;
-  services: string[]; // selected service ids
   monthly: number; // recurring revenue €
-  setupFee: number; // one-time setup fee €
   status: "active" | "paused" | "churned";
   notes: string;
   since: number;
@@ -122,75 +120,18 @@ export interface AdminData {
 export const STAGES: { id: StageId; label: string; tone: string }[] = [
   { id: "new", label: "New Lead", tone: "var(--brand-light)" },
   { id: "contacted", label: "Contacted", tone: "oklch(.7 .15 250)" },
-  { id: "qualified", label: "Qualified", tone: "oklch(.6 .12 290)" },
+  { id: "qualified", label: "Qualified", tone: "oklch(.72 .15 200)" },
   { id: "proposal", label: "Proposal Sent", tone: "var(--brand-violet)" },
-  { id: "won", label: "Won", tone: "var(--brand-violet)" },
+  { id: "won", label: "Won", tone: "oklch(.7 .18 150)" },
   { id: "lost", label: "Lost", tone: "oklch(.6 .02 290)" },
 ];
 
-/* ----------------------------------------------------------------------- */
-/* Services catalog — what the agency actually sells                        */
-/* ----------------------------------------------------------------------- */
-
-export type ServiceBilling = "monthly" | "one-time";
-
-export interface Service {
-  id: string;
-  name: string;
-  price: number; // €
-  billing: ServiceBilling;
-  desc: string;
-}
-
-export const SERVICES: Service[] = [
-  { id: "ads_setup",        name: "Ads Setup",                 price: 1000, billing: "one-time", desc: "Ad accounts, audiences and launch-ready first creative set up." },
-  { id: "ads_management",   name: "Ads Management / Creation", price: 500,  billing: "monthly",  desc: "Ongoing Meta / Google / TikTok ads management & creative." },
-  { id: "video_creation",   name: "Video Creation",            price: 100,  billing: "one-time", desc: "Short-form ad / content video, per video." },
-  { id: "email_sms",        name: "Email & SMS Automations",   price: 750,  billing: "monthly",  desc: "Flows, broadcasts and SMS automations." },
-  { id: "website",          name: "Website Design / Creation", price: 300,  billing: "one-time", desc: "Conversion-focused website / landing page, per site." },
-  { id: "pixel_ecom",       name: "E-commerce Pixel Setup",    price: 150,  billing: "one-time", desc: "Pixel, server-side tracking & conversion API for e-commerce." },
-  { id: "pixel_leadgen",    name: "Lead-gen Pixel Setup",      price: 150,  billing: "one-time", desc: "Pixel + form / lead tracking for service businesses." },
-];
-
-export function getService(id: string): Service | undefined {
-  return SERVICES.find((s) => s.id === id);
-}
-
-export function totalsForServices(ids: string[]): { monthly: number; setup: number; total: number } {
-  let monthly = 0;
-  let setup = 0;
-  for (const id of ids) {
-    const s = getService(id);
-    if (!s) continue;
-    if (s.billing === "monthly") monthly += s.price;
-    else setup += s.price;
-  }
-  return { monthly, setup, total: monthly + setup };
-}
-
-/* Pre-built bundles — flat-rate first month + recurring management. */
-export interface Bundle {
-  id: string;
-  name: string;
-  tagline: string;
-  firstMonth: number; // one-time / first-month price €
-  recurring: number;  // monthly afterwards €
-  includes: string[]; // service ids included
-}
-
-export const BUNDLES: Bundle[] = [
-  { id: "deluxe",   name: "Deluxe Package",   tagline: "Everything in — site, automations & management.", firstMonth: 2500, recurring: 750, includes: ["website", "ads_setup", "ads_management", "email_sms", "pixel_ecom"] },
-  { id: "creation", name: "Creation Package", tagline: "Ads setup, creative & video production.",          firstMonth: 750,  recurring: 0,   includes: ["ads_setup", "video_creation"] },
-  { id: "growth",   name: "Growth Package",   tagline: "Ads setup + ongoing management with creative.",   firstMonth: 1200, recurring: 500, includes: ["ads_setup", "ads_management", "pixel_ecom"] },
-];
-
-/* Pipeline starter templates — bundles of services. */
-export const DEAL_TEMPLATES: Record<string, { services: string[]; source: string; notes: string }> = {
-  "Deluxe Package":     { services: ["website", "ads_setup", "ads_management", "email_sms", "pixel_ecom"], source: "Inbound",   notes: "Deluxe bundle — €2,500 first month, €750/mo after." },
-  "Creation Package":   { services: ["ads_setup", "video_creation"],                                       source: "Inbound",   notes: "€750 one-time creation package." },
-  "Growth Package":     { services: ["ads_setup", "ads_management", "pixel_ecom"],                         source: "Inbound",   notes: "€1,200 first month, €500/mo management." },
-  "Website Only":       { services: ["website"],                                                            source: "Referral",  notes: "Conversion-focused website / landing page." },
-  "Email & SMS Only":   { services: ["email_sms"],                                                          source: "Inbound",   notes: "Monthly email + SMS automations." },
+/* Pipeline starter templates — pick one when creating a deal. */
+export const DEAL_TEMPLATES: Record<string, Partial<Deal>> = {
+  "Paid Ads Retainer": { value: 2500, source: "Meta/Google Ads", notes: "Monthly paid media management retainer." },
+  "Website Build": { value: 4500, source: "Referral", notes: "Conversion-focused website + landing pages." },
+  "Lead-Gen Sprint": { value: 1800, source: "Cold Outreach", notes: "30-day lead generation campaign." },
+  "Full Growth System": { value: 6000, source: "Inbound", notes: "Ads + email + automation + CRM build." },
 };
 
 /* ----------------------------------------------------------------------- */
@@ -208,32 +149,32 @@ function seed(): AdminData {
   const day = 86400000;
   return {
     deals: [
-      { id: uid("d"), name: "Northwind Realty", contact: "Anna De Vos", email: "anna@northwind.be", phone: "+32 470 11 22 33", value: 1000, stage: "new",       source: "Meta Ads",      services: ["ads_setup", "ads_management"], template: "Ads Management Retainer", notes: "Wants ongoing Meta ads.",                createdAt: now - day * 2,  updatedAt: now - day * 2 },
-      { id: uid("d"), name: "Lumen Studio",     contact: "Tom Pauwels", email: "tom@lumen.studio",   phone: "+32 478 44 55 66", value: 2500, stage: "contacted", source: "Referral",      services: ["website_build"],               template: "Website Build",           notes: "New site before Q3 launch.",              createdAt: now - day * 5,  updatedAt: now - day * 1 },
-      { id: uid("d"), name: "Bricks & Co",      contact: "Sara Janssen", email: "sara@bricksco.be",  phone: "+32 471 77 88 99", value: 4000, stage: "qualified", source: "Inbound",       services: ["website_build", "ads_setup", "ads_management"], template: "Full Growth System", notes: "Budget approved, waiting on proposal.",   createdAt: now - day * 8,  updatedAt: now - day * 2 },
-      { id: uid("d"), name: "Verde Living",     contact: "Joris Maes",   email: "joris@verde.be",    phone: "+32 479 12 34 56", value: 500,  stage: "proposal",  source: "Cold Outreach", services: ["email_sms"],                   template: "Email & SMS Marketing",   notes: "Proposal sent, follow up Friday.",        createdAt: now - day * 11, updatedAt: now - day * 1 },
-      { id: uid("d"), name: "Atlas Group",      contact: "Eva Smeets",   email: "eva@atlasgroup.be", phone: "+32 472 99 00 11", value: 4000, stage: "won",       source: "Referral",      services: ["website_build", "ads_setup", "ads_management", "email_sms"], template: "Full Growth System", notes: "Closed! Onboarding next week.",           createdAt: now - day * 20, updatedAt: now - day * 3 },
+      { id: uid("d"), name: "Northwind Realty", contact: "Anna De Vos", email: "anna@northwind.be", phone: "+32 470 11 22 33", value: 2500, stage: "new", source: "Meta Ads", template: "Paid Ads Retainer", notes: "Interested in lead-gen for new development.", createdAt: now - day * 2, updatedAt: now - day * 2 },
+      { id: uid("d"), name: "Lumen Studio", contact: "Tom Pauwels", email: "tom@lumen.studio", phone: "+32 478 44 55 66", value: 4500, stage: "contacted", source: "Referral", template: "Website Build", notes: "Needs new site before Q3 launch.", createdAt: now - day * 5, updatedAt: now - day * 1 },
+      { id: uid("d"), name: "Bricks & Co", contact: "Sara Janssen", email: "sara@bricksco.be", phone: "+32 471 77 88 99", value: 6000, stage: "qualified", source: "Inbound", template: "Full Growth System", notes: "Budget approved, waiting on proposal.", createdAt: now - day * 8, updatedAt: now - day * 2 },
+      { id: uid("d"), name: "Verde Living", contact: "Joris Maes", email: "joris@verde.be", phone: "+32 479 12 34 56", value: 1800, stage: "proposal", source: "Cold Outreach", template: "Lead-Gen Sprint", notes: "Proposal sent, follow up Friday.", createdAt: now - day * 11, updatedAt: now - day * 1 },
+      { id: uid("d"), name: "Atlas Group", contact: "Eva Smeets", email: "eva@atlasgroup.be", phone: "+32 472 99 00 11", value: 5200, stage: "won", source: "Referral", template: "Full Growth System", notes: "Closed! Onboarding next week.", createdAt: now - day * 20, updatedAt: now - day * 3 },
     ],
     raw: [
-      { id: uid("r"), business: "Coastal Apparel",  email: "shop@coastalapparel.be", phone: "+32 59 11 22 33", website: "coastalapparel.be", city: "Oostende",  industry: "E-commerce",  status: "raw",      scrapedAt: now - day },
-      { id: uid("r"), business: "Urban Nest",       email: "hello@urbannest.be",     phone: "+32 3 444 55 66", website: "urbannest.be",      city: "Antwerpen", industry: "Furniture / DTC", status: "accepted", scrapedAt: now - day * 2 },
-      { id: uid("r"), business: "Domus Plus",       email: "info@domusplus.be",      phone: "+32 2 555 66 77", website: "domusplus.be",      city: "Brussel",   industry: "Home Goods",  status: "raw",      scrapedAt: now - day * 3 },
-      { id: uid("r"), business: "Vastgoed Vlaams",  email: "info@vastgoedvlaams.be", phone: "+32 9 222 33 44", website: "vastgoedvlaams.be", city: "Gent",      industry: "Real Estate", status: "raw",      scrapedAt: now - day },
+      { id: uid("r"), business: "Vastgoed Vlaams", email: "info@vastgoedvlaams.be", phone: "+32 9 222 33 44", website: "vastgoedvlaams.be", city: "Gent", industry: "Real Estate", status: "raw", scrapedAt: now - day },
+      { id: uid("r"), business: "Coastal Homes", email: "contact@coastalhomes.be", phone: "+32 59 11 22 33", website: "coastalhomes.be", city: "Oostende", industry: "Real Estate", status: "raw", scrapedAt: now - day },
+      { id: uid("r"), business: "Urban Nest", email: "hello@urbannest.be", phone: "+32 3 444 55 66", website: "urbannest.be", city: "Antwerpen", industry: "Property Dev", status: "accepted", scrapedAt: now - day * 2 },
+      { id: uid("r"), business: "Domus Plus", email: "info@domusplus.be", phone: "+32 2 555 66 77", website: "domusplus.be", city: "Brussel", industry: "Real Estate", status: "raw", scrapedAt: now - day * 3 },
     ],
     clients: [
-      { id: uid("c"), company: "Atlas Group",  contact: "Eva Smeets",   email: "eva@atlasgroup.be", phone: "+32 472 99 00 11", address: "Kortrijksesteenweg 12, Gent", plan: "Full Growth System", services: ["website_build", "ads_setup", "ads_management", "email_sms"], monthly: 1000, setupFee: 3000, status: "active", notes: "Flagship client. Monthly strategy call on Mondays.", since: now - day * 60 },
-      { id: uid("c"), company: "Lumen Studio", contact: "Tom Pauwels",  email: "tom@lumen.studio",  phone: "+32 478 44 55 66", address: "Meir 88, Antwerpen",          plan: "Website + Ads",      services: ["website_build", "ads_setup", "ads_management"],               monthly: 500,  setupFee: 3000, status: "active", notes: "",                                                  since: now - day * 30 },
+      { id: uid("c"), company: "Atlas Group", contact: "Eva Smeets", email: "eva@atlasgroup.be", phone: "+32 472 99 00 11", address: "Kortrijksesteenweg 12, Gent", plan: "Full Growth System", monthly: 5200, status: "active", notes: "Flagship client. Monthly strategy call on Mondays.", since: now - day * 60 },
+      { id: uid("c"), company: "Lumen Studio", contact: "Tom Pauwels", email: "tom@lumen.studio", phone: "+32 478 44 55 66", address: "Meir 88, Antwerpen", plan: "Website + Ads", monthly: 3100, status: "active", notes: "", since: now - day * 30 },
     ],
     transactions: [
-      { id: uid("t"), label: "Atlas Group — retainer",       type: "income",  amount: 1000, category: "Retainer", date: isoDaysAgo(5) },
-      { id: uid("t"), label: "Lumen Studio — retainer",      type: "income",  amount: 500,  category: "Retainer", date: isoDaysAgo(7) },
-      { id: uid("t"), label: "Meta ad spend (clients)",      type: "expense", amount: 1400, category: "Ad Spend", date: isoDaysAgo(6) },
-      { id: uid("t"), label: "GoHighLevel subscription",     type: "expense", amount: 297,  category: "Software", date: isoDaysAgo(10) },
-      { id: uid("t"), label: "Bricks & Co — setup deposit",  type: "income",  amount: 2500, category: "Project",  date: isoDaysAgo(12) },
+      { id: uid("t"), label: "Atlas Group — retainer", type: "income", amount: 5200, category: "Retainer", date: isoDaysAgo(5) },
+      { id: uid("t"), label: "Lumen Studio — retainer", type: "income", amount: 3100, category: "Retainer", date: isoDaysAgo(7) },
+      { id: uid("t"), label: "Meta ad spend (clients)", type: "expense", amount: 1400, category: "Ad Spend", date: isoDaysAgo(6) },
+      { id: uid("t"), label: "GoHighLevel subscription", type: "expense", amount: 297, category: "Software", date: isoDaysAgo(10) },
+      { id: uid("t"), label: "Bricks & Co — deposit", type: "income", amount: 3000, category: "Project", date: isoDaysAgo(12) },
     ],
     templates: [
-      { id: uid("tpl"), name: "Cold Intro — E-commerce", subject: "{{business}} — more revenue from your store this month?", body: "Hi {{contact}},\n\nI noticed {{business}} is doing great work in {{city}}. We help e-commerce brands scale with paid ads, email & SMS marketing and conversion-focused websites.\n\nWorth a 15-min call this week?\n\n— The Inspirova team" },
-      { id: uid("tpl"), name: "Follow-up",               subject: "Quick follow-up, {{contact}}",                              body: "Hi {{contact}},\n\nJust circling back on my last note. Open to a short call to see if we're a fit for {{business}}?\n\n— Inspirova" },
+      { id: uid("tpl"), name: "Cold Intro — Real Estate", subject: "{{business}}, more qualified buyers this month?", body: "Hi {{contact}},\n\nI noticed {{business}} is active in {{city}}. We help real-estate teams get qualified buyer & seller leads on a money-back basis — you only pay for leads that fit.\n\nWorth a 15-min call this week?\n\n— The Inspirova team" },
+      { id: uid("tpl"), name: "Follow-up", subject: "Quick follow-up, {{contact}}", body: "Hi {{contact}},\n\nJust circling back on my last note. Open to a short call to see if we're a fit for {{business}}?\n\n— Inspirova" },
     ],
     campaigns: [],
     settings: { ghlApiKey: "", ghlLocationId: "", fromName: "Inspirova", fromEmail: "hello@inspirova.com" },
@@ -415,31 +356,21 @@ export async function geocodeLocation(q: string): Promise<GeocodeResult | null> 
  * and we generate realistic sample leads so the whole flow stays usable.
  */
 export async function apolloSearch(filters: ScrapeFilters): Promise<ScrapeResponse> {
-  let fallbackMessage = "Demo mode — showing sample contact(s). Apollo live search is unavailable right now.";
   try {
     const res = await fetch("/api/apollo/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(filters),
     });
-    const j = (await res.json().catch(() => null)) as {
-      demo?: boolean;
-      people?: ScrapedPerson[];
-      error?: string;
-      detail?: string;
-    } | null;
     if (res.ok) {
-      if (j && !j.demo && Array.isArray(j.people)) {
+      const j = (await res.json()) as { demo?: boolean; people?: ScrapedPerson[] };
+      if (!j.demo && Array.isArray(j.people)) {
         return {
           live: true,
           people: j.people,
           message: `Found ${j.people.length} contact(s) via Apollo.io.`,
         };
       }
-      fallbackMessage = "Demo mode — APOLLO_API_KEY is not available to the live Apollo proxy yet.";
-    } else if (j?.detail || j?.error) {
-      const detail = j.detail ? ` ${j.detail}` : "";
-      fallbackMessage = `Demo mode — Apollo live search returned ${j.error ?? `HTTP ${res.status}`}.${detail}`;
     }
   } catch {
     /* fall through to demo */
@@ -448,7 +379,7 @@ export async function apolloSearch(filters: ScrapeFilters): Promise<ScrapeRespon
   return {
     live: false,
     people,
-    message: fallbackMessage.replace("sample contact(s)", `${people.length} sample contact(s)`),
+    message: `Demo mode — showing ${people.length} sample contact(s). Deploy the Apollo proxy + set APOLLO_API_KEY to scrape live data.`,
   };
 }
 
@@ -472,7 +403,7 @@ export function demoScrape(filters: ScrapeFilters): ScrapedPerson[] {
   const firsts = ["Anna", "Tom", "Sara", "Joris", "Eva", "Luc", "Femke", "Dries", "Lotte", "Bram"];
   const lasts = ["De Vos", "Pauwels", "Janssen", "Maes", "Smeets", "Peeters", "Claes", "Willems", "Goossens", "Aerts"];
 
-  const n = Math.max(3, Math.min(filters.perPage || 25, 500));
+  const n = Math.max(3, Math.min(filters.perPage || 8, 14));
   const out: ScrapedPerson[] = [];
   for (let i = 0; i < n; i++) {
     const company = companies[i % companies.length];
