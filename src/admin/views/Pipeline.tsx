@@ -7,10 +7,10 @@ import {
   STAGES,
   DEAL_TEMPLATES,
   SERVICES,
-  getService,
   totalsForServices,
   fmtEuro,
   uid,
+
 } from "../store";
 import { Modal, Field, inputCls, Btn } from "../ui";
 
