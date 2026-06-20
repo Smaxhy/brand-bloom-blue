@@ -105,7 +105,7 @@ export function Leads({ data }: { data: AdminData; update: (fn: (p: AdminData) =
 
       <Panel>
         <h3 className="mb-1 font-display text-lg font-bold">Channel performance</h3>
-        <p className="mb-4 text-xs text-muted-foreground">Leads vs. cost per lead by acquisition channel</p>
+        <p className="mb-4 text-xs text-muted-foreground">Leads by acquisition channel (last 30 days)</p>
         <div className="h-60">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={channels}>
