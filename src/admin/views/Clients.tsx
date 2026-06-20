@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Plus, Pencil, Trash2, Mail, Phone, MapPin } from "lucide-react";
-import { type AdminData, type Client, uid, fmtEuro } from "../store";
+import { type AdminData, type Client, SERVICES, totalsForServices, uid, fmtEuro } from "../store";
 import { Panel, Modal, Field, inputCls, Btn } from "../ui";
 
 const empty = (): Client => ({
@@ -11,11 +11,19 @@ const empty = (): Client => ({
   phone: "",
   address: "",
   plan: "",
+  services: [],
   monthly: 0,
+  setupFee: 0,
   status: "active",
   notes: "",
   since: Date.now(),
 });
+
+function toggleClientService(c: Client, id: string): Client {
+  const services = c.services.includes(id) ? c.services.filter((s) => s !== id) : [...c.services, id];
+  const t = totalsForServices(services);
+  return { ...c, services, monthly: t.monthly, setupFee: t.setup };
+}
 
 export function Clients({
   data,
