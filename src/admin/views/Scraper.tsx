@@ -808,6 +808,14 @@ export function Scraper({
                       <Linkedin className="h-4 w-4" />
                     </a>
                   )}
+                  <button
+                    onClick={() => denyOne(p.id)}
+                    aria-label="Deny / remove"
+                    title="Deny & remove"
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border text-[oklch(.55_.2_25)] hover:bg-[oklch(.95_.04_25)]"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
               );
             })}
