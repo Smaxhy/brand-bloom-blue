@@ -567,14 +567,69 @@
       });
     }
     function calc(){
-      var monthly=0,setup=0;
-      SERVICES.forEach(function(s){ if(!s.checked) return; if(s.billing==="monthly") monthly+=s.price; else setup+=s.price; });
+      var monthly=0,setup=0,selected=[];
+      SERVICES.forEach(function(s){ if(!s.checked) return; selected.push(s.id); if(s.billing==="monthly") monthly+=s.price; else setup+=s.price; });
       document.getElementById("sumMonthly").textContent=euro(monthly);
       document.getElementById("sumSetup").textContent=euro(setup);
       document.getElementById("sumTotal").textContent=euro(monthly+setup);
+      window.__inspQuote={ selected:selected, monthly:monthly, setup:setup, total:monthly+setup, names:selected.map(nameById) };
     }
     renderBundles(); render(); calc();
   })();
+
+  /* ---- quote submission → admin pipeline (localStorage) ---- */
+  (function(){
+    var btn=document.getElementById("quoteBtn"); if(!btn) return;
+    var msg=document.getElementById("quoteMsg");
+    var STORE_KEY="inspirova.admin.data";
+
+    function uid(p){ return (p||"d")+"_"+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3); }
+    function val(id){ var el=document.getElementById(id); return el?el.value.trim():""; }
+    function setMsg(t,ok){ if(!msg) return; msg.textContent=t; msg.style.color = ok ? "var(--violet-bright)" : "var(--coral)"; }
+
+    btn.addEventListener("click", function(){
+      var company=val("qCompany"), first=val("qFirst"), last=val("qLast"),
+          email=val("qEmail"), phone=val("qPhone"), notes=val("qNotes");
+      var consent=document.getElementById("qConsent");
+      if(!company||!first||!email){ setMsg("Please fill in at least company, first name and e-mail.",false); return; }
+      if(consent && !consent.checked){ setMsg("Please tick the consent box so we can contact you.",false); return; }
+
+      var q = window.__inspQuote || { selected:[], monthly:0, setup:0, total:0, names:[] };
+      var now = Date.now();
+      var deal = {
+        id: uid("d"),
+        name: company,
+        contact: (first+" "+last).trim(),
+        email: email,
+        phone: phone,
+        value: q.total,
+        stage: "new",
+        source: "Website — Quote Request",
+        services: q.selected,
+        template: q.selected.length ? "Custom selection" : "Quote request",
+        notes: "Personal quote requested from inspirovamarketing.com."
+              + (q.names.length ? "\nServices: " + q.names.join(", ") : "")
+              + "\nMonthly: €"+q.monthly+" · Setup: €"+q.setup+" · Total: €"+q.total
+              + (notes ? "\n\nClient note: "+notes : ""),
+        createdAt: now,
+        updatedAt: now
+      };
+
+      try{
+        var raw = localStorage.getItem(STORE_KEY);
+        var data = raw ? JSON.parse(raw) : { deals:[], raw:[], clients:[], transactions:[], templates:[], campaigns:[], settings:{} };
+        if(!Array.isArray(data.deals)) data.deals=[];
+        data.deals.unshift(deal);
+        localStorage.setItem(STORE_KEY, JSON.stringify(data));
+        setMsg("Thanks! Your quote request has been sent — we'll be in touch within 24h.",true);
+        ["qCompany","qFirst","qLast","qEmail","qPhone","qNotes"].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=""; });
+        if(consent) consent.checked=false;
+      }catch(err){
+        setMsg("Something went wrong saving your request. Please e-mail hello@inspirova.com instead.",false);
+      }
+    });
+  })();
+
 
 </script>
 </body>
