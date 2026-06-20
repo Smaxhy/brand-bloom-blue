@@ -297,7 +297,13 @@ export interface ScrapeFilters {
   titles: string; // comma separated job titles (optional)
   industry: string; // keyword (optional)
   seniorities: string[]; // selected seniority ids
-  perPage: number; // how many results to pull (cap 25 to stay light)
+  perPage: number; // how many results to pull
+  // Targeting refinements
+  employeeRanges?: string[]; // Apollo size ranges, e.g. ["1,10","11,20"]
+  minRevenue?: number; // minimum company revenue (USD)
+  locationScope?: "person" | "company" | "both"; // match person location, company HQ, or both
+  requireEmail?: boolean; // only keep contacts Apollo has an email for
+  requirePhone?: boolean; // only keep contacts with a direct phone
 }
 
 export interface ScrapedPerson {

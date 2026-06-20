@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Radar,
   MapPin,
@@ -15,10 +15,7 @@ import {
   Square,
   Building2,
   Download,
-  X,
-  Trash2,
 } from "lucide-react";
-
 import {
   type AdminData,
   type RawBusiness,
@@ -33,34 +30,25 @@ import {
 } from "../store";
 import { Panel, Field, inputCls, Btn } from "../ui";
 
-const SCRAPER_STATE_KEY = "inspirova.admin.scraper.state";
+const SIZE_PRESETS: { id: string; label: string }[] = [
+  { id: "1,10", label: "1–10" },
+  { id: "11,20", label: "11–20" },
+  { id: "21,50", label: "21–50" },
+  { id: "51,100", label: "51–100" },
+  { id: "101,200", label: "101–200" },
+  { id: "201,500", label: "201–500" },
+  { id: "501,1000", label: "501–1k" },
+  { id: "1001,1000000", label: "1k+" },
+];
 
-interface PersistedScraperState {
-  results: ScrapedPerson[];
-  selected: Record<string, boolean>;
-  emailSource: Record<string, string>;
-  emailSourceUrl: Record<string, string>;
-  banner: { live: boolean; text: string } | null;
-}
-
-function loadScraperState(): PersistedScraperState | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(SCRAPER_STATE_KEY);
-    return raw ? (JSON.parse(raw) as PersistedScraperState) : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveScraperState(s: PersistedScraperState) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(SCRAPER_STATE_KEY, JSON.stringify(s));
-  } catch {
-    /* ignore */
-  }
-}
+const REVENUE_OPTS: { v: number; label: string }[] = [
+  { v: 0, label: "Any revenue" },
+  { v: 100000, label: "$100k+" },
+  { v: 500000, label: "$500k+" },
+  { v: 1000000, label: "$1M+" },
+  { v: 5000000, label: "$5M+" },
+  { v: 10000000, label: "$10M+" },
+];
 
 const KEYWORD_PRESETS = [
   "Real Estate",
@@ -102,53 +90,26 @@ export function Scraper({
     industry: "",
     seniorities: ["owner", "c_suite", "director"],
     perPage: 25,
+    employeeRanges: [],
+    minRevenue: 0,
+    locationScope: "both",
+    requireEmail: false,
+    requirePhone: false,
   });
   const [geo, setGeo] = useState<GeocodeResult | null>(null);
   const [geoBusy, setGeoBusy] = useState(false);
   const [scrapeBusy, setScrapeBusy] = useState(false);
-  const persisted = loadScraperState();
-  const [results, setResults] = useState<ScrapedPerson[]>(persisted?.results ?? []);
-  const [selected, setSelected] = useState<Record<string, boolean>>(persisted?.selected ?? {});
-  const [banner, setBanner] = useState<{ live: boolean; text: string } | null>(persisted?.banner ?? null);
+  const [results, setResults] = useState<ScrapedPerson[]>([]);
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [banner, setBanner] = useState<{ live: boolean; text: string } | null>(null);
   const [pushed, setPushed] = useState(0);
   const [revealPhone, setRevealPhone] = useState(false);
   const [enrichBusy, setEnrichBusy] = useState(false);
   const [enrichProgress, setEnrichProgress] = useState({ done: 0, total: 0 });
   // id -> which source revealed the email ("Apollo" | "Hunter" | "Google" | "demo")
-  const [emailSource, setEmailSource] = useState<Record<string, string>>(persisted?.emailSource ?? {});
+  const [emailSource, setEmailSource] = useState<Record<string, string>>({});
   // id -> URL where the email was found (Hunter source / Google result link)
-  const [emailSourceUrl, setEmailSourceUrl] = useState<Record<string, string>>(persisted?.emailSourceUrl ?? {});
-
-  // Persist scraper results across refreshes so accept/deny can be done later.
-  useEffect(() => {
-    saveScraperState({ results, selected, emailSource, emailSourceUrl, banner });
-  }, [results, selected, emailSource, emailSourceUrl, banner]);
-
-  function denySelected() {
-    const ids = new Set(Object.keys(selected).filter((id) => selected[id]));
-    if (!ids.size) return;
-    setResults((prev) => prev.filter((p) => !ids.has(p.id)));
-    setSelected({});
-  }
-
-  function denyOne(id: string) {
-    setResults((prev) => prev.filter((p) => p.id !== id));
-    setSelected((s) => {
-      const { [id]: _omit, ...rest } = s;
-      return rest;
-    });
-  }
-
-  function clearAllResults() {
-    if (!results.length) return;
-    if (typeof window !== "undefined" && !window.confirm(`Remove all ${results.length} scraped contacts?`)) return;
-    setResults([]);
-    setSelected({});
-    setEmailSource({});
-    setEmailSourceUrl({});
-    setBanner(null);
-  }
-
+  const [emailSourceUrl, setEmailSourceUrl] = useState<Record<string, string>>({});
 
   function splitName(name: string): { first: string; last: string } {
     const parts = name.trim().split(/\s+/);
@@ -260,6 +221,16 @@ export function Scraper({
     }));
   }
 
+  function toggleEmployeeRange(id: string) {
+    setFilters((f) => {
+      const cur = f.employeeRanges ?? [];
+      return {
+        ...f,
+        employeeRanges: cur.includes(id) ? cur.filter((r) => r !== id) : [...cur, id],
+      };
+    });
+  }
+
   async function locate() {
     if (!filters.location.trim()) return;
     setGeoBusy(true);
@@ -308,10 +279,6 @@ export function Scraper({
     }));
     update((prev) => ({ ...prev, raw: [...rows, ...prev.raw] }));
     setPushed(rows.length);
-    // Remove accepted contacts from the scraper queue so it acts as an inbox.
-    const acceptedIds = new Set(selectedPeople.map((p) => p.id));
-    setResults((prev) => prev.filter((p) => !acceptedIds.has(p.id)));
-    setSelected({});
   }
 
   function exportCSV(rows: ScrapedPerson[]) {
@@ -461,6 +428,87 @@ export function Scraper({
               </div>
             </div>
 
+            <div>
+              <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
+                Company size <span className="font-normal">(employees — great for local SMBs)</span>
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {SIZE_PRESETS.map((sz) => {
+                  const on = (filters.employeeRanges ?? []).includes(sz.id);
+                  return (
+                    <button
+                      key={sz.id}
+                      onClick={() => toggleEmployeeRange(sz.id)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        on
+                          ? "border-transparent bg-primary text-primary-foreground"
+                          : "border-border bg-background text-muted-foreground hover:bg-secondary"
+                      }`}
+                    >
+                      {sz.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Min company revenue">
+                <select
+                  className={inputCls}
+                  value={filters.minRevenue ?? 0}
+                  onChange={(e) => setFilters({ ...filters, minRevenue: Number(e.target.value) })}
+                >
+                  {REVENUE_OPTS.map((r) => (
+                    <option key={r.v} value={r.v}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Match location by">
+                <select
+                  className={inputCls}
+                  value={filters.locationScope ?? "both"}
+                  onChange={(e) =>
+                    setFilters({ ...filters, locationScope: e.target.value as "person" | "company" | "both" })
+                  }
+                >
+                  <option value="both">Person & company HQ</option>
+                  <option value="company">Company HQ only</option>
+                  <option value="person">Person's location only</option>
+                </select>
+              </Field>
+            </div>
+
+            <div>
+              <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
+                Reachability <span className="font-normal">(only pull leads you can actually contact)</span>
+              </span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setFilters({ ...filters, requireEmail: !filters.requireEmail })}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    filters.requireEmail
+                      ? "border-transparent bg-[var(--brand-coral)] text-white"
+                      : "border-border bg-background text-muted-foreground hover:bg-secondary"
+                  }`}
+                >
+                  Has email
+                </button>
+                <button
+                  onClick={() => setFilters({ ...filters, requirePhone: !filters.requirePhone })}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    filters.requirePhone
+                      ? "border-transparent bg-[var(--brand-coral)] text-white"
+                      : "border-border bg-background text-muted-foreground hover:bg-secondary"
+                  }`}
+                >
+                  Has direct phone
+                </button>
+              </div>
+            </div>
+
             <div className="flex flex-wrap items-end gap-3 pt-1">
               <Field label="Results to pull">
                 <select
@@ -572,17 +620,9 @@ export function Scraper({
               <Btn variant="ghost" onClick={() => exportCSV(selectedPeople)}>
                 <Download className="h-4 w-4" /> Download CSV
               </Btn>
-              <Btn variant="danger" onClick={denySelected}>
-                <X className="h-4 w-4" /> Deny {selectedPeople.length}
-              </Btn>
-              <Btn variant="ghost" onClick={clearAllResults}>
-                <Trash2 className="h-4 w-4" /> Clear all
-              </Btn>
               <Btn onClick={sendToRaw}>
-                <ArrowRightCircle className="h-4 w-4" /> Accept {selectedPeople.length} → Raw Data
+                <ArrowRightCircle className="h-4 w-4" /> Send {selectedPeople.length} to Raw Data
               </Btn>
-
-
             </div>
           </div>
 
@@ -695,16 +735,7 @@ export function Scraper({
                       <Linkedin className="h-4 w-4" />
                     </a>
                   )}
-                  <button
-                    onClick={() => denyOne(p.id)}
-                    aria-label="Deny / remove"
-                    title="Deny & remove"
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border text-[oklch(.55_.2_25)] hover:bg-[oklch(.95_.04_25)]"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
                 </div>
-
               );
             })}
           </div>
