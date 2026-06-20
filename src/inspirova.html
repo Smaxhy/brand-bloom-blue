@@ -83,14 +83,11 @@
   .orbit{position:relative;width:min(460px,86vw);aspect-ratio:1;margin-inline:auto}
   .orbit-ring{position:absolute;inset:8%;border:1px dashed rgba(255,255,255,.28);border-radius:50%}
   .orbit-ring.inner{inset:24%;border-color:rgba(255,255,255,.18)}
-  .orbit-core{position:absolute;inset:34%;border-radius:24px;
-    background:linear-gradient(160deg,#ffffff 0%,#F2EAFF 100%);
-    box-shadow:0 0 0 14px rgba(255,255,255,.16),0 0 60px rgba(124,92,255,.45);
-    display:grid;place-items:center;animation:corepulse 4s var(--ease) infinite;overflow:hidden}
-  .orbit-core::before,.orbit-core::after{content:"";position:absolute;width:78%;height:14%;border-radius:6px;
-    background:linear-gradient(90deg,var(--violet) 0%,var(--violet-bright) 50%,var(--coral) 100%)}
-  .orbit-core::before{transform:rotate(45deg)}
-  .orbit-core::after{transform:rotate(-45deg)}
+  .orbit-core{position:absolute;inset:30%;border-radius:28px;
+    background:rgba(255,255,255,.96);
+    box-shadow:0 0 0 14px rgba(255,255,255,.14),0 0 80px rgba(124,92,255,.55);
+    display:grid;place-items:center;animation:corepulse 4s var(--ease) infinite;overflow:hidden;padding:14%}
+  .orbit-core img{width:100%;height:100%;object-fit:contain;display:block}
   .node{position:absolute;top:50%;left:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:16px;
     background:#fff;display:grid;place-items:center;color:var(--violet);
     box-shadow:0 14px 30px -14px rgba(0,0,0,.45);animation:floaty 5s var(--ease) infinite}
@@ -128,22 +125,52 @@
   .fcard p{margin-top:8px;font-size:.9rem;color:rgba(255,255,255,.8)}
 
   /* ---------- how it works ---------- */
-  .how{padding:104px 0}
-  .how-head{text-align:center;max-width:720px;margin:0 auto 70px}
-  .how-tag{display:inline-flex;align-items:center;gap:0;font-family:var(--display);font-weight:800;
-    font-size:clamp(1.5rem,3.4vw,2.2rem);letter-spacing:-.02em}
-  .how-tag .pill{background:var(--violet);color:#fff;padding:4px 16px;border-radius:12px;margin-left:12px}
-  .how-head p{margin-top:18px;color:var(--muted);font-size:1.05rem}
-  .timeline{position:relative;max-width:920px;margin:0 auto}
+  .how{position:relative;padding:120px 0;color:#fff;overflow:hidden;
+    background:
+      radial-gradient(60% 50% at 15% 10%, rgba(124,92,255,.45) 0%, transparent 60%),
+      radial-gradient(55% 45% at 90% 90%, rgba(239,82,48,.32) 0%, transparent 65%),
+      radial-gradient(45% 45% at 50% 100%, rgba(168,139,255,.22) 0%, transparent 70%),
+      linear-gradient(180deg,#08060F 0%,#0C0820 55%,#08060F 100%)}
+  .how::before{content:"";position:absolute;inset:-2px 0 auto 0;height:140px;
+    background:linear-gradient(180deg,var(--ink) 0%,transparent 100%);pointer-events:none;z-index:1}
+  .how::after{content:"";position:absolute;inset:auto 0 -2px 0;height:140px;
+    background:linear-gradient(0deg,var(--ink) 0%,transparent 100%);pointer-events:none;z-index:1}
+  .how .wrap{position:relative;z-index:2}
+  .how-head{text-align:center;max-width:740px;margin:0 auto 80px}
+  .how-eye{font-family:var(--mono);font-weight:700;letter-spacing:.24em;font-size:.74rem;color:#A88BFF;text-transform:uppercase}
+  .how-head h2{margin-top:14px;font-family:var(--display);font-weight:800;letter-spacing:-.02em;
+    font-size:clamp(2rem,4.6vw,3.2rem);line-height:1.05}
+  .how-head h2 .grad{background:linear-gradient(110deg,#A88BFF 0%,#7C5CFF 45%,#FF8366 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .how-head p{margin-top:20px;color:rgba(255,255,255,.7);font-size:1.05rem}
+  .timeline{position:relative;max-width:960px;margin:0 auto}
   .tl-spine{position:absolute;left:50%;top:0;bottom:0;width:2px;transform:translateX(-50%);
-    background:repeating-linear-gradient(var(--violet-bright) 0 8px,transparent 8px 18px);opacity:.5}
-  .step{display:grid;grid-template-columns:1fr 110px 1fr;align-items:center;gap:10px;margin-bottom:18px}
-  .step .txt{padding:14px 4px}
-  .step .txt h3{font-family:var(--display);font-weight:700;font-size:1.18rem}
-  .step .txt p{margin-top:8px;color:var(--muted);font-size:.92rem}
-  .step .dot{justify-self:center;width:80px;height:80px;border-radius:50%;background:var(--violet-soft);
-    display:grid;place-items:center;color:var(--violet);box-shadow:0 0 0 10px rgba(124,92,255,.06)}
-  .step .dot svg{width:30px;height:30px}
+    background:linear-gradient(180deg,transparent 0%,rgba(168,139,255,.55) 12%,rgba(255,131,102,.55) 88%,transparent 100%);
+    border-radius:2px}
+  .tl-spine::after{content:"";position:absolute;left:-3px;top:0;width:8px;height:120px;border-radius:8px;
+    background:linear-gradient(180deg,#A88BFF,transparent);filter:blur(2px);
+    animation:spineflow 4.5s var(--ease) infinite}
+  @keyframes spineflow{0%{top:-10%;opacity:0}10%{opacity:1}90%{opacity:1}100%{top:100%;opacity:0}}
+  .step{display:grid;grid-template-columns:1fr 120px 1fr;align-items:center;gap:14px;margin-bottom:34px;
+    opacity:0;transform:translateY(28px);transition:opacity .8s var(--ease),transform .8s var(--ease)}
+  .step.in{opacity:1;transform:translateY(0)}
+  .step .txt{padding:18px 22px;border-radius:18px;
+    background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));
+    border:1px solid rgba(255,255,255,.08);backdrop-filter:blur(10px);
+    transition:transform .35s var(--ease),border-color .35s,box-shadow .35s}
+  .step:hover .txt{transform:translateY(-4px);border-color:rgba(168,139,255,.5);
+    box-shadow:0 18px 60px -20px rgba(124,92,255,.55)}
+  .step .txt h3{font-family:var(--display);font-weight:700;font-size:1.18rem;color:#fff}
+  .step .txt p{margin-top:8px;color:rgba(255,255,255,.7);font-size:.93rem;line-height:1.55}
+  .step .dot{justify-self:center;position:relative;width:84px;height:84px;border-radius:50%;
+    background:linear-gradient(140deg,#7C5CFF 0%,#A88BFF 55%,#FF8366 100%);
+    display:grid;place-items:center;color:#fff;box-shadow:0 0 0 8px rgba(124,92,255,.14),0 18px 50px -10px rgba(124,92,255,.6);
+    transition:transform .35s var(--ease)}
+  .step:hover .dot{transform:scale(1.08) rotate(-4deg)}
+  .step .dot::before{content:"";position:absolute;inset:-12px;border-radius:50%;
+    border:1px solid rgba(168,139,255,.35);animation:ringpulse 3s var(--ease) infinite}
+  @keyframes ringpulse{0%,100%{transform:scale(1);opacity:.5}50%{transform:scale(1.18);opacity:0}}
+  .step .dot svg{width:32px;height:32px;position:relative;z-index:1}
   .step.right .txt{order:3;text-align:left}
   .step.left .txt{text-align:right}
   .step.left .dot{order:2}
@@ -259,7 +286,7 @@
 <header>
   <div class="wrap">
     <div class="nav-shell">
-      <a class="brand" href="#top"><img class="logo-mark" src="__LOGO__" alt="Inspirova">Inspirova</a>
+      <a class="brand" href="#top">Inspirova</a>
       <nav class="nav-links" id="navlinks">
         <a href="#services" class="active">Marketing</a>
         <a href="#how">How it works</a>
@@ -294,25 +321,15 @@
       <div class="orbit" id="orbit" aria-hidden="true">
         <div class="orbit-ring"></div>
         <div class="orbit-ring inner"></div>
-        <div class="orbit-core"></div>
+        <div class="orbit-core"><img src="__LOGO__" alt="Inspirova"></div>
         <!-- nodes positioned by JS -->
       </div>
     </div>
   </div>
 </section>
 
-<!-- ============ TRUSTED ============ -->
-<section class="trusted wrap" id="services">
-  <div class="logos">
-    <span>NORTHWIND</span><span>Lumen·Studio</span><span>BRICKS&amp;CO</span>
-    <span>Verde</span><span>ATLAS</span><span>Caaap</span>
-    <span>URBAN NEST</span><span>Fjord</span><span>GML</span>
-    <span>Huspy™</span><span>DOMUS+</span><span>IMMPACT</span>
-  </div>
-</section>
-
 <!-- ============ FEATURE SPLIT ============ -->
-<section class="feat">
+<section class="feat" id="services">
   <div class="wrap">
     <div class="feat-grid">
       <div>
@@ -348,13 +365,15 @@
 </section>
 
 <!-- ============ HOW IT WORKS ============ -->
-<section class="how wrap" id="how">
-  <div class="how-head">
-    <div class="how-tag">HERE'S <span class="pill">HOW WE DO IT</span></div>
-    <p>We make finding your next customer simple — high-quality leads, backed by a results-first mindset.</p>
-  </div>
-  <div class="timeline">
-    <div class="tl-spine"></div>
+<section class="how" id="how">
+  <div class="wrap">
+    <div class="how-head">
+      <div class="how-eye">HERE'S HOW WE DO IT</div>
+      <h2>Five steps from <span class="grad">first call</span><br>to <span class="grad">compounding revenue</span>.</h2>
+      <p>A clean, transparent system — no fluff, no jargon. Just the path from cold prospect to loyal customer.</p>
+    </div>
+    <div class="timeline" id="timeline">
+      <div class="tl-spine"></div>
 
     <div class="step right">
       <div class="spacer"></div>
@@ -384,6 +403,7 @@
       <div class="spacer"></div>
       <div class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V8M6 20v-6M18 20V4"/></svg></div>
       <div class="txt"><h3>Step 5 · Scale what works</h3><p>We double down on the winners and expand the system — compounding your reach, your pipeline and your revenue month over month.</p></div>
+    </div>
     </div>
   </div>
 </section>
@@ -491,6 +511,23 @@
       el.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+n.i+'</svg><small>'+n.l+'</small>';
       orbit.appendChild(el);
     });
+  })();
+
+  /* ---- timeline scroll reveal ---- */
+  (function(){
+    var steps=document.querySelectorAll("#timeline .step"); if(!steps.length) return;
+    if(!("IntersectionObserver" in window)){ steps.forEach(function(s){s.classList.add("in");}); return; }
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){
+          var i=Array.prototype.indexOf.call(steps,e.target);
+          e.target.style.transitionDelay=(Math.min(i,4)*120)+"ms";
+          e.target.classList.add("in");
+          io.unobserve(e.target);
+        }
+      });
+    },{threshold:.2});
+    steps.forEach(function(s){io.observe(s);});
   })();
 
   /* ---- mobile menu ---- */
