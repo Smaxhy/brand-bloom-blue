@@ -422,15 +422,18 @@
 
       <div class="calc-grid" style="margin-top:34px">
         <div class="sliders">
-          <div class="form-grid">
-            <input type="text" placeholder="Company">
-            <input type="text" placeholder="First name">
-            <input type="text" placeholder="Last name">
-            <input type="email" placeholder="E-mail">
-            <input type="tel" placeholder="Phone">
-            <label class="chk"><input type="checkbox"> Yes, I'd like more information and agree to the privacy policy.</label>
-            <a href="/results" target="_top" class="btn btn-primary" style="justify-content:center;margin-top:6px">Request a personal quote</a>
+          <div class="form-grid" id="quoteForm">
+            <input type="text"  id="qCompany" placeholder="Company">
+            <input type="text"  id="qFirst"   placeholder="First name">
+            <input type="text"  id="qLast"    placeholder="Last name">
+            <input type="email" id="qEmail"   placeholder="E-mail">
+            <input type="tel"   id="qPhone"   placeholder="Phone">
+            <textarea id="qNotes" placeholder="Anything we should know? (optional)" rows="3" style="width:100%;padding:14px 16px;border:1.5px solid var(--line-strong);border-radius:14px;background:#fff;font:inherit;resize:vertical"></textarea>
+            <label class="chk"><input type="checkbox" id="qConsent"> Yes, I'd like more information and agree to the privacy policy.</label>
+            <button type="button" id="quoteBtn" class="btn btn-primary" style="justify-content:center;margin-top:6px">Request a personal quote</button>
+            <div id="quoteMsg" style="font-size:.85rem;color:var(--muted);min-height:1.2em"></div>
           </div>
+
         </div>
 
         <div class="breakdown">
