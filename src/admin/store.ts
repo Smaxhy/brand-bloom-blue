@@ -328,18 +328,6 @@ export interface ScrapeResponse {
   message: string;
 }
 
-function stringifyApiError(value: unknown): string {
-  if (typeof value === "string") return value;
-  if (value && typeof value === "object") {
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return String(value);
-    }
-  }
-  return String(value ?? "Unknown error");
-}
-
 /**
  * Turn a free-text address / location into coordinates so we can show it on a
  * map. Calls the /api/geocode proxy (which forwards to OpenStreetMap Nominatim
@@ -364,26 +352,25 @@ export async function geocodeLocation(q: string): Promise<GeocodeResult | null> 
  * IMPORTANT: Apollo's API blocks direct browser calls (CORS) and your API key
  * must never live in front-end code. This calls the /api/apollo/search proxy —
  * a Cloudflare Worker route that forwards to https://api.apollo.io with your
- * secret APOLLO_API_KEY. Live API errors are surfaced directly in the scraper
- * instead of being hidden behind generated sample data.
+ * secret APOLLO_API_KEY. Until that secret is set, the proxy reports demo mode
+ * and we generate realistic sample leads so the whole flow stays usable.
  */
 export async function apolloSearch(filters: ScrapeFilters): Promise<ScrapeResponse> {
+  let reason = "";
   try {
     const res = await fetch("/api/apollo/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(filters),
     });
-    const text = await res.text();
-    let j: { demo?: boolean; people?: ScrapedPerson[]; error?: unknown; detail?: unknown } = {};
-    if (text) {
-      try {
-        j = JSON.parse(text) as typeof j;
-      } catch {
-        j = { detail: text };
-      }
-    }
     if (res.ok) {
+      const j = (await res.json()) as {
+        demo?: boolean;
+        people?: ScrapedPerson[];
+        reason?: string;
+        status?: number;
+        detail?: string;
+      };
       if (!j.demo && Array.isArray(j.people)) {
         return {
           live: true,
@@ -391,20 +378,42 @@ export async function apolloSearch(filters: ScrapeFilters): Promise<ScrapeRespon
           message: `Found ${j.people.length} contact(s) via Apollo.io.`,
         };
       }
+      reason = describeApolloReason(j);
+    } else {
+      reason = `the proxy returned HTTP ${res.status}`;
     }
-    const detail = j.detail ? ` — ${stringifyApiError(j.detail)}` : "";
-    return {
-      live: false,
-      people: [],
-      message: `Apollo scrape failed (${res.status}): ${stringifyApiError(j.error || res.statusText)}${detail}`,
-    };
-  } catch (e) {
-    return {
-      live: false,
-      people: [],
-      message: `Apollo scrape failed before reaching the backend: ${(e as Error).message}`,
-    };
+  } catch {
+    reason = "the /api/apollo/search proxy couldn't be reached";
   }
+  const people = demoScrape(filters);
+  const base = `Demo mode — showing ${people.length} sample contact(s).`;
+  return {
+    live: false,
+    people,
+    message: reason
+      ? `${base} Reason: ${reason}.`
+      : `${base} Deploy the Apollo proxy + set APOLLO_API_KEY to scrape live data.`,
+  };
+}
+
+function describeApolloReason(j: { reason?: string; status?: number; detail?: string }): string {
+  if (j.reason === "missing_key")
+    return "the server has no APOLLO_API_KEY (set the Worker secret, then redeploy)";
+  if (j.reason === "apollo_error") {
+    const s = j.status;
+    const tail = j.detail ? ` — ${j.detail}` : "";
+    if (s === 401 || s === 403)
+      return `Apollo rejected the key (HTTP ${s}) — check it's your current master key${tail}`;
+    if (s === 402)
+      return `Apollo says you're out of credits (HTTP 402) — check your Apollo credit balance${tail}`;
+    if (s === 422)
+      return `Apollo couldn't parse the search (HTTP 422)${tail}`;
+    if (s === 429)
+      return `Apollo rate limit hit (HTTP 429) — wait a minute and retry${tail}`;
+    return `Apollo returned HTTP ${s}${tail}`;
+  }
+  if (j.reason === "exception") return `the server hit an error calling Apollo${j.detail ? ` — ${j.detail}` : ""}`;
+  return "";
 }
 
 /** Realistic sample data so the scraper is fully usable before going live. */

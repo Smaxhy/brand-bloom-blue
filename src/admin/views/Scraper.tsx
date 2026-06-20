@@ -223,9 +223,9 @@ export function Scraper({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-2xl text-sm text-muted-foreground">
           Enter a city, region or address and tap the keywords you want (Real Estate, Tree, Store…).
-          Inspirova locates it on the map and pulls the decision-makers at matching businesses there
-          — names, titles, company, website and LinkedIn. Pull up to 500 at once, then reveal emails
-          on demand across Apollo, Hunter.io and Google. Accept the good ones into your raw-data
+          Apollo finds the decision-makers at matching businesses there — names, titles, company,
+          website and LinkedIn. Pull up to 500 at once, then reveal emails: Apollo's data powers a
+          Google search to find each contact's address. Accept the good ones into your raw-data
           queue.
         </p>
       </div>
@@ -365,27 +365,22 @@ export function Scraper({
 
       {/* Banner */}
       {banner && (
-        (() => {
-          const isError = !banner.live;
-          return (
-            <div
-              className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${
-                isError
-                  ? "border-destructive/40 bg-destructive/10 text-destructive"
-                  : "border-[oklch(.7_.18_150/.4)] bg-[oklch(.7_.18_150/.08)] text-[oklch(.4_.12_150)]"
-              }`}
-            >
-              <span
-                className={`rounded-full px-2 py-0.5 text-[.65rem] font-bold uppercase tracking-wider ${
-                  isError ? "bg-destructive text-destructive-foreground" : "bg-[oklch(.7_.18_150)] text-white"
-                }`}
-              >
-                {isError ? "Error" : "Live"}
-              </span>
-              {banner.text}
-            </div>
-          );
-        })()
+        <div
+          className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${
+            banner.live
+              ? "border-[oklch(.7_.18_150/.4)] bg-[oklch(.7_.18_150/.08)] text-[oklch(.4_.12_150)]"
+              : "border-[oklch(.7_.16_60/.4)] bg-[oklch(.8_.16_80/.1)] text-[oklch(.45_.1_70)]"
+          }`}
+        >
+          <span
+            className={`rounded-full px-2 py-0.5 text-[.65rem] font-bold uppercase tracking-wider ${
+              banner.live ? "bg-[oklch(.7_.18_150)] text-white" : "bg-[oklch(.75_.16_70)] text-white"
+            }`}
+          >
+            {banner.live ? "Live" : "Demo"}
+          </span>
+          {banner.text}
+        </div>
       )}
 
       {/* Results */}
@@ -437,11 +432,9 @@ export function Scraper({
           </div>
 
           <p className="mb-4 text-xs text-muted-foreground">
-            Reveal waterfalls across sources: Apollo first, then Hunter.io, then Google (web search)
-            for anything still locked. Email reveals use your Apollo email credits (unlimited under
-            fair use on paid plans); phone numbers use mobile credits (limited each month), so leave
-            "+ phones" off unless you need them. EU contacts' personal emails may stay hidden under
-            GDPR.
+            Reveal uses the data Apollo found (name + company + domain) to run a precise Google
+            search and pull each contact's email. This needs a Serper key (the Google layer) — see
+            Settings. Phone is best-effort. EU contacts' info may be limited under GDPR.
           </p>
 
           {pushed > 0 && (

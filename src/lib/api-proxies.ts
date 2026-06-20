@@ -10,8 +10,8 @@
  *   APOLLO_API_KEY   – Apollo.io master API key (Settings → Integrations → API)
  *   GHL_API_KEY      – GoHighLevel private integration token (optional)
  *
- * If APOLLO_API_KEY is missing or Apollo rejects the request, /api/apollo/search
- * returns the real error so the admin scraper can show what needs fixing.
+ * If APOLLO_API_KEY is missing, /api/apollo/search returns { demo:true } and the
+ * front-end falls back to sample data, so the UI stays usable before go-live.
  */
 
 type Env = Record<string, string | undefined>;
@@ -20,15 +20,6 @@ const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
-function getSecret(env: Env, name: string): string | undefined {
-  const fromBinding = env[name]?.trim();
-  if (fromBinding) return fromBinding;
-
-  const runtimeEnv = (globalThis as typeof globalThis & { process?: { env?: Env } }).process?.env;
-  const fromRuntime = runtimeEnv?.[name]?.trim();
-  return fromRuntime || undefined;
 }
 
 /**
@@ -40,12 +31,52 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   const path = url.pathname;
 
   if (path === "/api/geocode") return geocode(url, env);
+  if (path === "/api/diag") return diag(env);
   if (path === "/api/apollo/search") return apolloSearch(request, env);
   if (path === "/api/enrich") return enrich(request, env);
   if (path === "/api/hunter/domain") return hunterDomain(url, env);
   if (path === "/api/ghl/send") return ghlSend(request, env);
 
   return null;
+}
+
+/* --------------------------------------------------------------------- */
+/* Diagnostics — tells the UI exactly why it might be in demo mode         */
+/* --------------------------------------------------------------------- */
+
+async function diag(env: Env): Promise<Response> {
+  const apolloKey = env.APOLLO_API_KEY;
+  const out: Record<string, unknown> = {
+    apolloKeyPresent: !!apolloKey,
+    apolloKeyLength: apolloKey ? apolloKey.length : 0,
+    hunterKeyPresent: !!env.HUNTER_API_KEY,
+    serperKeyPresent: !!env.SERPER_API_KEY,
+    ghlKeyPresent: !!env.GHL_API_KEY,
+  };
+  if (apolloKey) {
+    try {
+      const res = await fetch("https://api.apollo.io/api/v1/mixed_people/search", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          "X-Api-Key": apolloKey,
+        },
+        body: JSON.stringify({ page: 1, per_page: 1 }),
+      });
+      out.apolloStatus = res.status;
+      out.apolloOk = res.ok;
+      if (res.ok) {
+        const d = (await res.json()) as { people?: unknown[] };
+        out.apolloReturned = Array.isArray(d.people) ? d.people.length : 0;
+      } else {
+        out.apolloDetail = (await res.text()).slice(0, 200);
+      }
+    } catch (e) {
+      out.apolloError = (e as Error).message;
+    }
+  }
+  return json(out);
 }
 
 /* --------------------------------------------------------------------- */
@@ -101,16 +132,9 @@ interface ScrapeFilters {
 
 async function apolloSearch(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") return json({ error: "POST only" }, 405);
-  const key = getSecret(env, "APOLLO_API_KEY");
-  if (!key) {
-    return json(
-      {
-        error: "APOLLO_API_KEY is not available to the live scraper runtime.",
-        detail: "The secret is missing from the deployed backend environment or the deployment has not picked it up yet.",
-      },
-      500,
-    );
-  }
+  const key = env.APOLLO_API_KEY;
+  // No key configured -> tell the client to use demo data, with the reason.
+  if (!key) return json({ demo: true, reason: "missing_key" });
 
   let filters: ScrapeFilters = {};
   try {
@@ -149,13 +173,15 @@ async function apolloSearch(request: Request, env: Env): Promise<Response> {
   const PER_PAGE = 100;
 
   const byId = new Map<string, ApolloPerson>();
-  try {
-    for (const kw of queries) {
-      const body = { ...baseBody } as Record<string, unknown>;
-      if (kw) body.q_keywords = kw;
-      const pages = Math.ceil(perQuery / PER_PAGE);
-      for (let page = 1; page <= pages; page++) {
-        const res = await fetch("https://api.apollo.io/api/v1/people/search", {
+  let lastError: { status: number; detail: string } | null = null;
+
+  for (const kw of queries) {
+    const body = { ...baseBody } as Record<string, unknown>;
+    if (kw) body.q_keywords = kw;
+    const pages = Math.ceil(perQuery / PER_PAGE);
+    for (let page = 1; page <= pages; page++) {
+      try {
+        const res = await fetch("https://api.apollo.io/api/v1/mixed_people/search", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -166,16 +192,9 @@ async function apolloSearch(request: Request, env: Env): Promise<Response> {
           body: JSON.stringify({ ...body, page, per_page: PER_PAGE }),
         });
         if (!res.ok) {
-          if (page === 1 && byId.size === 0) {
-            const text = await res.text();
-            return json(
-              {
-                error: `Apollo API returned ${res.status} ${res.statusText}`.trim(),
-                detail: text.slice(0, 1000),
-              },
-              502,
-            );
-          }
+          // Remember the error, but keep trying the other keywords/pages —
+          // one failed call should never wipe out the whole scrape.
+          lastError = { status: res.status, detail: (await res.text()).slice(0, 300) };
           break;
         }
         const data = (await res.json()) as { people?: ApolloPerson[] };
@@ -186,18 +205,34 @@ async function apolloSearch(request: Request, env: Env): Promise<Response> {
         }
         if (batch.length < PER_PAGE) break;
         if (byId.size >= wanted) break;
+      } catch (e) {
+        lastError = { status: 0, detail: (e as Error).message };
+        break;
       }
-      if (byId.size >= wanted) break;
     }
+    if (byId.size >= wanted) break;
+  }
+
+  // If we got ANY live contacts, return them live — even if some calls failed.
+  if (byId.size > 0) {
     const people = Array.from(byId.values()).slice(0, wanted).map(normalizePerson);
     return json({ demo: false, people });
-  } catch (e) {
-    return json({ error: (e as Error).message }, 500);
   }
+  // Nothing came back. Surface the reason so the banner can explain it.
+  if (lastError) {
+    return json({
+      demo: true,
+      reason: "apollo_error",
+      status: lastError.status,
+      detail: lastError.detail,
+    });
+  }
+  // No error, just no matches for these filters.
+  return json({ demo: true, reason: "no_results" });
 }
 
 /* --------------------------------------------------------------------- */
-/* Enrichment waterfall — Apollo bulk_match, then Hunter.io fallback       */
+/* Reveal — use Apollo's data to power a Google (Serper) search            */
 /* --------------------------------------------------------------------- */
 
 interface EnrichInput {
@@ -218,151 +253,61 @@ async function enrich(request: Request, env: Env): Promise<Response> {
   } catch {
     return json({ error: "invalid json" }, 400);
   }
-  const people = (payload.people ?? []).slice(0, 10); // 1 Apollo bulk call = max 10
+  const people = (payload.people ?? []).slice(0, 10);
   if (!people.length) return json({ results: [] });
 
-  const apolloKey = getSecret(env, "APOLLO_API_KEY");
-  const hunterKey = getSecret(env, "HUNTER_API_KEY");
+  const serperKey = env.SERPER_API_KEY;
 
-  // No keys at all -> demo: synthesise plausible emails so the flow is usable.
-  if (!apolloKey && !hunterKey) {
+  // Google is the reveal engine, powered by the data Apollo already found.
+  // Without a Serper key we can't search Google, so return demo emails so the
+  // flow stays usable, and flag why.
+  if (!serperKey) {
     return json({
       demo: true,
-      results: people.map((p) => ({
-        id: p.id,
-        email: demoEmail(p),
-        phone: "",
-        source: "demo",
-      })),
+      reason: "missing_serper",
+      results: people.map((p) => ({ id: p.id, email: demoEmail(p), phone: "", source: "demo" })),
     });
   }
 
-  // Start with empty results keyed by id/index.
-  const results: { id?: string; email: string; phone: string; source: string }[] = people.map((p) => ({
-    id: p.id,
-    email: "",
-    phone: "",
-    source: "",
-  }));
-
-  // 1) Apollo bulk enrichment (best for Apollo-sourced contacts).
-  if (apolloKey) {
+  const results: { id?: string; email: string; phone: string; source: string }[] = [];
+  for (const p of people) {
+    const domain = cleanDomain(p.domain);
+    // Apollo's data (name + company + domain) makes Google's search precise.
+    const q = [
+      p.name ? `"${p.name}"` : "",
+      p.organizationName ? `"${p.organizationName}"` : "",
+      domain ? `"@${domain}"` : "",
+      payload.revealPhone ? "email OR phone" : "email",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    let email = "";
+    let phone = "";
     try {
-      const details = people.map((p) => ({
-        id: p.id,
-        first_name: p.firstName,
-        last_name: p.lastName,
-        name: p.name,
-        organization_name: p.organizationName,
-        domain: p.domain,
-        linkedin_url: p.linkedin,
-      }));
-      const url = new URL("https://api.apollo.io/api/v1/people/bulk_match");
-      url.searchParams.set("reveal_personal_emails", "true");
-      if (payload.revealPhone) url.searchParams.set("reveal_phone_number", "true");
-      const res = await fetch(url.toString(), {
+      const res = await fetch("https://google.serper.dev/search", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache",
-          Accept: "application/json",
-          "X-Api-Key": apolloKey,
-        },
-        body: JSON.stringify({
-          details,
-          reveal_personal_emails: true,
-          reveal_phone_number: !!payload.revealPhone,
-        }),
+        headers: { "X-API-KEY": serperKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ q, num: 10 }),
       });
       if (res.ok) {
-        const data = (await res.json()) as { matches?: (ApolloPerson | null)[] };
-        (data.matches ?? []).forEach((m, i) => {
-          if (!m || !results[i]) return;
-          const email = m.email && !isLocked(m.email) ? m.email : "";
-          const phone =
-            m.phone_numbers?.[0]?.sanitized_number || m.phone_numbers?.[0]?.raw_number || "";
-          if (email) {
-            results[i].email = email;
-            results[i].source = "Apollo";
-          }
-          if (phone) results[i].phone = phone;
-        });
+        const d = (await res.json()) as {
+          organic?: { title?: string; snippet?: string; link?: string }[];
+          knowledgeGraph?: Record<string, unknown>;
+        };
+        const blob = JSON.stringify(d.organic ?? []) + JSON.stringify(d.knowledgeGraph ?? {});
+        email = pickEmail(blob, domain);
+        if (payload.revealPhone) phone = pickPhone(blob);
       }
     } catch {
-      /* fall through to Hunter */
+      /* skip this one, leave it locked */
     }
+    results.push({ id: p.id, email, phone, source: email ? "Google" : "" });
   }
-
-  // 2) Hunter.io fallback for anyone still missing an email (searches the web by domain).
-  if (hunterKey) {
-    for (let i = 0; i < people.length; i++) {
-      if (results[i].email) continue;
-      const p = people[i];
-      const domain = cleanDomain(p.domain);
-      if (!domain) continue;
-      try {
-        const u = new URL("https://api.hunter.io/v2/email-finder");
-        u.searchParams.set("domain", domain);
-        if (p.firstName) u.searchParams.set("first_name", p.firstName);
-        if (p.lastName) u.searchParams.set("last_name", p.lastName);
-        u.searchParams.set("api_key", hunterKey);
-        const res = await fetch(u.toString());
-        if (res.ok) {
-          const d = (await res.json()) as { data?: { email?: string } };
-          if (d.data?.email) {
-            results[i].email = d.data.email;
-            results[i].source = "Hunter";
-          }
-        }
-      } catch {
-        /* skip this one */
-      }
-    }
-  }
-
-  // 3) Google (via SerpAPI) fallback — searches the whole web. For anyone
-  //    still missing an email, query Google for the person + company and pull
-  //    any address out of the result snippets.
-  const serpKey = getSecret(env, "SERPAPI_API_KEY");
-  if (serpKey) {
-    for (let i = 0; i < people.length; i++) {
-      if (results[i].email) continue;
-      const p = people[i];
-      const domain = cleanDomain(p.domain);
-      const q = [
-        p.name ? `"${p.name}"` : "",
-        p.organizationName ? `"${p.organizationName}"` : "",
-        domain ? `OR "@${domain}"` : "",
-        "email",
-      ]
-        .filter(Boolean)
-        .join(" ");
-      try {
-        const url = `https://serpapi.com/search.json?engine=google&num=10&q=${encodeURIComponent(q)}&api_key=${encodeURIComponent(serpKey)}`;
-        const res = await fetch(url);
-        if (res.ok) {
-          const d = (await res.json()) as {
-            organic_results?: { title?: string; snippet?: string; link?: string }[];
-            knowledge_graph?: Record<string, unknown>;
-          };
-          const blob =
-            JSON.stringify(d.organic_results ?? []) + JSON.stringify(d.knowledge_graph ?? {});
-          const email = pickEmail(blob, domain);
-          if (email) {
-            results[i].email = email;
-            results[i].source = "Google";
-          }
-        }
-      } catch {
-        /* skip this one */
-      }
-    }
-  }
-
   return json({ demo: false, results });
 }
 
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+const PHONE_RE = /(\+?\d[\d\s().-]{7,}\d)/g;
 
 /** Pull the best email out of a text blob, preferring one on the company domain. */
 function pickEmail(text: string, domain?: string): string {
@@ -379,12 +324,24 @@ function pickEmail(text: string, domain?: string): string {
   return found[0];
 }
 
+/** Best-effort phone extraction from a text blob. */
+function pickPhone(text: string): string {
+  const m = text.match(PHONE_RE);
+  if (!m) return "";
+  // Pick the first candidate with a sensible number of digits (8–15).
+  for (const cand of m) {
+    const digits = cand.replace(/\D/g, "");
+    if (digits.length >= 8 && digits.length <= 15) return cand.trim();
+  }
+  return "";
+}
+
 /* --------------------------------------------------------------------- */
 /* Hunter.io — find every public email at a company domain                 */
 /* --------------------------------------------------------------------- */
 
 async function hunterDomain(url: URL, env: Env): Promise<Response> {
-  const key = getSecret(env, "HUNTER_API_KEY");
+  const key = env.HUNTER_API_KEY;
   const domain = cleanDomain(url.searchParams.get("domain") ?? "");
   if (!domain) return json({ error: "missing domain" }, 400);
   if (!key) return json({ demo: true, emails: [] });
@@ -412,10 +369,6 @@ async function hunterDomain(url: URL, env: Env): Promise<Response> {
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }
-}
-
-function isLocked(email: string): boolean {
-  return /not_unlocked|email_not_unlocked|@domain\.com$|locked/i.test(email);
 }
 
 function cleanDomain(s: string | undefined): string {
@@ -513,7 +466,7 @@ async function ghlSend(request: Request, env: Env): Promise<Response> {
     return json({ error: "invalid json" }, 400);
   }
   // Prefer the server secret; fall back to a key passed from the client.
-  const key = getSecret(env, "GHL_API_KEY") || payload.apiKey;
+  const key = env.GHL_API_KEY || payload.apiKey;
   if (!key || !payload.locationId) {
     return json({ ok: true, simulated: true, message: "No GHL key on server — simulated." });
   }
