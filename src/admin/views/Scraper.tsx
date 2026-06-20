@@ -572,9 +572,20 @@ export function Scraper({
               <Btn variant="ghost" onClick={() => exportCSV(selectedPeople)}>
                 <Download className="h-4 w-4" /> Download CSV
               </Btn>
-              <Btn onClick={sendToRaw}>
-                <ArrowRightCircle className="h-4 w-4" /> Send {selectedPeople.length} to Raw Data
+              <Btn
+                variant="ghost"
+                onClick={denySelected}
+                className="text-[oklch(.55_.2_25)] hover:bg-[oklch(.95_.04_25)]"
+              >
+                <X className="h-4 w-4" /> Deny {selectedPeople.length}
               </Btn>
+              <Btn variant="ghost" onClick={clearAllResults} title="Remove every scraped contact">
+                <Trash2 className="h-4 w-4" /> Clear all
+              </Btn>
+              <Btn onClick={sendToRaw}>
+                <ArrowRightCircle className="h-4 w-4" /> Accept {selectedPeople.length} → Raw Data
+              </Btn>
+
             </div>
           </div>
 
