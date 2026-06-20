@@ -86,7 +86,7 @@ export function Scraper({
         };
       });
       const res = await enrichContacts(payload, revealPhone);
-      res.forEach((r) => {
+      res.forEach((r: { id?: string; email: string; phone: string; source: string }) => {
         if (r.id) updates[r.id] = { email: r.email, phone: r.phone, source: r.source };
       });
       setEnrichProgress({ done: Math.min(i + chunk.length, list.length), total: list.length });

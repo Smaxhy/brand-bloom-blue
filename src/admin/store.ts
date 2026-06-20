@@ -472,7 +472,7 @@ export function demoScrape(filters: ScrapeFilters): ScrapedPerson[] {
   const firsts = ["Anna", "Tom", "Sara", "Joris", "Eva", "Luc", "Femke", "Dries", "Lotte", "Bram"];
   const lasts = ["De Vos", "Pauwels", "Janssen", "Maes", "Smeets", "Peeters", "Claes", "Willems", "Goossens", "Aerts"];
 
-  const n = Math.max(3, Math.min(filters.perPage || 8, 14));
+  const n = Math.max(3, Math.min(filters.perPage || 25, 500));
   const out: ScrapedPerson[] = [];
   for (let i = 0; i < n; i++) {
     const company = companies[i % companies.length];
