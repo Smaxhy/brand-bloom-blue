@@ -4,7 +4,8 @@ import {
   MapPin,
   Search,
   Loader2,
-  Lock,
+  Unlock,
+  Sparkles,
   Linkedin,
   Globe,
   Phone,
@@ -23,6 +24,7 @@ import {
   SENIORITIES,
   apolloSearch,
   geocodeLocation,
+  enrichContacts,
   uid,
 } from "../store";
 import { Panel, Field, inputCls, Btn } from "../ui";
@@ -50,6 +52,67 @@ export function Scraper({
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [banner, setBanner] = useState<{ live: boolean; text: string } | null>(null);
   const [pushed, setPushed] = useState(0);
+  const [revealPhone, setRevealPhone] = useState(false);
+  const [enrichBusy, setEnrichBusy] = useState(false);
+  const [enrichProgress, setEnrichProgress] = useState({ done: 0, total: 0 });
+  // id -> which source revealed the email ("Apollo" | "Hunter" | "demo")
+  const [emailSource, setEmailSource] = useState<Record<string, string>>({});
+
+  function splitName(name: string): { first: string; last: string } {
+    const parts = name.trim().split(/\s+/);
+    return { first: parts[0] || "", last: parts.length > 1 ? parts.slice(1).join(" ") : "" };
+  }
+
+  async function revealEmails(targets: ScrapedPerson[]) {
+    const list = targets.filter((p) => p.emailLocked || !p.email);
+    if (!list.length) return;
+    setEnrichBusy(true);
+    setEnrichProgress({ done: 0, total: list.length });
+
+    const updates: Record<string, { email: string; phone: string; source: string }> = {};
+    // Process in batches of 10 (Apollo bulk limit) to stay within Worker limits.
+    for (let i = 0; i < list.length; i += 10) {
+      const chunk = list.slice(i, i + 10);
+      const payload = chunk.map((p) => {
+        const { first, last } = splitName(p.name);
+        return {
+          id: p.id,
+          name: p.name,
+          firstName: first,
+          lastName: last,
+          domain: p.website,
+          organizationName: p.company,
+          linkedin: p.linkedin,
+        };
+      });
+      const res = await enrichContacts(payload, revealPhone);
+      res.forEach((r) => {
+        if (r.id) updates[r.id] = { email: r.email, phone: r.phone, source: r.source };
+      });
+      setEnrichProgress({ done: Math.min(i + chunk.length, list.length), total: list.length });
+    }
+
+    setResults((prev) =>
+      prev.map((p) => {
+        const u = updates[p.id];
+        if (!u) return p;
+        return {
+          ...p,
+          email: u.email || p.email,
+          emailLocked: u.email ? false : p.emailLocked,
+          phone: u.phone || p.phone,
+        };
+      }),
+    );
+    setEmailSource((prev) => {
+      const next = { ...prev };
+      Object.entries(updates).forEach(([id, u]) => {
+        if (u.email) next[id] = u.source || "Apollo";
+      });
+      return next;
+    });
+    setEnrichBusy(false);
+  }
 
   function toggleSeniority(id: string) {
     setFilters((f) => ({
@@ -118,8 +181,9 @@ export function Scraper({
         <p className="max-w-2xl text-sm text-muted-foreground">
           Enter a city, region or address. Inspirova locates it on the map and pulls the
           decision-makers (owners, C-suite, directors) at businesses there — names, titles,
-          company, website, email and LinkedIn — straight from Apollo.io. Accept the good ones into
-          your raw-data queue.
+          company, website and LinkedIn — from Apollo.io. Pull up to 500 at once, then reveal
+          emails on demand (Apollo + Hunter.io web search). Accept the good ones into your raw-data
+          queue.
         </p>
       </div>
 
@@ -193,7 +257,7 @@ export function Scraper({
                   value={filters.perPage}
                   onChange={(e) => setFilters({ ...filters, perPage: Number(e.target.value) })}
                 >
-                  {[5, 10, 15, 25].map((n) => (
+                  {[25, 50, 100, 200, 500].map((n) => (
                     <option key={n} value={n}>
                       {n}
                     </option>
@@ -237,13 +301,13 @@ export function Scraper({
         <div
           className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${
             banner.live
-              ? "border-[color-mix(in oklab, var(--brand-violet) 40%, transparent)] bg-[color-mix(in oklab, var(--brand-violet) 10%, transparent)] text-[var(--brand-violet)]"
+              ? "border-[oklch(.7_.18_150/.4)] bg-[oklch(.7_.18_150/.08)] text-[oklch(.4_.12_150)]"
               : "border-[oklch(.7_.16_60/.4)] bg-[oklch(.8_.16_80/.1)] text-[oklch(.45_.1_70)]"
           }`}
         >
           <span
             className={`rounded-full px-2 py-0.5 text-[.65rem] font-bold uppercase tracking-wider ${
-              banner.live ? "bg-[var(--brand-violet)] text-white" : "bg-[oklch(.75_.16_70)] text-white"
+              banner.live ? "bg-[oklch(.7_.18_150)] text-white" : "bg-[oklch(.75_.16_70)] text-white"
             }`}
           >
             {banner.live ? "Live" : "Demo"}
@@ -261,7 +325,27 @@ export function Scraper({
               <h3 className="font-display text-lg font-bold">{results.length} contacts found</h3>
               <span className="text-sm text-muted-foreground">· {selectedPeople.length} selected</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={revealPhone}
+                  onChange={(e) => setRevealPhone(e.target.checked)}
+                  className="accent-[var(--brand-violet)]"
+                />
+                + phones
+              </label>
+              <Btn variant="soft" onClick={() => revealEmails(selectedPeople)}>
+                {enrichBusy ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Revealing {enrichProgress.done}/{enrichProgress.total}
+                  </>
+                ) : (
+                  <>
+                    <Unlock className="h-4 w-4" /> Reveal emails
+                  </>
+                )}
+              </Btn>
               <Btn
                 variant="ghost"
                 onClick={() =>
@@ -280,9 +364,16 @@ export function Scraper({
             </div>
           </div>
 
+          <p className="mb-4 text-xs text-muted-foreground">
+            Reveal pulls emails from Apollo first, then falls back to Hunter.io (web search) for any
+            it can't unlock. Email reveals use your Apollo email credits (unlimited under fair use on
+            paid plans); phone numbers use mobile credits (limited each month), so leave "+ phones"
+            off unless you need them. EU contacts' personal emails may stay hidden under GDPR.
+          </p>
+
           {pushed > 0 && (
             <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-secondary px-3 py-2.5 text-sm">
-              <CheckSquare className="h-4 w-4 text-[var(--brand-violet)]" />
+              <CheckSquare className="h-4 w-4 text-[oklch(.6_.15_150)]" />
               Added {pushed} contact(s) to your raw-data queue.
               <button onClick={() => go("raw")} className="font-semibold text-primary underline-offset-2 hover:underline">
                 Open Raw Data →
@@ -337,11 +428,22 @@ export function Scraper({
                     <div className="flex items-center gap-1.5">
                       <Mail className="h-3.5 w-3.5 text-muted-foreground" />
                       {p.emailLocked ? (
-                        <span className="inline-flex items-center gap-1 text-muted-foreground">
-                          <Lock className="h-3 w-3" /> locked — enrich to reveal
-                        </span>
+                        <button
+                          onClick={() => revealEmails([p])}
+                          disabled={enrichBusy}
+                          className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-[.7rem] font-semibold text-primary hover:bg-secondary disabled:opacity-50"
+                        >
+                          <Sparkles className="h-3 w-3" /> Reveal
+                        </button>
                       ) : (
-                        <span className="truncate">{p.email}</span>
+                        <span className="inline-flex items-center gap-1.5 truncate">
+                          <span className="truncate">{p.email}</span>
+                          {emailSource[p.id] && (
+                            <span className="shrink-0 rounded-full bg-secondary px-1.5 py-0.5 text-[.6rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                              {emailSource[p.id]}
+                            </span>
+                          )}
+                        </span>
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 text-muted-foreground">
