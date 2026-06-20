@@ -275,6 +275,8 @@
   .foot-links a{font-size:.9rem;transition:color .2s}.foot-links a:hover{color:var(--mist)}
 
   @media (max-width:880px){
+    .wrap{padding:0 18px}
+    .hero{padding:110px 0 70px}
     .hero-grid,.feat-grid,.calc-grid,.breakdown,.totals,.bundles{grid-template-columns:1fr}
     .cards{grid-template-columns:1fr 1fr}
     .logos{grid-template-columns:repeat(3,1fr)}
@@ -284,12 +286,21 @@
       border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:18px;gap:14px;box-shadow:0 20px 50px -24px rgba(0,0,0,.6);backdrop-filter:blur(20px)}
     .step{grid-template-columns:64px 1fr;gap:16px}
     .step.left .txt,.step.right .txt{order:2;text-align:left}
-    .step .dot{order:1;width:64px;height:64px}
+    .step.left .dot,.step.right .dot{order:1;width:64px;height:64px}
     .step .spacer{display:none}
     .tl-spine{left:32px}
-    .orbit{margin-top:40px}
+    .orbit{width:min(320px,78vw);margin-top:32px}
+    .calc-card{padding:28px 18px 36px;border-radius:24px;margin-top:36px}
+    .foot-grid{flex-direction:column;align-items:flex-start;text-align:left}
   }
-  @media (max-width:520px){.cards{grid-template-columns:1fr}.nav-cta .btn-outline{display:none}}
+  @media (max-width:520px){
+    .cards{grid-template-columns:1fr}
+    .nav-cta .btn-outline,.nav-cta .btn-primary{display:none}
+    .nav-shell{padding:0 10px 0 14px;height:58px}
+    .brand .logo-mark{width:28px;height:28px}
+    .hero h1{font-size:clamp(2rem,9vw,2.6rem)}
+    .hero{padding:96px 0 60px}
+  }
   @media (prefers-reduced-motion:reduce){*{animation:none!important}html{scroll-behavior:auto}}
 </style>
 </head>
