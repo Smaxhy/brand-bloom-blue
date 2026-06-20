@@ -122,7 +122,7 @@ export const STAGES: { id: StageId; label: string; tone: string }[] = [
   { id: "contacted", label: "Contacted", tone: "oklch(.7 .15 250)" },
   { id: "qualified", label: "Qualified", tone: "oklch(.72 .15 200)" },
   { id: "proposal", label: "Proposal Sent", tone: "var(--brand-violet)" },
-  { id: "won", label: "Won", tone: "oklch(.7 .18 150)" },
+  { id: "won", label: "Won", tone: "var(--brand-violet)" },
   { id: "lost", label: "Lost", tone: "oklch(.6 .02 290)" },
 ];
 

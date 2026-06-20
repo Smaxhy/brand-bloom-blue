@@ -83,17 +83,17 @@ export function EmailHub({
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard label="Accepted Recipients" value={String(accepted.length)} hint="From Raw Data" icon={Users} accent="var(--brand-violet)" />
         <StatCard label="Templates" value={String(data.templates.length)} icon={FileText} accent="var(--brand-coral)" />
-        <StatCard label="Campaigns Sent" value={String(data.campaigns.length)} icon={Send} accent="oklch(.7 .18 150)" />
+        <StatCard label="Campaigns Sent" value={String(data.campaigns.length)} icon={Send} accent="var(--brand-violet)" />
       </div>
 
       <div
         className="flex items-center gap-2 rounded-xl border px-4 py-3 text-sm"
         style={{
-          borderColor: liveMode ? "color-mix(in oklab, oklch(.7 .18 150) 40%, transparent)" : "var(--border)",
-          background: liveMode ? "color-mix(in oklab, oklch(.7 .18 150) 8%, transparent)" : "var(--secondary)",
+          borderColor: liveMode ? "color-mix(in oklab, var(--brand-violet) 40%, transparent)" : "var(--border)",
+          background: liveMode ? "color-mix(in oklab, var(--brand-violet) 8%, transparent)" : "var(--secondary)",
         }}
       >
-        <CheckCircle2 className="h-4 w-4" style={{ color: liveMode ? "oklch(.55 .15 150)" : "var(--muted-foreground)" }} />
+        <CheckCircle2 className="h-4 w-4" style={{ color: liveMode ? "var(--brand-violet)" : "var(--muted-foreground)" }} />
         {liveMode
           ? "GoHighLevel is connected. Campaigns send through your GHL location."
           : "Demo mode — add your GoHighLevel API key in Settings to send live emails. Until then, sends are simulated."}
@@ -146,7 +146,7 @@ export function EmailHub({
             )}
 
             {result && (
-              <div className={`mt-3 rounded-lg px-3 py-2 text-sm ${result.ok ? "bg-[oklch(.7_.18_150)]/12 text-[oklch(.45_.15_150)]" : "bg-destructive/10 text-destructive"}`}>
+              <div className={`mt-3 rounded-lg px-3 py-2 text-sm ${result.ok ? "bg-[var(--brand-violet)]/12 text-[var(--brand-violet)]" : "bg-destructive/10 text-destructive"}`}>
                 {result.message}
               </div>
             )}

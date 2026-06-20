@@ -70,8 +70,8 @@ export function Clients({
               <span
                 className="rounded-full px-2.5 py-1 text-[.65rem] font-semibold capitalize"
                 style={{
-                  background: c.status === "active" ? "color-mix(in oklab, oklch(.7 .18 150) 16%, transparent)" : c.status === "paused" ? "var(--secondary)" : "color-mix(in oklab, var(--destructive) 12%, transparent)",
-                  color: c.status === "active" ? "oklch(.45 .15 150)" : c.status === "churned" ? "var(--destructive)" : "var(--muted-foreground)",
+                  background: c.status === "active" ? "color-mix(in oklab, var(--brand-violet) 16%, transparent)" : c.status === "paused" ? "var(--secondary)" : "color-mix(in oklab, var(--destructive) 12%, transparent)",
+                  color: c.status === "active" ? "var(--brand-violet)" : c.status === "churned" ? "var(--destructive)" : "var(--muted-foreground)",
                 }}
               >
                 {c.status}

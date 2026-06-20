@@ -17,7 +17,7 @@ const COLORS = [
   "var(--brand-violet)",
   "var(--brand-coral)",
   "oklch(.66 .19 250)",
-  "oklch(.7 .18 150)",
+  "var(--brand-violet)",
   "var(--brand-light)",
   "oklch(.72 .15 60)",
 ];
@@ -52,7 +52,7 @@ export function Leads({ data }: { data: AdminData; update: (fn: (p: AdminData) =
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total Leads" value={String(totalDeals + rawCount)} hint={`${totalDeals} in CRM · ${rawCount} raw`} icon={Sparkles} accent="var(--brand-violet)" />
-        <StatCard label="Win Rate" value={`${conv}%`} hint={`${won} deals won`} icon={Target} accent="oklch(.7 .18 150)" />
+        <StatCard label="Win Rate" value={`${conv}%`} hint={`${won} deals won`} icon={Target} accent="var(--brand-violet)" />
         <StatCard label="Accepted Raw" value={String(accepted)} hint="Ready for outreach" icon={Filter} accent="var(--brand-coral)" />
         <StatCard label="Avg. Deal Value" value={fmtEuro(totalDeals ? Math.round(data.deals.reduce((s, d) => s + d.value, 0) / totalDeals) : 0)} hint="Across all stages" icon={Megaphone} accent="oklch(.66 .19 250)" />
       </div>
