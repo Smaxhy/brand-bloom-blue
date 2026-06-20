@@ -38,6 +38,7 @@ export function RawData({
           value: 0,
           stage: "new",
           source: r.source || "Scraped",
+          services: [],
           template: "",
           notes: `From raw data · ${r.city} · ${r.industry}${r.contactTitle ? ` · ${r.contactTitle}` : ""}`,
           createdAt: Date.now(),
