@@ -22,9 +22,8 @@
     --line:rgba(255,255,255,.08); --line-strong:rgba(255,255,255,.16);
     --glow:rgba(124,92,255,.18);
     --surface-dark:
-      radial-gradient(60% 50% at 15% 10%, rgba(124,92,255,.42) 0%, transparent 60%),
-      radial-gradient(55% 45% at 90% 90%, rgba(99,102,241,.36) 0%, transparent 65%),
-      radial-gradient(45% 45% at 50% 100%, rgba(168,139,255,.22) 0%, transparent 70%),
+      radial-gradient(60% 50% at 15% 10%, rgba(124,92,255,.10) 0%, transparent 65%),
+      radial-gradient(55% 45% at 90% 90%, rgba(99,102,241,.08) 0%, transparent 70%),
       linear-gradient(180deg,#08060F 0%,#0C0820 55%,#08060F 100%);
     --maxw:1180px; --ease:cubic-bezier(.22,.61,.36,1);
     --sans:'Inter',system-ui,sans-serif;
@@ -91,18 +90,15 @@
   .orbit-ring.inner{inset:24%;border-color:rgba(255,255,255,.18)}
   .orbit-core{position:absolute;inset:18%;border-radius:28px;
     background:transparent;
-    filter:drop-shadow(0 0 20px rgba(124,92,255,.25));
-    display:grid;place-items:center;animation:corepulse 4s var(--ease) infinite;overflow:visible;padding:0}
+    display:grid;place-items:center;overflow:visible;padding:0}
   .orbit-core img{width:100%;height:100%;object-fit:contain;display:block}
   .node{position:absolute;top:50%;left:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:16px;
     background:#fff;display:grid;place-items:center;color:var(--violet);
-    box-shadow:0 14px 30px -14px rgba(0,0,0,.45);animation:floaty 5s var(--ease) infinite}
+    box-shadow:0 14px 30px -14px rgba(0,0,0,.45)}
   .node svg{width:24px;height:24px}
   .node small{position:absolute;top:60px;left:50%;transform:translateX(-50%);font-size:.62rem;font-weight:600;
     color:rgba(255,255,255,.92);white-space:nowrap;letter-spacing:.01em}
   .node.lime{color:#7C3AED}
-  @keyframes corepulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
-  @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
 
   /* ---------- trusted ---------- */
   .trusted{padding:50px 0 20px;text-align:center}
@@ -117,9 +113,7 @@
   .brand-moment{position:relative;height:100px;overflow:hidden;
     background:linear-gradient(180deg,var(--ink) 0%,#0B0828 50%,var(--ink) 100%)}
   .brand-moment::before{content:"";position:absolute;inset:0;
-    background:
-      radial-gradient(60% 80% at 50% 50%, rgba(124,92,255,.25) 0%, transparent 70%),
-      radial-gradient(40% 60% at 20% 50%, rgba(99,102,241,.18) 0%, transparent 70%);
+    background:radial-gradient(60% 80% at 50% 50%, rgba(124,92,255,.08) 0%, transparent 75%);
     pointer-events:none}
 
 
@@ -147,9 +141,8 @@
   /* ---------- how it works ---------- */
   .how{position:relative;padding:90px 0;color:#fff;overflow:hidden;
     background:
-      radial-gradient(60% 50% at 15% 10%, rgba(124,92,255,.45) 0%, transparent 60%),
-      radial-gradient(55% 45% at 90% 90%, rgba(239,82,48,.32) 0%, transparent 65%),
-      radial-gradient(45% 45% at 50% 100%, rgba(168,139,255,.22) 0%, transparent 70%),
+      radial-gradient(60% 50% at 15% 10%, rgba(124,92,255,.10) 0%, transparent 65%),
+      radial-gradient(55% 45% at 90% 90%, rgba(239,82,48,.08) 0%, transparent 70%),
       linear-gradient(180deg,#08060F 0%,#0C0820 55%,#08060F 100%)}
   .how::before{content:"";position:absolute;inset:-2px 0 auto 0;height:140px;
     background:linear-gradient(180deg,var(--ink) 0%,transparent 100%);pointer-events:none;z-index:1}
@@ -164,13 +157,8 @@
     -webkit-background-clip:text;background-clip:text;color:transparent}
   .how-head p{margin-top:20px;color:rgba(255,255,255,.7);font-size:1.05rem}
   .timeline{position:relative;max-width:960px;margin:0 auto}
-  .tl-spine{position:absolute;left:50%;top:0;bottom:0;width:2px;transform:translateX(-50%);
-    background:linear-gradient(180deg,transparent 0%,rgba(168,139,255,.55) 12%,rgba(255,131,102,.55) 88%,transparent 100%);
-    border-radius:2px}
-  .tl-spine::after{content:"";position:absolute;left:-3px;top:0;width:8px;height:120px;border-radius:8px;
-    background:linear-gradient(180deg,#A88BFF,transparent);filter:blur(2px);
-    animation:spineflow 4.5s var(--ease) infinite}
-  @keyframes spineflow{0%{top:-10%;opacity:0}10%{opacity:1}90%{opacity:1}100%{top:100%;opacity:0}}
+  .tl-spine{position:absolute;left:50%;top:0;bottom:0;width:1px;transform:translateX(-50%);
+    background:rgba(255,255,255,.08);border-radius:1px}
   .step{display:grid;grid-template-columns:1fr 120px 1fr;align-items:center;gap:14px;margin-bottom:22px;
     opacity:0;transform:translateY(28px);transition:opacity .8s var(--ease),transform .8s var(--ease)}
   .step.in{opacity:1;transform:translateY(0)}
@@ -178,18 +166,14 @@
     background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));
     border:1px solid rgba(255,255,255,.08);backdrop-filter:blur(10px);
     transition:transform .35s var(--ease),border-color .35s,box-shadow .35s}
-  .step:hover .txt{transform:translateY(-4px);border-color:rgba(168,139,255,.5);
-    box-shadow:0 18px 60px -20px rgba(124,92,255,.55)}
+  .step:hover .txt{transform:translateY(-4px);border-color:rgba(168,139,255,.5)}
   .step .txt h3{font-family:var(--display);font-weight:700;font-size:1.18rem;color:#fff}
   .step .txt p{margin-top:8px;color:rgba(255,255,255,.7);font-size:.93rem;line-height:1.55}
   .step .dot{justify-self:center;position:relative;width:84px;height:84px;border-radius:50%;
     background:linear-gradient(140deg,#7C5CFF 0%,#A88BFF 55%,#FF8366 100%);
-    display:grid;place-items:center;color:#fff;box-shadow:0 0 0 4px rgba(124,92,255,.08),0 8px 24px -8px rgba(124,92,255,.25);
+    display:grid;place-items:center;color:#fff;box-shadow:0 8px 20px -10px rgba(0,0,0,.5);
     transition:transform .35s var(--ease)}
-  .step:hover .dot{transform:scale(1.08) rotate(-4deg)}
-  .step .dot::before{content:"";position:absolute;inset:-12px;border-radius:50%;
-    border:1px solid rgba(168,139,255,.35);animation:ringpulse 3s var(--ease) infinite}
-  @keyframes ringpulse{0%,100%{transform:scale(1);opacity:.5}50%{transform:scale(1.18);opacity:0}}
+  .step:hover .dot{transform:scale(1.06)}
   .step .dot svg{width:32px;height:32px;position:relative;z-index:1}
   .step.right .txt{order:3;text-align:left}
   .step.left .txt{text-align:right}
@@ -200,9 +184,8 @@
   /* ---------- pricing ---------- */
   .pricing{position:relative;padding:70px 0 0;color:#fff;overflow:hidden;
     background:
-      radial-gradient(60% 50% at 15% 10%, rgba(99,102,241,.42) 0%, transparent 60%),
-      radial-gradient(55% 45% at 90% 90%, rgba(124,92,255,.45) 0%, transparent 65%),
-      radial-gradient(45% 45% at 50% 100%, rgba(79,70,229,.32) 0%, transparent 70%),
+      radial-gradient(60% 50% at 15% 10%, rgba(99,102,241,.10) 0%, transparent 65%),
+      radial-gradient(55% 45% at 90% 90%, rgba(124,92,255,.10) 0%, transparent 70%),
       linear-gradient(180deg,#08060F 0%,#0C0820 55%,#08060F 100%)}
   .pricing::before{content:"";position:absolute;inset:-2px 0 auto 0;height:140px;
     background:linear-gradient(180deg,var(--ink) 0%,transparent 100%);pointer-events:none;z-index:1}
@@ -290,6 +273,8 @@
   .foot-links a{font-size:.9rem;transition:color .2s}.foot-links a:hover{color:var(--mist)}
 
   @media (max-width:880px){
+    .wrap{padding:0 18px}
+    .hero{padding:110px 0 70px}
     .hero-grid,.feat-grid,.calc-grid,.breakdown,.totals,.bundles{grid-template-columns:1fr}
     .cards{grid-template-columns:1fr 1fr}
     .logos{grid-template-columns:repeat(3,1fr)}
@@ -299,12 +284,21 @@
       border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:18px;gap:14px;box-shadow:0 20px 50px -24px rgba(0,0,0,.6);backdrop-filter:blur(20px)}
     .step{grid-template-columns:64px 1fr;gap:16px}
     .step.left .txt,.step.right .txt{order:2;text-align:left}
-    .step .dot{order:1;width:64px;height:64px}
+    .step.left .dot,.step.right .dot{order:1;width:64px;height:64px}
     .step .spacer{display:none}
     .tl-spine{left:32px}
-    .orbit{margin-top:40px}
+    .orbit{width:min(320px,78vw);margin-top:32px}
+    .calc-card{padding:28px 18px 36px;border-radius:24px;margin-top:36px}
+    .foot-grid{flex-direction:column;align-items:flex-start;text-align:left}
   }
-  @media (max-width:520px){.cards{grid-template-columns:1fr}.nav-cta .btn-outline{display:none}}
+  @media (max-width:520px){
+    .cards{grid-template-columns:1fr}
+    .nav-cta .btn-outline,.nav-cta .btn-primary{display:none}
+    .nav-shell{padding:0 10px 0 14px;height:58px}
+    .brand .logo-mark{width:28px;height:28px}
+    .hero h1{font-size:clamp(2rem,9vw,2.6rem)}
+    .hero{padding:96px 0 60px}
+  }
   @media (prefers-reduced-motion:reduce){*{animation:none!important}html{scroll-behavior:auto}}
 </style>
 </head>
@@ -314,7 +308,7 @@
 <header>
   <div class="wrap">
     <div class="nav-shell">
-      <a class="brand" href="#top" aria-label="Inspirova"></a>
+      <a class="brand" href="#top" aria-label="Inspirova"><img class="logo-mark" src="__LOGO__" alt="Inspirova"><span>Inspirova</span></a>
       <nav class="nav-links" id="navlinks">
         <a href="#services" class="active">Marketing</a>
         <a href="#how">How it works</a>
