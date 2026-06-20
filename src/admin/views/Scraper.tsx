@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Radar,
   MapPin,
@@ -15,7 +15,10 @@ import {
   Square,
   Building2,
   Download,
+  X,
+  Trash2,
 } from "lucide-react";
+
 import {
   type AdminData,
   type RawBusiness,
@@ -29,6 +32,35 @@ import {
   uid,
 } from "../store";
 import { Panel, Field, inputCls, Btn } from "../ui";
+
+const SCRAPER_STATE_KEY = "inspirova.admin.scraper.state";
+
+interface PersistedScraperState {
+  results: ScrapedPerson[];
+  selected: Record<string, boolean>;
+  emailSource: Record<string, string>;
+  emailSourceUrl: Record<string, string>;
+  banner: { live: boolean; text: string } | null;
+}
+
+function loadScraperState(): PersistedScraperState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(SCRAPER_STATE_KEY);
+    return raw ? (JSON.parse(raw) as PersistedScraperState) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveScraperState(s: PersistedScraperState) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SCRAPER_STATE_KEY, JSON.stringify(s));
+  } catch {
+    /* ignore */
+  }
+}
 
 const KEYWORD_PRESETS = [
   "Real Estate",
@@ -74,17 +106,49 @@ export function Scraper({
   const [geo, setGeo] = useState<GeocodeResult | null>(null);
   const [geoBusy, setGeoBusy] = useState(false);
   const [scrapeBusy, setScrapeBusy] = useState(false);
-  const [results, setResults] = useState<ScrapedPerson[]>([]);
-  const [selected, setSelected] = useState<Record<string, boolean>>({});
-  const [banner, setBanner] = useState<{ live: boolean; text: string } | null>(null);
+  const persisted = loadScraperState();
+  const [results, setResults] = useState<ScrapedPerson[]>(persisted?.results ?? []);
+  const [selected, setSelected] = useState<Record<string, boolean>>(persisted?.selected ?? {});
+  const [banner, setBanner] = useState<{ live: boolean; text: string } | null>(persisted?.banner ?? null);
   const [pushed, setPushed] = useState(0);
   const [revealPhone, setRevealPhone] = useState(false);
   const [enrichBusy, setEnrichBusy] = useState(false);
   const [enrichProgress, setEnrichProgress] = useState({ done: 0, total: 0 });
   // id -> which source revealed the email ("Apollo" | "Hunter" | "Google" | "demo")
-  const [emailSource, setEmailSource] = useState<Record<string, string>>({});
+  const [emailSource, setEmailSource] = useState<Record<string, string>>(persisted?.emailSource ?? {});
   // id -> URL where the email was found (Hunter source / Google result link)
-  const [emailSourceUrl, setEmailSourceUrl] = useState<Record<string, string>>({});
+  const [emailSourceUrl, setEmailSourceUrl] = useState<Record<string, string>>(persisted?.emailSourceUrl ?? {});
+
+  // Persist scraper results across refreshes so accept/deny can be done later.
+  useEffect(() => {
+    saveScraperState({ results, selected, emailSource, emailSourceUrl, banner });
+  }, [results, selected, emailSource, emailSourceUrl, banner]);
+
+  function denySelected() {
+    const ids = new Set(Object.keys(selected).filter((id) => selected[id]));
+    if (!ids.size) return;
+    setResults((prev) => prev.filter((p) => !ids.has(p.id)));
+    setSelected({});
+  }
+
+  function denyOne(id: string) {
+    setResults((prev) => prev.filter((p) => p.id !== id));
+    setSelected((s) => {
+      const { [id]: _omit, ...rest } = s;
+      return rest;
+    });
+  }
+
+  function clearAllResults() {
+    if (!results.length) return;
+    if (typeof window !== "undefined" && !window.confirm(`Remove all ${results.length} scraped contacts?`)) return;
+    setResults([]);
+    setSelected({});
+    setEmailSource({});
+    setEmailSourceUrl({});
+    setBanner(null);
+  }
+
 
   function splitName(name: string): { first: string; last: string } {
     const parts = name.trim().split(/\s+/);
@@ -244,6 +308,10 @@ export function Scraper({
     }));
     update((prev) => ({ ...prev, raw: [...rows, ...prev.raw] }));
     setPushed(rows.length);
+    // Remove accepted contacts from the scraper queue so it acts as an inbox.
+    const acceptedIds = new Set(selectedPeople.map((p) => p.id));
+    setResults((prev) => prev.filter((p) => !acceptedIds.has(p.id)));
+    setSelected({});
   }
 
   function exportCSV(rows: ScrapedPerson[]) {
@@ -504,9 +572,17 @@ export function Scraper({
               <Btn variant="ghost" onClick={() => exportCSV(selectedPeople)}>
                 <Download className="h-4 w-4" /> Download CSV
               </Btn>
-              <Btn onClick={sendToRaw}>
-                <ArrowRightCircle className="h-4 w-4" /> Send {selectedPeople.length} to Raw Data
+              <Btn variant="danger" onClick={denySelected}>
+                <X className="h-4 w-4" /> Deny {selectedPeople.length}
               </Btn>
+              <Btn variant="ghost" onClick={clearAllResults}>
+                <Trash2 className="h-4 w-4" /> Clear all
+              </Btn>
+              <Btn onClick={sendToRaw}>
+                <ArrowRightCircle className="h-4 w-4" /> Accept {selectedPeople.length} → Raw Data
+              </Btn>
+
+
             </div>
           </div>
 
@@ -619,7 +695,16 @@ export function Scraper({
                       <Linkedin className="h-4 w-4" />
                     </a>
                   )}
+                  <button
+                    onClick={() => denyOne(p.id)}
+                    aria-label="Deny / remove"
+                    title="Deny & remove"
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border text-[oklch(.55_.2_25)] hover:bg-[oklch(.95_.04_25)]"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
+
               );
             })}
           </div>
