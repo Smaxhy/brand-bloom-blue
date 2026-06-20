@@ -6,6 +6,9 @@ import {
   type StageId,
   STAGES,
   DEAL_TEMPLATES,
+  SERVICES,
+  getService,
+  totalsForServices,
   fmtEuro,
   uid,
 } from "../store";
@@ -20,6 +23,7 @@ const empty = (): Deal => ({
   value: 0,
   stage: "new",
   source: "",
+  services: [],
   template: "",
   notes: "",
   createdAt: Date.now(),
@@ -46,8 +50,15 @@ export function Pipeline({
   function applyTemplate(d: Deal, name: string): Deal {
     const t = DEAL_TEMPLATES[name];
     if (!t) return { ...d, template: "" };
-    return { ...d, template: name, value: t.value ?? d.value, source: t.source ?? d.source, notes: t.notes ?? d.notes };
+    const totals = totalsForServices(t.services);
+    return { ...d, template: name, services: t.services, value: totals.total, source: t.source ?? d.source, notes: t.notes ?? d.notes };
   }
+
+  function toggleService(d: Deal, id: string): Deal {
+    const services = d.services.includes(id) ? d.services.filter((s) => s !== id) : [...d.services, id];
+    return { ...d, services, value: totalsForServices(services).total };
+  }
+
 
   function save(d: Deal) {
     update((p) => {
