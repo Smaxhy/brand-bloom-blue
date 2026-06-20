@@ -16,6 +16,11 @@
 
 type Env = Record<string, string | undefined>;
 
+/** Read a secret from Worker env binding OR process.env (Lovable injects secrets via process.env). */
+function secret(env: Env, name: string): string | undefined {
+  return env[name] || (typeof process !== "undefined" ? process.env?.[name] : undefined);
+}
+
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 
 function json(body: unknown, status = 200): Response {
