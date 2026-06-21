@@ -625,15 +625,14 @@
     n&&n.querySelectorAll("a").forEach(function(a){a.addEventListener("click",function(){n.classList.remove("open");});});
   })();
 
-  /* ---- pricing service picker + bundles ---- */
+  /* ---- pricing calculator ---- */
   (function(){
     var grid=document.getElementById("servicesGrid");
-    var bundlesGrid=document.getElementById("bundlesGrid");
-    if(!grid||!bundlesGrid) return;
+    if(!grid) return;
 
     var SERVICES=[
-      {id:"ads_setup",      name:"Ads Setup",                 price:1000, billing:"upfront", desc:"Ad accounts, audiences & launch-ready first creative.", checked:false},
-      {id:"ads_management", name:"Ads Management / Creation", price:500,  billing:"monthly",  desc:"Ongoing Meta / Google / TikTok ads & creative.",        checked:false},
+      {id:"ads_setup",      name:"Ads Setup",                 price:1000, billing:"upfront", desc:"Ad accounts, audiences & launch-ready first creative.", checked:true},
+      {id:"ads_management", name:"Ads Management / Creation", price:500,  billing:"monthly",  desc:"Ongoing Meta / Google / TikTok ads & creative.",        checked:true},
       {id:"video_creation", name:"Video Creation",            price:100,  billing:"upfront", desc:"Short-form ad / content video, per video.",            checked:false},
       {id:"email_sms",      name:"Email & SMS Automations",   price:750,  billing:"monthly",  desc:"Flows, broadcasts and SMS automations.",                checked:false},
       {id:"website",        name:"Website Design / Creation", price:300,  billing:"upfront", desc:"Conversion-focused website, per site.",                checked:false},
@@ -641,51 +640,68 @@
       {id:"pixel_leadgen",  name:"Lead-gen Pixel Setup",      price:150,  billing:"upfront", desc:"Pixel + form/lead tracking for service businesses.",   checked:false}
     ];
 
-    var BUNDLES=[
-      { id:"deluxe",   name:"Deluxe Package",   tag:"Everything: site, automations, ads management.", first:2500, recurring:750, vsRetainer:1500, vsLeads:60, includes:["website","ads_setup","ads_management","email_sms","pixel_ecom"], badge:"Most popular" },
-      { id:"growth",   name:"Growth Package",   tag:"Ads setup, ongoing management & tracking.",      first:1200, recurring:500, vsRetainer:1000, vsLeads:40, includes:["ads_setup","ads_management","pixel_ecom"], badge:"Best value" },
-      { id:"creation", name:"Creation Package", tag:"Ads setup, creative & video production.",        first:750,  recurring:0,   vsRetainer:800,  vsLeads:25, includes:["ads_setup","video_creation"], badge:"" }
-    ];
+    var COMPETITOR_RETAINER = 1000;
+    var COMMISSION_RATE = 0.10;
+    var COST_PER_LEAD = 35;
 
-    // Industry average: retainer + 10% of ad spend (assume €2,000/mo) + €35 per lead.
-    var AD_SPEND_ASSUMED = 2000;
-    var COMMISSION_RATE  = 0.10;
-    var COST_PER_LEAD    = 35;
+    var sliderAd = document.getElementById("sliderAdSpend");
+    var sliderLeads = document.getElementById("sliderLeads");
+    var valAd = document.getElementById("valAdSpend");
+    var valLeads = document.getElementById("valLeads");
 
-    var euro=function(v){return "€"+v.toLocaleString("nl-BE",{minimumFractionDigits:2,maximumFractionDigits:2});};
-    var euro0=function(v){return "€"+Math.round(v).toLocaleString("nl-BE");};
+    var euro=function(v){return "€"+v.toLocaleString("nl-BE",{minimumFractionDigits:0,maximumFractionDigits:0});};
+    var euroDec=function(v){return "€"+v.toLocaleString("nl-BE",{minimumFractionDigits:2,maximumFractionDigits:2});};
     var nameById=function(id){var s=SERVICES.find(function(x){return x.id===id;}); return s?s.name:id;};
 
-    function renderBundles(){
-      bundlesGrid.innerHTML=BUNDLES.map(function(b){
-        var items=b.includes.map(function(i){return '<li>'+nameById(i)+'</li>';}).join("");
-        var competitorMonthly = b.vsRetainer + (AD_SPEND_ASSUMED*COMMISSION_RATE) + (b.vsLeads*COST_PER_LEAD);
-        var ourMonthly = b.recurring>0 ? b.recurring : Math.round(b.first/3); // amortize one-off over 3mo for fair compare
-        var saved = Math.max(0, competitorMonthly - ourMonthly);
-        var pct = Math.round((saved/competitorMonthly)*100);
-        return '<div class="bundle'+(b.badge?" featured":"")+'" data-id="'+b.id+'">'
-          +(b.badge?'<div class="bundle-badge">'+b.badge+'</div>':'')
-          +'<div class="bundle-name">'+b.name+'</div>'
-          +'<div class="bundle-tag">'+b.tag+'</div>'
-          +'<div class="bundle-price">'+euro0(b.first)+'<small> first month</small></div>'
-          +(b.recurring>0?'<div class="bundle-sub">then '+euro0(b.recurring)+' / month — flat, all-in</div>':'<div class="bundle-sub">one-time, no monthly</div>')
-          +'<div class="bundle-vs">'
-            +'<div class="vs-lbl">vs. typical agency</div>'
-            +'<div class="vs-row"><span>'+euro0(b.vsRetainer)+' retainer + 10% of ad spend + €35/lead</span><span class="vs-price">'+euro0(competitorMonthly)+'/mo</span></div>'
-            +'<div class="vs-save">You save ~'+euro0(saved)+'/mo · '+pct+'% less</div>'
-          +'</div>'
-          +'<ul class="bundle-list">'+items+'</ul>'
-          +'<button class="btn btn-primary bundle-btn" type="button">Select bundle</button>'
-        +'</div>';
-      }).join("");
-      bundlesGrid.querySelectorAll(".bundle").forEach(function(card){
-        card.querySelector(".bundle-btn").addEventListener("click",function(){
-          var b=BUNDLES.find(function(x){return x.id===card.dataset.id;});
-          SERVICES.forEach(function(s){ s.checked = b.includes.indexOf(s.id)!==-1; });
-          render(); calc();
-          document.getElementById("servicesGrid").scrollIntoView({behavior:"smooth",block:"center"});
-        });
+    function updateSliders(){
+      if(sliderAd && valAd) valAd.textContent = euro(+sliderAd.value);
+      if(sliderLeads && valLeads) valLeads.textContent = sliderLeads.value;
+    }
+
+    function calc(){
+      var monthly=0,upfront=0,selected=[];
+      SERVICES.forEach(function(s){
+        if(!s.checked) return;
+        selected.push(s.id);
+        if(s.billing==="monthly") monthly+=s.price;
+        else upfront+=s.price;
       });
+
+      var adSpend = sliderAd ? +sliderAd.value : 2000;
+      var leads = sliderLeads ? +sliderLeads.value : 40;
+
+      var competitorMonthly = COMPETITOR_RETAINER + (adSpend * COMMISSION_RATE) + (leads * COST_PER_LEAD);
+      var ourMonthly = monthly;
+      var saved = Math.max(0, competitorMonthly - ourMonthly);
+      var pct = competitorMonthly > 0 ? Math.round((saved/competitorMonthly)*100) : 0;
+
+      var compUs = document.getElementById("compUs");
+      var compThem = document.getElementById("compThem");
+      var savePct = document.getElementById("savePct");
+      var saveAmt = document.getElementById("saveAmt");
+      var ctRetainerUs = document.getElementById("ctRetainerUs");
+      var ctRetainerThem = document.getElementById("ctRetainerThem");
+      var ctCommission = document.getElementById("ctCommission");
+      var ctLeadCost = document.getElementById("ctLeadCost");
+      var ctTotalUs = document.getElementById("ctTotalUs");
+      var ctTotalThem = document.getElementById("ctTotalThem");
+      var footUs = document.getElementById("footUs");
+      var footThem = document.getElementById("footThem");
+
+      if(compUs) compUs.textContent = euro(ourMonthly);
+      if(compThem) compThem.textContent = euro(competitorMonthly);
+      if(savePct) savePct.textContent = pct + "%";
+      if(saveAmt) saveAmt.textContent = (saved > 0 ? "~" + euro(saved) + "/month" : "Select services to compare");
+      if(ctRetainerUs) ctRetainerUs.textContent = euro(ourMonthly);
+      if(ctRetainerThem) ctRetainerThem.textContent = euro(COMPETITOR_RETAINER);
+      if(ctCommission) ctCommission.textContent = euro(adSpend * COMMISSION_RATE);
+      if(ctLeadCost) ctLeadCost.textContent = euro(leads * COST_PER_LEAD);
+      if(ctTotalUs) ctTotalUs.textContent = euro(ourMonthly);
+      if(ctTotalThem) ctTotalThem.textContent = euro(competitorMonthly);
+      if(footUs) footUs.textContent = euro(ourMonthly);
+      if(footThem) footThem.textContent = euro(competitorMonthly);
+
+      window.__inspQuote={ selected:selected, monthly:monthly, upfront:upfront, total:monthly+upfront, names:selected.map(nameById) };
     }
 
     function render(){
@@ -694,7 +710,7 @@
           +'<input type="checkbox" data-i="'+i+'"'+(s.checked?" checked":"")+'>'
           +'<div class="svc-body">'
             +'<div class="svc-top"><span class="svc-name">'+s.name+'</span>'
-            +'<span class="svc-price">'+euro(s.price)+'<small>'+(s.billing==="monthly"?" /mo":" first month")+'</small></span></div>'
+            +'<span class="svc-price">'+euroDec(s.price)+'<small>'+(s.billing==="monthly"?" /mo":" one-time")+'</small></span></div>'
             +'<div class="svc-desc">'+s.desc+'</div>'
           +'</div></label>';
       }).join("");
@@ -705,14 +721,11 @@
         });
       });
     }
-    function calc(){
-      var monthly=0,upfront=0,selected=[];
-      SERVICES.forEach(function(s){ if(!s.checked) return; selected.push(s.id); if(s.billing==="monthly") monthly+=s.price; else upfront+=s.price; });
-      document.getElementById("sumMonthly").textContent=euro(monthly);
-      document.getElementById("sumTotal").textContent=euro(monthly+upfront);
-      window.__inspQuote={ selected:selected, monthly:monthly, upfront:upfront, total:monthly+upfront, names:selected.map(nameById) };
-    }
-    renderBundles(); render(); calc();
+
+    if(sliderAd) sliderAd.addEventListener("input", function(){ updateSliders(); calc(); });
+    if(sliderLeads) sliderLeads.addEventListener("input", function(){ updateSliders(); calc(); });
+
+    updateSliders(); render(); calc();
   })();
 
   /* ---- quote submission → admin pipeline (localStorage) ---- */
