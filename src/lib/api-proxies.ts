@@ -685,35 +685,61 @@ async function ghlSend(request: Request, env: Env): Promise<Response> {
   }
   // Prefer the server secret; fall back to a key passed from the client.
   const key = secret(env, "GHL_API_KEY") || payload.apiKey;
-  if (!key || !payload.locationId) {
-    return json({ ok: true, simulated: true, message: "No GHL key on server — simulated." });
+  const recipients = payload.to ?? [];
+  if (!key) {
+    return json({
+      ok: true,
+      simulated: true,
+      message: "No GHL key on server — simulated send.",
+      details: recipients.map((r) => ({ email: r.email, ok: true, simulated: true })),
+    });
+  }
+  if (!payload.locationId) {
+    return json({
+      ok: false,
+      message: "Missing Location ID. Set it in Settings → GoHighLevel.",
+      details: recipients.map((r) => ({ email: r.email, ok: false, error: "missing locationId" })),
+    });
   }
   try {
-    // Create/queue an email per recipient via the LeadConnector API.
-    // (Endpoint shapes vary by GHL plan; adjust to your account's email API.)
-    const results = await Promise.all(
-      (payload.to ?? []).map((rcpt) =>
-        fetch("https://services.leadconnectorhq.com/emails/send", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${key}`,
-            "Content-Type": "application/json",
-            Version: "2021-07-28",
-          },
-          body: JSON.stringify({
-            locationId: payload.locationId,
-            to: rcpt.email,
-            subject: payload.subject,
-            html: (payload.body ?? "").replace(/\n/g, "<br>"),
-            fromName: payload.fromName,
-            fromEmail: payload.fromEmail,
-          }),
-        }).then((r) => r.ok),
-      ),
+    const details = await Promise.all(
+      recipients.map(async (rcpt) => {
+        try {
+          const res = await fetch("https://services.leadconnectorhq.com/emails/send", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${key}`,
+              "Content-Type": "application/json",
+              Version: "2021-07-28",
+              Accept: "application/json",
+            },
+            body: JSON.stringify({
+              locationId: payload.locationId,
+              to: rcpt.email,
+              subject: payload.subject,
+              html: (payload.body ?? "").replace(/\n/g, "<br>"),
+              fromName: payload.fromName,
+              fromEmail: payload.fromEmail,
+            }),
+          });
+          if (res.ok) return { email: rcpt.email, ok: true, status: res.status };
+          const detail = (await res.text()).slice(0, 300);
+          return { email: rcpt.email, ok: false, status: res.status, error: detail };
+        } catch (e) {
+          return { email: rcpt.email, ok: false, error: (e as Error).message };
+        }
+      }),
     );
-    const sent = results.filter(Boolean).length;
-    return json({ ok: sent > 0, message: `Forwarded ${sent}/${results.length} to GoHighLevel.` });
+    const sent = details.filter((d) => d.ok).length;
+    return json({
+      ok: sent > 0,
+      message:
+        sent === details.length
+          ? `Delivered to all ${sent} recipient(s) via GoHighLevel.`
+          : `Delivered ${sent}/${details.length} — see details below.`,
+      details,
+    });
   } catch (e) {
-    return json({ ok: false, message: (e as Error).message }, 500);
+    return json({ ok: false, message: (e as Error).message, details: [] }, 500);
   }
 }
