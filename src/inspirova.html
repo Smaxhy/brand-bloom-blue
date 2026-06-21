@@ -454,69 +454,106 @@
   <div class="wrap pricing-head">
     <div class="eye">PRICING</div>
     <h2>Build your own package.<br><span class="lime">See exactly what you save vs. a typical agency.</span></h2>
-    <p>Pick a ready-made bundle below or select exactly what you need. You control your ad spend directly.</p>
+    <p>No commission. No per-lead fees. One flat monthly price — cancel anytime.</p>
   </div>
 
   <div class="wrap">
     <div class="calc-card">
 
-      <div class="bundles-head">
-        <h3 class="bundles-title">Bundle deals</h3>
-        <p class="bundles-sub">
-          One flat monthly price. <strong>No commission. No pay-per-lead.</strong>
-          Typical agencies charge a retainer <em>plus ~10% of ad spend</em> <em>plus ~€35 per lead</em> — our bundles replace all of it.
-        </p>
-      </div>
-      <div class="bundles" id="bundlesGrid"><!-- injected --></div>
-      <div class="bundles-foot">
-        <span class="bundles-foot-chip">No commission</span>
-        <span class="bundles-foot-chip">No per-lead fee</span>
-        <span class="bundles-foot-chip">Cancel anytime</span>
-        <span class="bundles-foot-chip">You own your ad account</span>
-      </div>
-
-      <div class="divider"><span>or build your own</span></div>
-
-      <div class="services-grid" id="servicesGrid">
-        <!-- service cards injected by JS -->
+      <!-- TOP: Big comparison -->
+      <div class="comp-header">
+        <div class="comp-col us">
+          <h3>Inspirova</h3>
+          <div class="comp-sub">Flat monthly fee</div>
+          <div class="comp-price" id="compUs">€0</div>
+        </div>
+        <div class="comp-col them">
+          <h3>Typical agency</h3>
+          <div class="comp-sub">Retainer + 10% + €35/lead</div>
+          <div class="comp-price" id="compThem">€0</div>
+        </div>
       </div>
 
-      <div class="totals">
-        <div class="totals-row"><span class="k">Monthly</span><span class="v" id="sumMonthly">€0,00</span><span class="sub">/month, recurring</span></div>
-        <div class="totals-row total"><span class="k">First month</span><span class="v" id="sumTotal">€0,00</span><span class="sub">first month + setup</span></div>
-      </div>
+      <!-- BODY -->
+      <div class="calc-body">
+        <div class="calc-left">
 
-      <p class="fineprint">
-        No commission on results. No €35/lead surcharge. No long-term contract — monthly billing, cancel anytime.
-      </p>
+          <!-- SLIDERS -->
+          <div class="sliders">
+            <div class="slider-row">
+              <label>Monthly ad spend <span id="valAdSpend">€2.000</span></label>
+              <input type="range" id="sliderAdSpend" min="500" max="15000" step="500" value="2000">
+            </div>
+            <div class="slider-row">
+              <label>Leads per month <span id="valLeads">40</span></label>
+              <input type="range" id="sliderLeads" min="5" max="200" step="5" value="40">
+            </div>
+          </div>
 
-      <div class="calc-grid" style="margin-top:34px">
-        <div class="sliders">
+          <h4>Build your own</h4>
+          <div class="services-grid" id="servicesGrid"></div>
+
           <div class="form-grid" id="quoteForm">
             <input type="text"  id="qCompany" placeholder="Company">
             <input type="text"  id="qFirst"   placeholder="First name">
             <input type="text"  id="qLast"    placeholder="Last name">
             <input type="email" id="qEmail"   placeholder="E-mail">
             <input type="tel"   id="qPhone"   placeholder="Phone">
-            <textarea id="qNotes" placeholder="Anything we should know? (optional)" rows="3" style="width:100%;padding:14px 16px;border:1.5px solid rgba(255,255,255,.12);border-radius:14px;background:rgba(255,255,255,.04);color:#fff;font:inherit;resize:vertical"></textarea>
+            <textarea id="qNotes" placeholder="Anything we should know? (optional)" rows="3"></textarea>
             <label class="chk"><input type="checkbox" id="qConsent"> Yes, I'd like more information and agree to the privacy policy.</label>
-            <button type="button" id="quoteBtn" class="btn btn-primary" style="justify-content:center;margin-top:6px">Request a personal quote</button>
-            <div id="quoteMsg" style="font-size:.85rem;color:var(--muted);min-height:1.2em"></div>
           </div>
-
         </div>
 
-        <div class="breakdown">
-          <div class="bd-col">
-            <h4>WHAT'S INCLUDED</h4>
-            <div class="bd-row"><div class="k">Strategy &amp; reporting calls</div><div class="v">Monthly</div></div>
-            <div class="bd-row"><div class="k">Dedicated account manager</div><div class="v">Yes</div></div>
-            <div class="bd-row"><div class="k">Creative production</div><div class="v">Included</div></div>
-            <div class="bd-row"><div class="k">Contract length</div><div class="v">Month-to-month</div></div>
-            <div class="bd-row total"><div class="k">Refund policy</div><div class="v">No refunds · cancel anytime</div></div>
+        <div class="calc-right">
+
+          <!-- SAVE -->
+          <div class="save-big">
+            <div class="save-label">YOU SAVE</div>
+            <div class="save-pct" id="savePct">48%</div>
+            <div class="save-amt" id="saveAmt">~€1.870/month</div>
+          </div>
+
+          <h4>Price breakdown</h4>
+          <div class="comp-table" id="compTable">
+            <div class="ct-row head">
+              <div></div>
+              <div>Inspirova</div>
+              <div>Typical agency</div>
+            </div>
+            <div class="ct-row">
+              <div class="ct-lbl">Monthly retainer</div>
+              <div class="ct-us" id="ctRetainerUs">€0</div>
+              <div class="ct-them" id="ctRetainerThem">€1.000</div>
+            </div>
+            <div class="ct-row">
+              <div class="ct-lbl">Ad spend commission</div>
+              <div class="ct-us">€0</div>
+              <div class="ct-them" id="ctCommission">€200</div>
+            </div>
+            <div class="ct-row">
+              <div class="ct-lbl">Cost per lead</div>
+              <div class="ct-us">€0</div>
+              <div class="ct-them" id="ctLeadCost">€1.400</div>
+            </div>
+            <div class="ct-row total">
+              <div class="ct-lbl">Monthly total</div>
+              <div class="ct-us" id="ctTotalUs">€0</div>
+              <div class="ct-them" id="ctTotalThem">€2.600</div>
+            </div>
           </div>
         </div>
       </div>
+
+      <!-- FOOTER -->
+      <div class="calc-footer">
+        <button type="button" id="quoteBtn" class="btn btn-primary" style="padding:16px 40px;font-size:1.05rem">Request a personal quote</button>
+        <div class="footer-totals">
+          <div class="us"><span>Inspirova monthly</span><span id="footUs">€0</span></div>
+          <div><span>Typical agency monthly</span><span id="footThem">€0</span></div>
+        </div>
+        <div id="quoteMsg" style="font-size:.85rem;color:var(--muted);min-height:1.2em;text-align:center"></div>
+      </div>
+
     </div>
   </div>
 </section>
