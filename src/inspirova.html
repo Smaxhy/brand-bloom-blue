@@ -237,6 +237,19 @@
   .save-pct{font-family:var(--display);font-weight:800;font-size:clamp(3.2rem,8vw,5.5rem);color:#9CFFB7;line-height:1;margin-top:6px}
   .save-amt{font-size:.92rem;color:rgba(255,255,255,.65);margin-top:8px}
 
+  /* bundles */
+  .bundles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:22px}
+  .bundle{position:relative;border:1.5px solid rgba(255,255,255,.12);border-radius:16px;padding:16px 14px;background:rgba(255,255,255,.03);cursor:pointer;transition:all .18s;text-align:left;color:#fff;font-family:inherit}
+  .bundle:hover{border-color:var(--violet-bright);background:rgba(168,139,255,.06);transform:translateY(-2px)}
+  .bundle.on{border-color:#9CFFB7;background:rgba(156,255,183,.08);box-shadow:0 10px 30px -18px rgba(156,255,183,.5)}
+  .bundle .b-tag{font-family:var(--mono);font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:.6rem;color:rgba(255,255,255,.5)}
+  .bundle.on .b-tag{color:#9CFFB7}
+  .bundle .b-name{font-family:var(--display);font-weight:800;font-size:1.05rem;margin-top:4px}
+  .bundle .b-price{font-family:var(--display);font-weight:800;font-size:1.4rem;margin-top:6px;color:var(--violet-bright)}
+  .bundle.on .b-price{color:#9CFFB7}
+  .bundle .b-price small{font-size:.7rem;font-weight:500;color:rgba(255,255,255,.55);display:block;margin-top:2px;letter-spacing:.04em}
+  .bundle .b-pop{position:absolute;top:-10px;right:12px;background:#9CFFB7;color:#0c0820;font-family:var(--mono);font-weight:800;font-size:.58rem;letter-spacing:.14em;padding:4px 8px;border-radius:99px}
+
   /* services */
   .services-grid{display:grid;grid-template-columns:1fr;gap:10px}
   .svc{display:flex;gap:12px;border:1.5px solid rgba(255,255,255,.1);border-radius:14px;padding:14px 16px;background:rgba(255,255,255,.03);cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s;color:#fff}
@@ -292,6 +305,7 @@
     .hero-grid,.feat-grid,.calc-body,.footer-totals{grid-template-columns:1fr}
     .cards{grid-template-columns:1fr 1fr}
     .logos{grid-template-columns:repeat(3,1fr)}
+    .bundles{grid-template-columns:1fr}
     .nav-links{display:none}
     .menu-btn{display:grid;place-items:center}
     .nav-links.open{display:flex;position:absolute;top:74px;left:0;right:0;flex-direction:column;background:rgba(12,8,32,.92);
@@ -481,7 +495,7 @@
           <!-- SLIDERS -->
           <div class="sliders">
             <div class="slider-row">
-              <label>Monthly ad spend <span id="valAdSpend">€2.000</span></label>
+              <label>Your monthly ad budget <span id="valAdSpend">€2.000</span></label>
               <input type="range" id="sliderAdSpend" min="500" max="15000" step="500" value="2000">
             </div>
             <div class="slider-row">
@@ -490,7 +504,10 @@
             </div>
           </div>
 
-          <h4>Build your own</h4>
+          <h4>Pick a bundle</h4>
+          <div class="bundles" id="bundles"></div>
+
+          <h4>Or build your own</h4>
           <div class="services-grid" id="servicesGrid"></div>
 
           <div class="form-grid" id="quoteForm">
@@ -539,6 +556,11 @@
               <div class="ct-lbl">Monthly total</div>
               <div class="ct-us" id="ctTotalUs">€0</div>
               <div class="ct-them" id="ctTotalThem">€2.600</div>
+            </div>
+            <div class="ct-row total">
+              <div class="ct-lbl">First month (incl. setup)</div>
+              <div class="ct-us" id="ctFirstUs">€0</div>
+              <div class="ct-them" id="ctFirstThem">€2.600</div>
             </div>
           </div>
         </div>
@@ -629,15 +651,22 @@
   (function(){
     var grid=document.getElementById("servicesGrid");
     if(!grid) return;
+    var bundlesEl=document.getElementById("bundles");
 
     var SERVICES=[
-      {id:"ads_setup",      name:"Ads Setup",                 price:1000, billing:"upfront", desc:"Ad accounts, audiences & launch-ready first creative.", checked:true},
-      {id:"ads_management", name:"Ads Management / Creation", price:500,  billing:"monthly",  desc:"Ongoing Meta / Google / TikTok ads & creative.",        checked:true},
-      {id:"video_creation", name:"Video Creation",            price:100,  billing:"upfront", desc:"Short-form ad / content video, per video.",            checked:false},
-      {id:"email_sms",      name:"Email & SMS Automations",   price:750,  billing:"monthly",  desc:"Flows, broadcasts and SMS automations.",                checked:false},
-      {id:"website",        name:"Website Design / Creation", price:300,  billing:"upfront", desc:"Conversion-focused website, per site.",                checked:false},
-      {id:"pixel_ecom",     name:"E-commerce Pixel Setup",    price:150,  billing:"upfront", desc:"Pixel + server-side tracking for e-commerce.",          checked:false},
-      {id:"pixel_leadgen",  name:"Lead-gen Pixel Setup",      price:150,  billing:"upfront", desc:"Pixel + form/lead tracking for service businesses.",   checked:false}
+      {id:"ads_setup",      name:"Ads Setup",                 price:750, billing:"upfront", desc:"Ad accounts, audiences & launch-ready first creative.", checked:true},
+      {id:"ads_management", name:"Ads Management / Creation", price:500, billing:"monthly", desc:"Ongoing Meta / Google / TikTok ads & creative.",        checked:true},
+      {id:"video_creation", name:"Video Creation",            price:100, billing:"upfront", desc:"Short-form ad / content video, per video.",            checked:false},
+      {id:"email_sms",      name:"Email & SMS Automations",   price:700, billing:"monthly", desc:"Flows, broadcasts and SMS automations.",                checked:false},
+      {id:"website",        name:"Website Design / Creation", price:250, billing:"upfront", desc:"Conversion-focused website, per site.",                checked:false},
+      {id:"pixel_ecom",     name:"E-commerce Pixel Setup",    price:100, billing:"upfront", desc:"Pixel + server-side tracking for e-commerce.",          checked:false},
+      {id:"pixel_leadgen",  name:"Lead-gen Pixel Setup",      price:100, billing:"upfront", desc:"Pixel + form/lead tracking for service businesses.",   checked:false}
+    ];
+
+    var BUNDLES=[
+      {id:"starter", tag:"Starter",  name:"Launch",   first:1350, services:["ads_setup","ads_management","pixel_leadgen"]},
+      {id:"growth",  tag:"Growth",   name:"Scale",    first:2150, services:["ads_setup","ads_management","video_creation","email_sms","pixel_leadgen"], popular:true},
+      {id:"complete",tag:"Complete", name:"Everything", first:2500, services:["ads_setup","ads_management","video_creation","email_sms","website","pixel_ecom","pixel_leadgen"]}
     ];
 
     var COMPETITOR_RETAINER = 1000;
@@ -658,6 +687,12 @@
       if(sliderLeads && valLeads) valLeads.textContent = sliderLeads.value;
     }
 
+    function activeBundleId(){
+      var ids=SERVICES.filter(function(s){return s.checked;}).map(function(s){return s.id;}).sort().join(",");
+      var match=BUNDLES.find(function(b){return b.services.slice().sort().join(",")===ids;});
+      return match?match.id:null;
+    }
+
     function calc(){
       var monthly=0,upfront=0,selected=[];
       SERVICES.forEach(function(s){
@@ -672,36 +707,57 @@
 
       var competitorMonthly = COMPETITOR_RETAINER + (adSpend * COMMISSION_RATE) + (leads * COST_PER_LEAD);
       var ourMonthly = monthly;
+      var ourFirst = monthly + upfront;
       var saved = Math.max(0, competitorMonthly - ourMonthly);
       var pct = competitorMonthly > 0 ? Math.round((saved/competitorMonthly)*100) : 0;
 
-      var compUs = document.getElementById("compUs");
-      var compThem = document.getElementById("compThem");
-      var savePct = document.getElementById("savePct");
-      var saveAmt = document.getElementById("saveAmt");
-      var ctRetainerUs = document.getElementById("ctRetainerUs");
-      var ctRetainerThem = document.getElementById("ctRetainerThem");
-      var ctCommission = document.getElementById("ctCommission");
-      var ctLeadCost = document.getElementById("ctLeadCost");
-      var ctTotalUs = document.getElementById("ctTotalUs");
-      var ctTotalThem = document.getElementById("ctTotalThem");
-      var footUs = document.getElementById("footUs");
-      var footThem = document.getElementById("footThem");
+      var set=function(id,v){var el=document.getElementById(id); if(el) el.textContent=v;};
 
-      if(compUs) compUs.textContent = euro(ourMonthly);
-      if(compThem) compThem.textContent = euro(competitorMonthly);
-      if(savePct) savePct.textContent = pct + "%";
-      if(saveAmt) saveAmt.textContent = (saved > 0 ? "~" + euro(saved) + "/month" : "Select services to compare");
-      if(ctRetainerUs) ctRetainerUs.textContent = euro(ourMonthly);
-      if(ctRetainerThem) ctRetainerThem.textContent = euro(COMPETITOR_RETAINER);
-      if(ctCommission) ctCommission.textContent = euro(adSpend * COMMISSION_RATE);
-      if(ctLeadCost) ctLeadCost.textContent = euro(leads * COST_PER_LEAD);
-      if(ctTotalUs) ctTotalUs.textContent = euro(ourMonthly);
-      if(ctTotalThem) ctTotalThem.textContent = euro(competitorMonthly);
-      if(footUs) footUs.textContent = euro(ourMonthly);
-      if(footThem) footThem.textContent = euro(competitorMonthly);
+      set("compUs", euro(ourMonthly));
+      set("compThem", euro(competitorMonthly));
+      set("savePct", pct + "%");
+      set("saveAmt", saved > 0 ? "~" + euro(saved) + "/month" : "Select services to compare");
+      set("ctRetainerUs", euro(ourMonthly));
+      set("ctRetainerThem", euro(COMPETITOR_RETAINER));
+      set("ctCommission", euro(adSpend * COMMISSION_RATE));
+      set("ctLeadCost", euro(leads * COST_PER_LEAD));
+      set("ctTotalUs", euro(ourMonthly));
+      set("ctTotalThem", euro(competitorMonthly));
+      set("ctFirstUs", euro(ourFirst));
+      set("ctFirstThem", euro(competitorMonthly));
+      set("footUs", euro(ourMonthly));
+      set("footThem", euro(competitorMonthly));
 
-      window.__inspQuote={ selected:selected, monthly:monthly, upfront:upfront, total:monthly+upfront, names:selected.map(nameById) };
+      // mark active bundle
+      var active=activeBundleId();
+      if(bundlesEl){
+        bundlesEl.querySelectorAll(".bundle").forEach(function(b){
+          b.classList.toggle("on", b.dataset.id===active);
+        });
+      }
+
+      window.__inspQuote={ selected:selected, monthly:monthly, upfront:upfront, total:ourFirst, names:selected.map(nameById) };
+    }
+
+    function applyBundle(id){
+      var b=BUNDLES.find(function(x){return x.id===id;}); if(!b) return;
+      SERVICES.forEach(function(s){ s.checked = b.services.indexOf(s.id) !== -1; });
+      render(); calc();
+    }
+
+    function renderBundles(){
+      if(!bundlesEl) return;
+      bundlesEl.innerHTML = BUNDLES.map(function(b){
+        return '<button type="button" class="bundle" data-id="'+b.id+'">'
+          + (b.popular?'<span class="b-pop">Most picked</span>':'')
+          + '<div class="b-tag">'+b.tag+'</div>'
+          + '<div class="b-name">'+b.name+'</div>'
+          + '<div class="b-price">'+euro(b.first)+'<small>first month · all-in</small></div>'
+          + '</button>';
+      }).join("");
+      bundlesEl.querySelectorAll(".bundle").forEach(function(btn){
+        btn.addEventListener("click", function(){ applyBundle(btn.dataset.id); });
+      });
     }
 
     function render(){
@@ -725,7 +781,7 @@
     if(sliderAd) sliderAd.addEventListener("input", function(){ updateSliders(); calc(); });
     if(sliderLeads) sliderLeads.addEventListener("input", function(){ updateSliders(); calc(); });
 
-    updateSliders(); render(); calc();
+    updateSliders(); renderBundles(); render(); calc();
   })();
 
   /* ---- quote submission → admin pipeline (localStorage) ---- */
