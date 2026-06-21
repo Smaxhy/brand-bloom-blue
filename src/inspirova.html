@@ -273,12 +273,12 @@
   .form-grid input::placeholder{color:rgba(255,255,255,.4)}
   .form-grid input:focus{border-color:var(--violet-bright);outline:none;background:rgba(255,255,255,.06)}
   .chk{display:flex;align-items:flex-start;gap:9px;font-size:.78rem;color:rgba(255,255,255,.65);margin-top:4px}
-  .breakdown{margin-top:36px;display:grid;grid-template-columns:1fr 1fr;gap:30px}
-  .bd-col h4{font-family:var(--display);font-weight:800;letter-spacing:.03em;margin-bottom:18px;color:#fff}
-  .bd-row{margin-bottom:16px}
-  .bd-row .k{font-weight:700;color:var(--violet-bright);font-size:.9rem}
-  .bd-row .v{font-weight:600;margin-top:2px;color:rgba(255,255,255,.85)}
-  .bd-row.total{border-top:1px solid rgba(255,255,255,.1);padding-top:14px}
+  .calc-footer{margin-top:36px;display:flex;flex-direction:column;align-items:center;gap:20px}
+  .footer-totals{display:grid;grid-template-columns:1fr 1fr;gap:24px;width:100%;max-width:560px}
+  .footer-totals > div{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);font-size:.85rem}
+  .footer-totals > div span:first-child{color:rgba(255,255,255,.6);font-weight:600}
+  .footer-totals > div span:last-child{font-family:var(--display);font-weight:800;color:#fff;font-size:1.1rem}
+  .footer-totals > div.us span:last-child{color:#9CFFB7}
 
   footer{background:var(--ink);color:rgba(255,255,255,.6);padding:40px 0 30px;border-top:1px solid rgba(255,255,255,.08)}
   .foot-grid{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
