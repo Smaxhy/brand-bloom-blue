@@ -98,6 +98,7 @@ export interface EmailCampaign {
 
 export interface Settings {
   ghlApiKey: string;
+  ghlCompanyId: string;
   ghlLocationId: string;
   fromName: string;
   fromEmail: string;
@@ -177,7 +178,7 @@ function seed(): AdminData {
       { id: uid("tpl"), name: "Follow-up", subject: "Quick follow-up, {{contact}}", body: "Hi {{contact}},\n\nJust circling back on my last note. Open to a short call to see if we're a fit for {{business}}?\n\n— Inspirova" },
     ],
     campaigns: [],
-    settings: { ghlApiKey: "", ghlLocationId: "", fromName: "Inspirova", fromEmail: "hello@inspirova.com" },
+    settings: { ghlApiKey: "", ghlCompanyId: "", ghlLocationId: "", fromName: "Inspirova", fromEmail: "hello@inspirova.com" },
   };
 }
 
@@ -258,6 +259,7 @@ export interface GhlSendDetail {
 
 export async function ghlSendEmail(opts: {
   apiKey: string;
+  companyId?: string;
   locationId: string;
   to: { name: string; email: string }[];
   subject: string;
