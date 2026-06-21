@@ -217,67 +217,49 @@
   .pricing-head p{margin-top:16px;color:rgba(255,255,255,.85)}
   .calc-card{margin-top:54px;background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02));color:#fff;border:1px solid rgba(255,255,255,.1);border-radius:34px;
     backdrop-filter:blur(14px);box-shadow:0 14px 36px -20px rgba(124,92,255,.2);padding:40px clamp(20px,4vw,56px) 50px;position:relative;z-index:2}
-  .calc-grid{display:grid;grid-template-columns:1fr 1fr;gap:48px}
-  .calc-col h3{text-align:center;font-family:var(--display);font-weight:800;letter-spacing:.04em;color:#fff}
-  .calc-col .ppl{text-align:center;margin-top:14px;font-weight:600;color:var(--violet-bright);font-size:.96rem}
-  .calc-col .big{text-align:center;font-family:var(--display);font-weight:800;font-size:clamp(2.4rem,5vw,3.4rem);margin-top:4px;color:#fff}
-  .calc-col.us .big{color:var(--violet-bright)}
-  .save{text-align:center;margin-top:6px}
-  .save .lbl{font-weight:700;letter-spacing:.16em;font-size:.72rem;color:var(--violet-bright)}
-  .save .pct{font-family:var(--display);font-weight:800;font-size:clamp(3rem,8vw,5rem);color:var(--violet-bright);line-height:1}
-  .services-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
-  .svc{display:flex;gap:12px;border:1.5px solid rgba(255,255,255,.1);border-radius:16px;padding:14px 16px;background:rgba(255,255,255,.03);cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s;color:#fff}
+  .calc-body{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start}
+  .calc-left h4,.calc-right h4{font-family:var(--display);font-weight:800;font-size:.88rem;letter-spacing:.06em;text-transform:uppercase;margin-bottom:18px;color:#fff}
+
+  /* comparison header */
+  .comp-header{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:32px}
+  .comp-col{text-align:center}
+  .comp-col h3{font-family:var(--display);font-weight:800;font-size:1.05rem;letter-spacing:.06em;text-transform:uppercase}
+  .comp-col.us h3{color:#9CFFB7}
+  .comp-col.them h3{color:rgba(255,255,255,.55)}
+  .comp-sub{margin-top:4px;font-size:.82rem;color:rgba(255,255,255,.55)}
+  .comp-price{font-family:var(--display);font-weight:800;font-size:clamp(2.2rem,4.5vw,3.2rem);margin-top:8px;line-height:1}
+  .comp-col.us .comp-price{color:#9CFFB7}
+  .comp-col.them .comp-price{color:rgba(255,255,255,.9)}
+
+  /* save highlight */
+  .save-big{text-align:center;margin:28px 0 32px}
+  .save-label{font-family:var(--mono);font-weight:700;letter-spacing:.22em;font-size:.68rem;color:#9CFFB7;text-transform:uppercase}
+  .save-pct{font-family:var(--display);font-weight:800;font-size:clamp(3.2rem,8vw,5.5rem);color:#9CFFB7;line-height:1;margin-top:6px}
+  .save-amt{font-size:.92rem;color:rgba(255,255,255,.65);margin-top:8px}
+
+  /* services */
+  .services-grid{display:grid;grid-template-columns:1fr;gap:10px}
+  .svc{display:flex;gap:12px;border:1.5px solid rgba(255,255,255,.1);border-radius:14px;padding:14px 16px;background:rgba(255,255,255,.03);cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s;color:#fff}
   .svc:hover{border-color:var(--violet-bright);background:rgba(168,139,255,.06)}
   .svc.on{border-color:var(--violet-bright);background:rgba(124,92,255,.14);box-shadow:0 8px 24px -16px var(--glow)}
   .svc input{margin-top:4px;accent-color:var(--violet-bright)}
   .svc-body{flex:1;min-width:0}
   .svc-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
-  .svc-name{font-weight:700;color:#fff;font-size:.95rem}
-  .svc-price{font-family:var(--display);font-weight:800;color:var(--violet-bright);font-size:1rem}
+  .svc-name{font-weight:700;color:#fff;font-size:.92rem}
+  .svc-price{font-family:var(--display);font-weight:800;color:var(--violet-bright);font-size:.95rem}
   .svc-price small{font-weight:500;color:rgba(255,255,255,.6);font-size:.7rem;margin-left:2px}
-  .svc-desc{margin-top:4px;font-size:.8rem;color:rgba(255,255,255,.65);line-height:1.4}
-  .totals{margin-top:24px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-  .totals-row{border:1.5px solid rgba(255,255,255,.1);border-radius:14px;padding:14px 18px;display:flex;flex-direction:column;gap:2px;background:rgba(255,255,255,.03)}
-  .totals-row .k{font-weight:700;color:var(--violet-bright);font-size:.78rem;letter-spacing:.06em;text-transform:uppercase}
-  .totals-row .v{font-family:var(--display);font-weight:800;font-size:1.5rem;color:#fff}
-  .totals-row .sub{font-size:.72rem;color:rgba(255,255,255,.6)}
-  .totals-row.total{background:linear-gradient(140deg,#7C5CFF 0%,#A88BFF 55%,#FF8366 100%);color:#fff;border-color:transparent}
-  .totals-row.total .k{color:rgba(255,255,255,.85)}
-  .totals-row.total .v{color:#fff}
-  .totals-row.total .sub{color:rgba(255,255,255,.85)}
+  .svc-desc{margin-top:4px;font-size:.78rem;color:rgba(255,255,255,.65);line-height:1.4}
 
-  .bundles-head{margin:0 0 18px}
-  .bundles-title{font-family:var(--display);font-weight:800;letter-spacing:-.01em;font-size:1.4rem;color:#fff;margin:0 0 6px}
-  .bundles-sub{margin:0;color:rgba(255,255,255,.7);font-size:.88rem;line-height:1.5;max-width:760px}
-  .bundles-sub strong{color:#fff}
-  .bundles-sub em{font-style:normal;color:#FF8366;font-weight:600}
-  .bundles{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:14px}
-  .bundle{position:relative;display:flex;flex-direction:column;gap:8px;border:1.5px solid rgba(255,255,255,.1);border-radius:20px;padding:22px 22px 24px;background:rgba(255,255,255,.03);transition:transform .15s,box-shadow .15s,border-color .15s;color:#fff}
-  .bundle:hover{transform:translateY(-2px);box-shadow:0 18px 40px -24px var(--glow);border-color:var(--violet-bright)}
-  .bundle.featured{border-color:var(--violet-bright);background:linear-gradient(160deg,rgba(124,92,255,.18) 0%,rgba(255,131,102,.08) 100%);box-shadow:0 16px 40px -20px var(--glow)}
-  .bundle-badge{position:absolute;top:-10px;right:18px;background:linear-gradient(140deg,#7C5CFF,#FF8366);color:#fff;font-family:var(--mono);font-weight:700;letter-spacing:.08em;font-size:.65rem;padding:5px 10px;border-radius:99px;text-transform:uppercase}
-  .bundle-name{font-family:var(--display);font-weight:800;font-size:1.15rem;color:#fff}
-  .bundle-tag{font-size:.82rem;color:rgba(255,255,255,.65);line-height:1.4}
-  .bundle-price{font-family:var(--display);font-weight:800;font-size:2rem;color:var(--violet-bright);line-height:1;margin-top:6px}
-  .bundle-price small{font-family:var(--sans);font-weight:500;color:rgba(255,255,255,.6);font-size:.72rem;margin-left:4px}
-  .bundle-sub{font-size:.82rem;color:rgba(255,255,255,.7);font-weight:600}
-  .bundle-vs{margin-top:10px;padding:10px 12px;border-radius:12px;border:1px dashed rgba(255,131,102,.35);background:rgba(255,131,102,.06)}
-  .bundle-vs .vs-lbl{font-family:var(--mono);font-weight:700;letter-spacing:.14em;font-size:.6rem;color:#FF8366;text-transform:uppercase}
-  .bundle-vs .vs-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-top:4px;font-size:.78rem;color:rgba(255,255,255,.8)}
-  .bundle-vs .vs-price{font-family:var(--display);font-weight:800;color:#fff;text-decoration:line-through;text-decoration-color:rgba(255,131,102,.7);font-size:.95rem}
-  .bundle-vs .vs-save{margin-top:6px;font-family:var(--mono);font-weight:700;font-size:.72rem;letter-spacing:.06em;color:#9CFFB7}
-  .bundle-list{list-style:none;padding:0;margin:6px 0 4px;display:grid;gap:4px}
-  .bundle-list li{position:relative;padding-left:18px;font-size:.82rem;color:rgba(255,255,255,.85)}
-  .bundle-list li:before{content:"";position:absolute;left:0;top:8px;width:8px;height:8px;border-radius:50%;background:var(--violet-bright)}
-  .bundle-btn{margin-top:auto;width:100%;justify-content:center}
-  .bundles-foot{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 4px}
-  .bundles-foot-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;background:rgba(156,255,183,.08);border:1px solid rgba(156,255,183,.25);color:#9CFFB7;font-family:var(--mono);font-weight:700;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase}
-  .bundles-foot-chip:before{content:"✓";font-size:.8rem}
-
-  .divider{display:flex;align-items:center;gap:14px;margin:30px 0 20px;color:rgba(255,255,255,.55);font-family:var(--mono);font-weight:700;letter-spacing:.16em;font-size:.7rem;text-transform:uppercase}
-  .divider:before,.divider:after{content:"";flex:1;height:1px;background:rgba(255,255,255,.1)}
-
-  .fineprint{margin-top:18px;font-size:.78rem;color:rgba(255,255,255,.6);line-height:1.55;padding:14px 16px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08)}
+  /* comparison table */
+  .comp-table{display:grid;gap:0}
+  .ct-row{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:12px;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.08);font-size:.85rem;align-items:center}
+  .ct-row.head{font-family:var(--mono);font-weight:700;letter-spacing:.1em;font-size:.62rem;text-transform:uppercase;color:rgba(255,255,255,.45);padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.18)}
+  .ct-row .ct-lbl{color:var(--violet-bright);font-weight:700;font-size:.82rem}
+  .ct-row .ct-us{color:#fff;font-weight:600}
+  .ct-row .ct-them{color:rgba(255,255,255,.65)}
+  .ct-row.total{border-top:2px solid rgba(255,255,255,.18);border-bottom:none;margin-top:4px;padding-top:14px}
+  .ct-row.total .ct-us{color:#9CFFB7;font-size:1rem;font-weight:800}
+  .ct-row.total .ct-them{color:rgba(255,255,255,.85);font-size:1rem;font-weight:800}
 
   .sliders{margin-top:30px}
   .slider-row{margin-bottom:26px}
@@ -291,12 +273,12 @@
   .form-grid input::placeholder{color:rgba(255,255,255,.4)}
   .form-grid input:focus{border-color:var(--violet-bright);outline:none;background:rgba(255,255,255,.06)}
   .chk{display:flex;align-items:flex-start;gap:9px;font-size:.78rem;color:rgba(255,255,255,.65);margin-top:4px}
-  .breakdown{margin-top:36px;display:grid;grid-template-columns:1fr 1fr;gap:30px}
-  .bd-col h4{font-family:var(--display);font-weight:800;letter-spacing:.03em;margin-bottom:18px;color:#fff}
-  .bd-row{margin-bottom:16px}
-  .bd-row .k{font-weight:700;color:var(--violet-bright);font-size:.9rem}
-  .bd-row .v{font-weight:600;margin-top:2px;color:rgba(255,255,255,.85)}
-  .bd-row.total{border-top:1px solid rgba(255,255,255,.1);padding-top:14px}
+  .calc-footer{margin-top:36px;display:flex;flex-direction:column;align-items:center;gap:20px}
+  .footer-totals{display:grid;grid-template-columns:1fr 1fr;gap:24px;width:100%;max-width:560px}
+  .footer-totals > div{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);font-size:.85rem}
+  .footer-totals > div span:first-child{color:rgba(255,255,255,.6);font-weight:600}
+  .footer-totals > div span:last-child{font-family:var(--display);font-weight:800;color:#fff;font-size:1.1rem}
+  .footer-totals > div.us span:last-child{color:#9CFFB7}
 
   footer{background:var(--ink);color:rgba(255,255,255,.6);padding:40px 0 30px;border-top:1px solid rgba(255,255,255,.08)}
   .foot-grid{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
@@ -307,7 +289,7 @@
   @media (max-width:880px){
     .wrap{padding:0 18px}
     .hero{padding:110px 0 70px}
-    .hero-grid,.feat-grid,.calc-grid,.breakdown,.totals,.bundles{grid-template-columns:1fr}
+    .hero-grid,.feat-grid,.calc-body,.footer-totals{grid-template-columns:1fr}
     .cards{grid-template-columns:1fr 1fr}
     .logos{grid-template-columns:repeat(3,1fr)}
     .nav-links{display:none}
@@ -471,70 +453,107 @@
 <section class="pricing" id="pricing">
   <div class="wrap pricing-head">
     <div class="eye">PRICING</div>
-    <h2>Choose a bundle, or craft your own.<br><span class="lime">Transparent pricing. Monthly terms. Cancel anytime.</span></h2>
-    <p>Pick a ready-made bundle below or select exactly what you need. You control your ad spend directly.</p>
+    <h2>Build your own package.<br><span class="lime">See exactly what you save vs. a typical agency.</span></h2>
+    <p>No commission. No per-lead fees. One flat monthly price — cancel anytime.</p>
   </div>
 
   <div class="wrap">
     <div class="calc-card">
 
-      <div class="bundles-head">
-        <h3 class="bundles-title">Bundle deals</h3>
-        <p class="bundles-sub">
-          One flat monthly price. <strong>No commission. No pay-per-lead.</strong>
-          Typical agencies charge a retainer <em>plus ~10% of ad spend</em> <em>plus ~€35 per lead</em> — our bundles replace all of it.
-        </p>
-      </div>
-      <div class="bundles" id="bundlesGrid"><!-- injected --></div>
-      <div class="bundles-foot">
-        <span class="bundles-foot-chip">No commission</span>
-        <span class="bundles-foot-chip">No per-lead fee</span>
-        <span class="bundles-foot-chip">Cancel anytime</span>
-        <span class="bundles-foot-chip">You own your ad account</span>
-      </div>
-
-      <div class="divider"><span>or build your own</span></div>
-
-      <div class="services-grid" id="servicesGrid">
-        <!-- service cards injected by JS -->
+      <!-- TOP: Big comparison -->
+      <div class="comp-header">
+        <div class="comp-col us">
+          <h3>Inspirova</h3>
+          <div class="comp-sub">Flat monthly fee</div>
+          <div class="comp-price" id="compUs">€0</div>
+        </div>
+        <div class="comp-col them">
+          <h3>Typical agency</h3>
+          <div class="comp-sub">Retainer + 10% + €35/lead</div>
+          <div class="comp-price" id="compThem">€0</div>
+        </div>
       </div>
 
-      <div class="totals">
-        <div class="totals-row"><span class="k">Monthly</span><span class="v" id="sumMonthly">€0,00</span><span class="sub">/month, recurring</span></div>
-        <div class="totals-row total"><span class="k">First month</span><span class="v" id="sumTotal">€0,00</span><span class="sub">first month + setup</span></div>
-      </div>
+      <!-- BODY -->
+      <div class="calc-body">
+        <div class="calc-left">
 
-      <p class="fineprint">
-        No commission on results. No €35/lead surcharge. No long-term contract — monthly billing, cancel anytime.
-      </p>
+          <!-- SLIDERS -->
+          <div class="sliders">
+            <div class="slider-row">
+              <label>Monthly ad spend <span id="valAdSpend">€2.000</span></label>
+              <input type="range" id="sliderAdSpend" min="500" max="15000" step="500" value="2000">
+            </div>
+            <div class="slider-row">
+              <label>Leads per month <span id="valLeads">40</span></label>
+              <input type="range" id="sliderLeads" min="5" max="200" step="5" value="40">
+            </div>
+          </div>
 
-      <div class="calc-grid" style="margin-top:34px">
-        <div class="sliders">
+          <h4>Build your own</h4>
+          <div class="services-grid" id="servicesGrid"></div>
+
           <div class="form-grid" id="quoteForm">
             <input type="text"  id="qCompany" placeholder="Company">
             <input type="text"  id="qFirst"   placeholder="First name">
             <input type="text"  id="qLast"    placeholder="Last name">
             <input type="email" id="qEmail"   placeholder="E-mail">
             <input type="tel"   id="qPhone"   placeholder="Phone">
-            <textarea id="qNotes" placeholder="Anything we should know? (optional)" rows="3" style="width:100%;padding:14px 16px;border:1.5px solid rgba(255,255,255,.12);border-radius:14px;background:rgba(255,255,255,.04);color:#fff;font:inherit;resize:vertical"></textarea>
+            <textarea id="qNotes" placeholder="Anything we should know? (optional)" rows="3"></textarea>
             <label class="chk"><input type="checkbox" id="qConsent"> Yes, I'd like more information and agree to the privacy policy.</label>
-            <button type="button" id="quoteBtn" class="btn btn-primary" style="justify-content:center;margin-top:6px">Request a personal quote</button>
-            <div id="quoteMsg" style="font-size:.85rem;color:var(--muted);min-height:1.2em"></div>
           </div>
-
         </div>
 
-        <div class="breakdown">
-          <div class="bd-col">
-            <h4>WHAT'S INCLUDED</h4>
-            <div class="bd-row"><div class="k">Strategy &amp; reporting calls</div><div class="v">Monthly</div></div>
-            <div class="bd-row"><div class="k">Dedicated account manager</div><div class="v">Yes</div></div>
-            <div class="bd-row"><div class="k">Creative production</div><div class="v">Included</div></div>
-            <div class="bd-row"><div class="k">Contract length</div><div class="v">Month-to-month</div></div>
-            <div class="bd-row total"><div class="k">Refund policy</div><div class="v">No refunds · cancel anytime</div></div>
+        <div class="calc-right">
+
+          <!-- SAVE -->
+          <div class="save-big">
+            <div class="save-label">YOU SAVE</div>
+            <div class="save-pct" id="savePct">48%</div>
+            <div class="save-amt" id="saveAmt">~€1.870/month</div>
+          </div>
+
+          <h4>Price breakdown</h4>
+          <div class="comp-table" id="compTable">
+            <div class="ct-row head">
+              <div></div>
+              <div>Inspirova</div>
+              <div>Typical agency</div>
+            </div>
+            <div class="ct-row">
+              <div class="ct-lbl">Monthly retainer</div>
+              <div class="ct-us" id="ctRetainerUs">€0</div>
+              <div class="ct-them" id="ctRetainerThem">€1.000</div>
+            </div>
+            <div class="ct-row">
+              <div class="ct-lbl">Ad spend commission</div>
+              <div class="ct-us">€0</div>
+              <div class="ct-them" id="ctCommission">€200</div>
+            </div>
+            <div class="ct-row">
+              <div class="ct-lbl">Cost per lead</div>
+              <div class="ct-us">€0</div>
+              <div class="ct-them" id="ctLeadCost">€1.400</div>
+            </div>
+            <div class="ct-row total">
+              <div class="ct-lbl">Monthly total</div>
+              <div class="ct-us" id="ctTotalUs">€0</div>
+              <div class="ct-them" id="ctTotalThem">€2.600</div>
+            </div>
           </div>
         </div>
       </div>
+
+      <!-- FOOTER -->
+      <div class="calc-footer">
+        <button type="button" id="quoteBtn" class="btn btn-primary" style="padding:16px 40px;font-size:1.05rem">Request a personal quote</button>
+        <div class="footer-totals">
+          <div class="us"><span>Inspirova monthly</span><span id="footUs">€0</span></div>
+          <div><span>Typical agency monthly</span><span id="footThem">€0</span></div>
+        </div>
+        <div id="quoteMsg" style="font-size:.85rem;color:var(--muted);min-height:1.2em;text-align:center"></div>
+      </div>
+
     </div>
   </div>
 </section>
@@ -606,15 +625,14 @@
     n&&n.querySelectorAll("a").forEach(function(a){a.addEventListener("click",function(){n.classList.remove("open");});});
   })();
 
-  /* ---- pricing service picker + bundles ---- */
+  /* ---- pricing calculator ---- */
   (function(){
     var grid=document.getElementById("servicesGrid");
-    var bundlesGrid=document.getElementById("bundlesGrid");
-    if(!grid||!bundlesGrid) return;
+    if(!grid) return;
 
     var SERVICES=[
-      {id:"ads_setup",      name:"Ads Setup",                 price:1000, billing:"upfront", desc:"Ad accounts, audiences & launch-ready first creative.", checked:false},
-      {id:"ads_management", name:"Ads Management / Creation", price:500,  billing:"monthly",  desc:"Ongoing Meta / Google / TikTok ads & creative.",        checked:false},
+      {id:"ads_setup",      name:"Ads Setup",                 price:1000, billing:"upfront", desc:"Ad accounts, audiences & launch-ready first creative.", checked:true},
+      {id:"ads_management", name:"Ads Management / Creation", price:500,  billing:"monthly",  desc:"Ongoing Meta / Google / TikTok ads & creative.",        checked:true},
       {id:"video_creation", name:"Video Creation",            price:100,  billing:"upfront", desc:"Short-form ad / content video, per video.",            checked:false},
       {id:"email_sms",      name:"Email & SMS Automations",   price:750,  billing:"monthly",  desc:"Flows, broadcasts and SMS automations.",                checked:false},
       {id:"website",        name:"Website Design / Creation", price:300,  billing:"upfront", desc:"Conversion-focused website, per site.",                checked:false},
@@ -622,51 +640,68 @@
       {id:"pixel_leadgen",  name:"Lead-gen Pixel Setup",      price:150,  billing:"upfront", desc:"Pixel + form/lead tracking for service businesses.",   checked:false}
     ];
 
-    var BUNDLES=[
-      { id:"deluxe",   name:"Deluxe Package",   tag:"Everything: site, automations, ads management.", first:2500, recurring:750, vsRetainer:1500, vsLeads:60, includes:["website","ads_setup","ads_management","email_sms","pixel_ecom"], badge:"Most popular" },
-      { id:"growth",   name:"Growth Package",   tag:"Ads setup, ongoing management & tracking.",      first:1200, recurring:500, vsRetainer:1000, vsLeads:40, includes:["ads_setup","ads_management","pixel_ecom"], badge:"Best value" },
-      { id:"creation", name:"Creation Package", tag:"Ads setup, creative & video production.",        first:750,  recurring:0,   vsRetainer:800,  vsLeads:25, includes:["ads_setup","video_creation"], badge:"" }
-    ];
+    var COMPETITOR_RETAINER = 1000;
+    var COMMISSION_RATE = 0.10;
+    var COST_PER_LEAD = 35;
 
-    // Industry average: retainer + 10% of ad spend (assume €2,000/mo) + €35 per lead.
-    var AD_SPEND_ASSUMED = 2000;
-    var COMMISSION_RATE  = 0.10;
-    var COST_PER_LEAD    = 35;
+    var sliderAd = document.getElementById("sliderAdSpend");
+    var sliderLeads = document.getElementById("sliderLeads");
+    var valAd = document.getElementById("valAdSpend");
+    var valLeads = document.getElementById("valLeads");
 
-    var euro=function(v){return "€"+v.toLocaleString("nl-BE",{minimumFractionDigits:2,maximumFractionDigits:2});};
-    var euro0=function(v){return "€"+Math.round(v).toLocaleString("nl-BE");};
+    var euro=function(v){return "€"+v.toLocaleString("nl-BE",{minimumFractionDigits:0,maximumFractionDigits:0});};
+    var euroDec=function(v){return "€"+v.toLocaleString("nl-BE",{minimumFractionDigits:2,maximumFractionDigits:2});};
     var nameById=function(id){var s=SERVICES.find(function(x){return x.id===id;}); return s?s.name:id;};
 
-    function renderBundles(){
-      bundlesGrid.innerHTML=BUNDLES.map(function(b){
-        var items=b.includes.map(function(i){return '<li>'+nameById(i)+'</li>';}).join("");
-        var competitorMonthly = b.vsRetainer + (AD_SPEND_ASSUMED*COMMISSION_RATE) + (b.vsLeads*COST_PER_LEAD);
-        var ourMonthly = b.recurring>0 ? b.recurring : Math.round(b.first/3); // amortize one-off over 3mo for fair compare
-        var saved = Math.max(0, competitorMonthly - ourMonthly);
-        var pct = Math.round((saved/competitorMonthly)*100);
-        return '<div class="bundle'+(b.badge?" featured":"")+'" data-id="'+b.id+'">'
-          +(b.badge?'<div class="bundle-badge">'+b.badge+'</div>':'')
-          +'<div class="bundle-name">'+b.name+'</div>'
-          +'<div class="bundle-tag">'+b.tag+'</div>'
-          +'<div class="bundle-price">'+euro0(b.first)+'<small> first month</small></div>'
-          +(b.recurring>0?'<div class="bundle-sub">then '+euro0(b.recurring)+' / month — flat, all-in</div>':'<div class="bundle-sub">one-time, no monthly</div>')
-          +'<div class="bundle-vs">'
-            +'<div class="vs-lbl">vs. typical agency</div>'
-            +'<div class="vs-row"><span>'+euro0(b.vsRetainer)+' retainer + 10% of ad spend + €35/lead</span><span class="vs-price">'+euro0(competitorMonthly)+'/mo</span></div>'
-            +'<div class="vs-save">You save ~'+euro0(saved)+'/mo · '+pct+'% less</div>'
-          +'</div>'
-          +'<ul class="bundle-list">'+items+'</ul>'
-          +'<button class="btn btn-primary bundle-btn" type="button">Select bundle</button>'
-        +'</div>';
-      }).join("");
-      bundlesGrid.querySelectorAll(".bundle").forEach(function(card){
-        card.querySelector(".bundle-btn").addEventListener("click",function(){
-          var b=BUNDLES.find(function(x){return x.id===card.dataset.id;});
-          SERVICES.forEach(function(s){ s.checked = b.includes.indexOf(s.id)!==-1; });
-          render(); calc();
-          document.getElementById("servicesGrid").scrollIntoView({behavior:"smooth",block:"center"});
-        });
+    function updateSliders(){
+      if(sliderAd && valAd) valAd.textContent = euro(+sliderAd.value);
+      if(sliderLeads && valLeads) valLeads.textContent = sliderLeads.value;
+    }
+
+    function calc(){
+      var monthly=0,upfront=0,selected=[];
+      SERVICES.forEach(function(s){
+        if(!s.checked) return;
+        selected.push(s.id);
+        if(s.billing==="monthly") monthly+=s.price;
+        else upfront+=s.price;
       });
+
+      var adSpend = sliderAd ? +sliderAd.value : 2000;
+      var leads = sliderLeads ? +sliderLeads.value : 40;
+
+      var competitorMonthly = COMPETITOR_RETAINER + (adSpend * COMMISSION_RATE) + (leads * COST_PER_LEAD);
+      var ourMonthly = monthly;
+      var saved = Math.max(0, competitorMonthly - ourMonthly);
+      var pct = competitorMonthly > 0 ? Math.round((saved/competitorMonthly)*100) : 0;
+
+      var compUs = document.getElementById("compUs");
+      var compThem = document.getElementById("compThem");
+      var savePct = document.getElementById("savePct");
+      var saveAmt = document.getElementById("saveAmt");
+      var ctRetainerUs = document.getElementById("ctRetainerUs");
+      var ctRetainerThem = document.getElementById("ctRetainerThem");
+      var ctCommission = document.getElementById("ctCommission");
+      var ctLeadCost = document.getElementById("ctLeadCost");
+      var ctTotalUs = document.getElementById("ctTotalUs");
+      var ctTotalThem = document.getElementById("ctTotalThem");
+      var footUs = document.getElementById("footUs");
+      var footThem = document.getElementById("footThem");
+
+      if(compUs) compUs.textContent = euro(ourMonthly);
+      if(compThem) compThem.textContent = euro(competitorMonthly);
+      if(savePct) savePct.textContent = pct + "%";
+      if(saveAmt) saveAmt.textContent = (saved > 0 ? "~" + euro(saved) + "/month" : "Select services to compare");
+      if(ctRetainerUs) ctRetainerUs.textContent = euro(ourMonthly);
+      if(ctRetainerThem) ctRetainerThem.textContent = euro(COMPETITOR_RETAINER);
+      if(ctCommission) ctCommission.textContent = euro(adSpend * COMMISSION_RATE);
+      if(ctLeadCost) ctLeadCost.textContent = euro(leads * COST_PER_LEAD);
+      if(ctTotalUs) ctTotalUs.textContent = euro(ourMonthly);
+      if(ctTotalThem) ctTotalThem.textContent = euro(competitorMonthly);
+      if(footUs) footUs.textContent = euro(ourMonthly);
+      if(footThem) footThem.textContent = euro(competitorMonthly);
+
+      window.__inspQuote={ selected:selected, monthly:monthly, upfront:upfront, total:monthly+upfront, names:selected.map(nameById) };
     }
 
     function render(){
@@ -675,7 +710,7 @@
           +'<input type="checkbox" data-i="'+i+'"'+(s.checked?" checked":"")+'>'
           +'<div class="svc-body">'
             +'<div class="svc-top"><span class="svc-name">'+s.name+'</span>'
-            +'<span class="svc-price">'+euro(s.price)+'<small>'+(s.billing==="monthly"?" /mo":" first month")+'</small></span></div>'
+            +'<span class="svc-price">'+euroDec(s.price)+'<small>'+(s.billing==="monthly"?" /mo":" one-time")+'</small></span></div>'
             +'<div class="svc-desc">'+s.desc+'</div>'
           +'</div></label>';
       }).join("");
@@ -686,14 +721,11 @@
         });
       });
     }
-    function calc(){
-      var monthly=0,upfront=0,selected=[];
-      SERVICES.forEach(function(s){ if(!s.checked) return; selected.push(s.id); if(s.billing==="monthly") monthly+=s.price; else upfront+=s.price; });
-      document.getElementById("sumMonthly").textContent=euro(monthly);
-      document.getElementById("sumTotal").textContent=euro(monthly+upfront);
-      window.__inspQuote={ selected:selected, monthly:monthly, upfront:upfront, total:monthly+upfront, names:selected.map(nameById) };
-    }
-    renderBundles(); render(); calc();
+
+    if(sliderAd) sliderAd.addEventListener("input", function(){ updateSliders(); calc(); });
+    if(sliderLeads) sliderLeads.addEventListener("input", function(){ updateSliders(); calc(); });
+
+    updateSliders(); render(); calc();
   })();
 
   /* ---- quote submission → admin pipeline (localStorage) ---- */
