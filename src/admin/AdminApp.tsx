@@ -34,6 +34,8 @@ import { Clients } from "./views/Clients";
 import { Finance } from "./views/Finance";
 import { EmailHub } from "./views/EmailHub";
 import { SettingsView } from "./views/SettingsView";
+import { TeamUsers } from "./views/TeamUsers";
+import { UserPlus } from "lucide-react";
 
 type ViewId =
   | "dashboard"
@@ -44,9 +46,12 @@ type ViewId =
   | "clients"
   | "finance"
   | "email"
+  | "team"
   | "settings";
 
-const NAV: { id: ViewId; label: string; icon: React.ElementType }[] = [
+type TeamRole = "ceo" | "admin";
+
+const BASE_NAV: { id: ViewId; label: string; icon: React.ElementType }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "pipeline", label: "Pipeline", icon: GitBranch },
   { id: "leads", label: "Lead Generation", icon: Sparkles },

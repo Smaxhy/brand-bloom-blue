@@ -381,20 +381,18 @@ export function subscribeRemote(cb: (data: AdminData) => void): () => void {
  * Sign in to Lovable Cloud and verify the user has the `admin` role.
  * Returns null on success, otherwise a short error message.
  */
-export async function login(email: string, password: string): Promise<string | null> {
+export async function login(identifier: string, password: string): Promise<string | null> {
   const { supabase } = await import("@/integrations/supabase/client");
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: email.trim(),
-    password,
-  });
+  const id = identifier.trim();
+  const email = id.includes("@") ? id : `${id.toLowerCase()}@inspirova.local`;
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error || !data.user) return error?.message ?? "Sign in failed.";
-  const { data: roleRow, error: roleErr } = await supabase
+  const { data: roles, error: roleErr } = await supabase
     .from("user_roles")
     .select("role")
-    .eq("user_id", data.user.id)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (roleErr || !roleRow) {
+    .eq("user_id", data.user.id);
+  const allowed = (roles ?? []).some((r) => r.role === "admin" || r.role === "ceo");
+  if (roleErr || !allowed) {
     await supabase.auth.signOut();
     return "This account isn't authorised to use the admin panel.";
   }
