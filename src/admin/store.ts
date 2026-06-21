@@ -356,12 +356,13 @@ export function subscribeRemote(cb: (data: AdminData) => void): () => void {
   let cleanup: (() => void) | null = null;
   void (async () => {
     const { supabase } = await import("@/integrations/supabase/client");
-    if (cancelled) return;
+    const userId = await currentUserId();
+    if (cancelled || !userId) return;
     const channel = supabase
-      .channel("admin_state_changes")
+      .channel(`admin_state_changes_${userId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "admin_state", filter: `id=eq.${SINGLETON_ID}` },
+        { event: "*", schema: "public", table: "admin_state", filter: `user_id=eq.${userId}` },
         (payload) => {
           const next = (payload.new as { data?: Partial<AdminData> } | null)?.data;
           if (!next) return;
