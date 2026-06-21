@@ -315,7 +315,8 @@ async function pushRemote(data: AdminData): Promise<void> {
     .from("admin_state")
     .upsert({
       id: SINGLETON_ID,
-      data: data as unknown as Record<string, unknown>,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: data as any,
       updated_at: new Date().toISOString(),
     });
   if (error) console.warn("[admin] cloud save failed", error);
