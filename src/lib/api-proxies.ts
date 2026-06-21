@@ -667,6 +667,7 @@ function normalizePerson(p: ApolloPerson) {
 
 interface GhlPayload {
   apiKey?: string;
+  companyId?: string;
   locationId?: string;
   to?: { name: string; email: string }[];
   subject?: string;
@@ -685,7 +686,9 @@ async function ghlSend(request: Request, env: Env): Promise<Response> {
   }
   // Prefer the key currently entered in Settings; fall back to the server secret.
   // This avoids a stale server key silently overriding a newly scoped GHL token.
-  const key = payload.apiKey || secret(env, "GHL_API_KEY");
+  const key = (payload.apiKey || secret(env, "GHL_API_KEY") || "").trim();
+  const locationId = (payload.locationId || "").trim();
+  const companyId = (payload.companyId || "").trim();
   const recipients = payload.to ?? [];
   if (!key) {
     return json({
@@ -695,20 +698,44 @@ async function ghlSend(request: Request, env: Env): Promise<Response> {
       details: recipients.map((r) => ({ email: r.email, ok: true, simulated: true })),
     });
   }
-  if (!payload.locationId) {
+  if (!locationId) {
     return json({
       ok: false,
       message: "Missing Location ID. Set it in Settings → GoHighLevel.",
       details: recipients.map((r) => ({ email: r.email, ok: false, error: "missing locationId" })),
     });
   }
-  const ghlHeaders = {
-    Authorization: `Bearer ${key}`,
+  const jsonHeaders = (token: string) => ({
+    Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
     Version: "v3",
     Accept: "application/json",
-  };
+  });
   try {
+    let activeKey = key;
+    if (companyId) {
+      const tokenRes = await fetch("https://services.leadconnectorhq.com/oauth/location-token", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+          Version: "v3",
+          Accept: "application/json",
+        },
+        body: new URLSearchParams({ companyId, locationId }).toString(),
+      });
+      if (!tokenRes.ok) {
+        const detail = (await tokenRes.text()).slice(0, 300);
+        return json({
+          ok: false,
+          message: "GHL could not create a location-scoped token from that Agency token.",
+          details: recipients.map((r) => ({ email: r.email, ok: false, status: tokenRes.status, error: `location token: ${detail}` })),
+        });
+      }
+      const tokenJson = (await tokenRes.json()) as { accessToken?: string };
+      if (tokenJson.accessToken) activeKey = tokenJson.accessToken;
+    }
+    const ghlHeaders = jsonHeaders(activeKey);
     const details = await Promise.all(
       recipients.map(async (rcpt) => {
         try {
@@ -718,7 +745,7 @@ async function ghlSend(request: Request, env: Env): Promise<Response> {
             method: "POST",
             headers: ghlHeaders,
             body: JSON.stringify({
-              locationId: payload.locationId,
+              locationId,
               email: rcpt.email,
               firstName: firstName || rcpt.email,
               lastName: rest.join(" ") || undefined,

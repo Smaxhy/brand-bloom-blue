@@ -42,6 +42,7 @@ export function EmailHub({
     setResult(null);
     const res = await ghlSendEmail({
       apiKey: data.settings.ghlApiKey,
+      companyId: data.settings.ghlCompanyId,
       locationId: data.settings.ghlLocationId,
       to: recipients.map((r) => ({ name: r.business, email: r.email })),
       subject: tpl.subject,

@@ -36,6 +36,7 @@ export function SettingsView({
     setTestResult(null);
     const res = await ghlSendEmail({
       apiKey: s.ghlApiKey,
+      companyId: s.ghlCompanyId,
       locationId: s.ghlLocationId,
       to: [{ name: "Test", email: testTo.trim() }],
       subject: "Inspirova GHL test email ✅",
@@ -60,6 +61,7 @@ export function SettingsView({
         </div>
         <div className="space-y-3">
           <Field label="API Key (optional — server already has one configured)"><input className={inputCls} value={s.ghlApiKey} onChange={(e) => setS({ ...s, ghlApiKey: e.target.value })} placeholder="pit-… (leave blank to use server key)" /></Field>
+          <Field label="Company / Agency ID (required for Agency tokens)"><input className={inputCls} value={s.ghlCompanyId} onChange={(e) => setS({ ...s, ghlCompanyId: e.target.value })} placeholder="Needed if your token was created at agency level" /></Field>
           <Field label="Location ID"><input className={inputCls} value={s.ghlLocationId} onChange={(e) => setS({ ...s, ghlLocationId: e.target.value })} placeholder="e.g. abc123…" /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="From name"><input className={inputCls} value={s.fromName} onChange={(e) => setS({ ...s, fromName: e.target.value })} /></Field>
