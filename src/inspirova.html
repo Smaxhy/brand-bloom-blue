@@ -237,6 +237,19 @@
   .save-pct{font-family:var(--display);font-weight:800;font-size:clamp(3.2rem,8vw,5.5rem);color:#9CFFB7;line-height:1;margin-top:6px}
   .save-amt{font-size:.92rem;color:rgba(255,255,255,.65);margin-top:8px}
 
+  /* bundles */
+  .bundles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:22px}
+  .bundle{position:relative;border:1.5px solid rgba(255,255,255,.12);border-radius:16px;padding:16px 14px;background:rgba(255,255,255,.03);cursor:pointer;transition:all .18s;text-align:left;color:#fff;font-family:inherit}
+  .bundle:hover{border-color:var(--violet-bright);background:rgba(168,139,255,.06);transform:translateY(-2px)}
+  .bundle.on{border-color:#9CFFB7;background:rgba(156,255,183,.08);box-shadow:0 10px 30px -18px rgba(156,255,183,.5)}
+  .bundle .b-tag{font-family:var(--mono);font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:.6rem;color:rgba(255,255,255,.5)}
+  .bundle.on .b-tag{color:#9CFFB7}
+  .bundle .b-name{font-family:var(--display);font-weight:800;font-size:1.05rem;margin-top:4px}
+  .bundle .b-price{font-family:var(--display);font-weight:800;font-size:1.4rem;margin-top:6px;color:var(--violet-bright)}
+  .bundle.on .b-price{color:#9CFFB7}
+  .bundle .b-price small{font-size:.7rem;font-weight:500;color:rgba(255,255,255,.55);display:block;margin-top:2px;letter-spacing:.04em}
+  .bundle .b-pop{position:absolute;top:-10px;right:12px;background:#9CFFB7;color:#0c0820;font-family:var(--mono);font-weight:800;font-size:.58rem;letter-spacing:.14em;padding:4px 8px;border-radius:99px}
+
   /* services */
   .services-grid{display:grid;grid-template-columns:1fr;gap:10px}
   .svc{display:flex;gap:12px;border:1.5px solid rgba(255,255,255,.1);border-radius:14px;padding:14px 16px;background:rgba(255,255,255,.03);cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s;color:#fff}
