@@ -198,8 +198,13 @@ function isoDaysAgo(n: number): string {
 /* immediately while the cloud round-trip happens in the background.        */
 /* ----------------------------------------------------------------------- */
 
-const SINGLETON_ID = "singleton";
 const MIGRATED_KEY = "inspirova.admin.migrated";
+
+async function currentUserId(): Promise<string | null> {
+  const { supabase } = await import("@/integrations/supabase/client");
+  const { data } = await supabase.auth.getUser();
+  return data.user?.id ?? null;
+}
 
 function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData {
   const s = seed();
