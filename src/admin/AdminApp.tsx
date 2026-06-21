@@ -17,7 +17,9 @@ import {
 import logo from "@/assets/inspirova-logo.png";
 import {
   loadData,
+  loadDataRemote,
   saveData,
+  subscribeRemote,
   isAuthed,
   login as doLogin,
   logout as doLogout,
@@ -66,7 +68,12 @@ export function AdminApp() {
   useEffect(() => {
     setMounted(true);
     setAuthed(isAuthed());
+    // Instant first paint from local cache, then hydrate from the cloud.
     setData(loadData());
+    void loadDataRemote().then(setData);
+    // Live updates when a teammate edits on another device.
+    const unsub = subscribeRemote(setData);
+    return unsub;
   }, []);
 
   // single setter the views use; persists immediately

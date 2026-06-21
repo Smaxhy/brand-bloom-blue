@@ -186,32 +186,191 @@ function isoDaysAgo(n: number): string {
   return new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
 }
 
-export function loadData(): AdminData {
-  if (typeof window === "undefined") return seed();
+/* ----------------------------------------------------------------------- */
+/* Remote (Lovable Cloud) sync                                              */
+/*                                                                          */
+/* Everything in the admin panel lives in a single shared JSON blob in the  */
+/* `admin_state` table (row id = "singleton"). That way any device logged   */
+/* into the InspirovaManagement account sees the same pipeline, raw data,   */
+/* clients, finance, templates, campaigns and settings.                     */
+/*                                                                          */
+/* localStorage is still used as an instant cache so the UI renders         */
+/* immediately while the cloud round-trip happens in the background.        */
+/* ----------------------------------------------------------------------- */
+
+const SINGLETON_ID = "singleton";
+const MIGRATED_KEY = "inspirova.admin.migrated";
+
+function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData {
+  const s = seed();
+  if (!d || typeof d !== "object") return s;
+  return {
+    ...s,
+    ...d,
+    settings: { ...s.settings, ...(d.settings ?? {}) },
+  };
+}
+
+function readLocal(): AdminData | null {
+  if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(STORE_KEY);
-    if (!raw) {
-      const s = seed();
-      window.localStorage.setItem(STORE_KEY, JSON.stringify(s));
-      return s;
-    }
-    const parsed = JSON.parse(raw) as AdminData;
-    // make sure newer keys exist if the schema grew
-    return { ...seed(), ...parsed, settings: { ...seed().settings, ...parsed.settings } };
+    if (!raw) return null;
+    return withSchemaDefaults(JSON.parse(raw) as AdminData);
   } catch {
-    return seed();
+    return null;
   }
 }
 
-export function saveData(data: AdminData) {
+function writeLocal(data: AdminData) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORE_KEY, JSON.stringify(data));
+  try {
+    window.localStorage.setItem(STORE_KEY, JSON.stringify(data));
+  } catch {
+    /* quota etc. — ignore */
+  }
 }
 
-export function resetData(): AdminData {
+function isEmptyRemote(d: unknown): boolean {
+  if (!d || typeof d !== "object") return true;
+  return Object.keys(d as Record<string, unknown>).length === 0;
+}
+
+/**
+ * Synchronous fallback — returns whatever's cached locally (or the seed).
+ * Used as the immediate first paint before the cloud fetch resolves.
+ */
+export function loadData(): AdminData {
+  return readLocal() ?? seed();
+}
+
+/**
+ * Fetch the shared admin state from Lovable Cloud. On first run (remote
+ * empty + local has data) the local copy is pushed up so this device's
+ * existing pipeline / scrapes survive the migration.
+ */
+export async function loadDataRemote(): Promise<AdminData> {
+  const { supabase } = await import("@/integrations/supabase/client");
+  const local = readLocal();
+  try {
+    const { data: row, error } = await supabase
+      .from("admin_state")
+      .select("data")
+      .eq("id", SINGLETON_ID)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    const remote = row?.data as Partial<AdminData> | null | undefined;
+    const alreadyMigrated =
+      typeof window !== "undefined" && window.localStorage.getItem(MIGRATED_KEY) === "1";
+
+    if (isEmptyRemote(remote)) {
+      const base = local ?? seed();
+      await pushRemote(base);
+      if (typeof window !== "undefined") window.localStorage.setItem(MIGRATED_KEY, "1");
+      writeLocal(base);
+      return base;
+    }
+
+    const merged = withSchemaDefaults(remote);
+
+    // First-run merge: fold any local-only rows into the cloud copy so
+    // nothing the user added before the migration disappears.
+    if (!alreadyMigrated && local) {
+      const mergedWithLocal = mergeLocalIntoRemote(merged, local);
+      await pushRemote(mergedWithLocal);
+      if (typeof window !== "undefined") window.localStorage.setItem(MIGRATED_KEY, "1");
+      writeLocal(mergedWithLocal);
+      return mergedWithLocal;
+    }
+
+    writeLocal(merged);
+    return merged;
+  } catch (e) {
+    console.warn("[admin] cloud load failed, using local cache", e);
+    return local ?? seed();
+  }
+}
+
+function mergeLocalIntoRemote(remote: AdminData, local: AdminData): AdminData {
+  const mergeById = <T extends { id: string }>(r: T[], l: T[]): T[] => {
+    const ids = new Set(r.map((x) => x.id));
+    return [...r, ...l.filter((x) => !ids.has(x.id))];
+  };
+  return {
+    ...remote,
+    deals: mergeById(remote.deals, local.deals),
+    raw: mergeById(remote.raw, local.raw),
+    clients: mergeById(remote.clients, local.clients),
+    transactions: mergeById(remote.transactions, local.transactions),
+    templates: mergeById(remote.templates, local.templates),
+    campaigns: mergeById(remote.campaigns, local.campaigns),
+  };
+}
+
+async function pushRemote(data: AdminData): Promise<void> {
+  const { supabase } = await import("@/integrations/supabase/client");
+  const { error } = await supabase
+    .from("admin_state")
+    .upsert({
+      id: SINGLETON_ID,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: data as any,
+      updated_at: new Date().toISOString(),
+    });
+  if (error) console.warn("[admin] cloud save failed", error);
+}
+
+/**
+ * Write-through save. Updates the local cache immediately (so the UI feels
+ * instant) and fires the cloud upsert in the background.
+ */
+export function saveData(data: AdminData) {
+  writeLocal(data);
+  void pushRemote(data);
+}
+
+/** Reset the shared blob back to the seed — affects every signed-in device. */
+export async function resetData(): Promise<AdminData> {
   const s = seed();
-  saveData(s);
+  writeLocal(s);
+  await pushRemote(s);
   return s;
+}
+
+/**
+ * Subscribe to remote changes so updates made on another device appear
+ * here without a refresh. Returns an unsubscribe function.
+ */
+export function subscribeRemote(cb: (data: AdminData) => void): () => void {
+  let cancelled = false;
+  let cleanup: (() => void) | null = null;
+  void (async () => {
+    const { supabase } = await import("@/integrations/supabase/client");
+    if (cancelled) return;
+    const channel = supabase
+      .channel("admin_state_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "admin_state", filter: `id=eq.${SINGLETON_ID}` },
+        (payload) => {
+          const next = (payload.new as { data?: Partial<AdminData> } | null)?.data;
+          if (!next) return;
+          const merged = withSchemaDefaults(next);
+          writeLocal(merged);
+          cb(merged);
+        },
+      )
+      .subscribe();
+    cleanup = () => {
+      void supabase.removeChannel(channel);
+    };
+  })();
+  return () => {
+    cancelled = true;
+    cleanup?.();
+  };
 }
 
 /* ----------------------------------------------------------------------- */

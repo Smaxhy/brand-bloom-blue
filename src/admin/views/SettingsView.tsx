@@ -22,9 +22,9 @@ export function SettingsView({
     setTimeout(() => setSaved(false), 1800);
   }
 
-  function reset() {
-    if (confirm("Reset all admin data back to the demo seed? This cannot be undone.")) {
-      const fresh = resetData();
+  async function reset() {
+    if (confirm("Reset all admin data back to the demo seed? This affects every signed-in device and cannot be undone.")) {
+      const fresh = await resetData();
       update(() => fresh);
       setS(fresh.settings);
     }
