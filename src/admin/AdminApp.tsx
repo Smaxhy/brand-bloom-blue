@@ -17,7 +17,6 @@ import {
 import logo from "@/assets/inspirova-logo.png";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  loadData,
   loadDataRemote,
   saveData,
   subscribeRemote,
@@ -105,7 +104,7 @@ export function AdminApp() {
       }
       setRole(resolved);
       setAuthed(true);
-      setData(loadData());
+      setData(null);
       const remote = await loadDataRemote();
       setData(remote);
       unsubData?.();
@@ -129,7 +128,8 @@ export function AdminApp() {
   const update = useMemo(
     () => (next: AdminData | ((prev: AdminData) => AdminData)) => {
       setData((prev) => {
-        const base = prev ?? loadData();
+        if (!prev) return prev;
+        const base = prev;
         const resolved = typeof next === "function" ? (next as (p: AdminData) => AdminData)(base) : next;
         saveData(resolved);
         return resolved;
