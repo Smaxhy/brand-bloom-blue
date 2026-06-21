@@ -391,7 +391,7 @@ export async function login(identifier: string, password: string): Promise<strin
     .from("user_roles")
     .select("role")
     .eq("user_id", data.user.id);
-  const allowed = (roles ?? []).some((r) => r.role === "admin" || r.role === "ceo");
+  const allowed = (roles ?? []).some((r) => r.role === "admin" || r.role === "ceo" || r.role === "user");
   if (roleErr || !allowed) {
     await supabase.auth.signOut();
     return "This account isn't authorised to use the admin panel.";

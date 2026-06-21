@@ -49,7 +49,7 @@ type ViewId =
   | "team"
   | "settings";
 
-type TeamRole = "ceo" | "admin";
+type TeamRole = "ceo" | "admin" | "user";
 
 const BASE_NAV: { id: ViewId; label: string; icon: React.ElementType }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -94,7 +94,9 @@ export function AdminApp() {
         ? "ceo"
         : list.includes("admin")
           ? "admin"
-          : null;
+          : list.includes("user")
+            ? "user"
+            : null;
       if (!resolved) {
         await supabase.auth.signOut();
         setAuthed(false);
