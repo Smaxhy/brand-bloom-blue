@@ -66,6 +66,7 @@ export function AdminApp() {
   const [mounted, setMounted] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [role, setRole] = useState<TeamRole | null>(null);
+  const [accountName, setAccountName] = useState("");
   const [view, setView] = useState<ViewId>("dashboard");
   const [data, setData] = useState<AdminData | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -79,6 +80,7 @@ export function AdminApp() {
       if (!userId) {
         setAuthed(false);
         setRole(null);
+        setAccountName("");
         setData(null);
         unsubData?.();
         unsubData = null;
@@ -100,9 +102,13 @@ export function AdminApp() {
         await supabase.auth.signOut();
         setAuthed(false);
         setRole(null);
+        setAccountName("");
         return;
       }
       setRole(resolved);
+      const { data: userResult } = await supabase.auth.getUser();
+      const email = userResult.user?.email ?? "";
+      setAccountName(email.endsWith("@inspirova.local") ? email.split("@")[0] : email || "Account");
       setAuthed(true);
       setData(null);
       const remote = await loadDataRemote();
@@ -245,7 +251,7 @@ export function AdminApp() {
           </button>
           <h1 className="font-display text-xl font-bold tracking-tight">{current.label}</h1>
           <span className="ml-auto hidden items-center gap-2 rounded-full bg-secondary px-3 py-1.5 text-xs text-muted-foreground sm:flex">
-            <span className="h-2 w-2 rounded-full bg-[oklch(.7_.18_150)]" /> Signed in as InspirovaManagement
+            <span className="h-2 w-2 rounded-full bg-[oklch(.7_.18_150)]" /> Signed in as {accountName}
           </span>
         </header>
 
