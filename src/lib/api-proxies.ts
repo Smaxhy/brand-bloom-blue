@@ -708,7 +708,7 @@ async function ghlSend(request: Request, env: Env): Promise<Response> {
   const jsonHeaders = (token: string) => ({
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
-    Version: "v3",
+    Version: "2021-07-28",
     Accept: "application/json",
   });
   try {
