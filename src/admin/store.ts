@@ -1,9 +1,5 @@
 /** Inspirova Admin — per-account Lovable Cloud data layer. */
 
-export const SESSION_KEY = "inspirova.admin.session";
-export const ADMIN_USER = "InspirovaManagement";
-export const ADMIN_PASS = "Kakapuma08";
-
 /* ----------------------------------------------------------------------- */
 /* Types                                                                    */
 /* ----------------------------------------------------------------------- */
@@ -310,6 +306,7 @@ export async function login(identifier: string, password: string): Promise<strin
   const { supabase } = await import("@/integrations/supabase/client");
   const id = identifier.trim();
   const email = id.includes("@") ? id : `${id.toLowerCase()}@inspirova.local`;
+  await supabase.auth.signOut();
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error || !data.user) return error?.message ?? "Sign in failed.";
   const { data: roles, error: roleErr } = await supabase
