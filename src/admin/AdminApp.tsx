@@ -198,8 +198,7 @@ export function AdminApp() {
         <div className="border-t border-border p-3">
           <button
             onClick={() => {
-              doLogout();
-              setAuthed(false);
+              void doLogout();
             }}
             className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
           >
