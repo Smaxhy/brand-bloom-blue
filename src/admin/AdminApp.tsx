@@ -80,11 +80,13 @@ export function AdminApp() {
         unsubData = null;
         return;
       }
-      const { data: isAdmin } = await supabase.rpc("has_role", {
-        _user_id: userId,
-        _role: "admin",
-      });
-      if (!isAdmin) {
+      const { data: roleRow } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("role", "admin")
+        .maybeSingle();
+      if (!roleRow) {
         await supabase.auth.signOut();
         setAuthed(false);
         return;

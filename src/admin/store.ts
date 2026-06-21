@@ -388,11 +388,13 @@ export async function login(email: string, password: string): Promise<string | n
     password,
   });
   if (error || !data.user) return error?.message ?? "Sign in failed.";
-  const { data: isAdmin, error: roleErr } = await supabase.rpc("has_role", {
-    _user_id: data.user.id,
-    _role: "admin",
-  });
-  if (roleErr || !isAdmin) {
+  const { data: roleRow, error: roleErr } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", data.user.id)
+    .eq("role", "admin")
+    .maybeSingle();
+  if (roleErr || !roleRow) {
     await supabase.auth.signOut();
     return "This account isn't authorised to use the admin panel.";
   }
