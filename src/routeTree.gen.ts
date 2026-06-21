@@ -9,16 +9,10 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SeedAdminRouteImport } from './routes/seed-admin'
 import { Route as ResultsRouteImport } from './routes/results'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 
-const SeedAdminRoute = SeedAdminRouteImport.update({
-  id: '/seed-admin',
-  path: '/seed-admin',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ResultsRoute = ResultsRouteImport.update({
   id: '/results',
   path: '/results',
@@ -39,45 +33,34 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/results': typeof ResultsRoute
-  '/seed-admin': typeof SeedAdminRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/results': typeof ResultsRoute
-  '/seed-admin': typeof SeedAdminRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/results': typeof ResultsRoute
-  '/seed-admin': typeof SeedAdminRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/results' | '/seed-admin'
+  fullPaths: '/' | '/admin' | '/results'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/results' | '/seed-admin'
-  id: '__root__' | '/' | '/admin' | '/results' | '/seed-admin'
+  to: '/' | '/admin' | '/results'
+  id: '__root__' | '/' | '/admin' | '/results'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   ResultsRoute: typeof ResultsRoute
-  SeedAdminRoute: typeof SeedAdminRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/seed-admin': {
-      id: '/seed-admin'
-      path: '/seed-admin'
-      fullPath: '/seed-admin'
-      preLoaderRoute: typeof SeedAdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/results': {
       id: '/results'
       path: '/results'
@@ -106,7 +89,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   ResultsRoute: ResultsRoute,
-  SeedAdminRoute: SeedAdminRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
