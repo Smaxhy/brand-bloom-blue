@@ -132,13 +132,8 @@ export function AdminApp() {
     );
   }
 
-  if (!authed) {
-    return <LoginScreen onSuccess={() => setAuthed(true)} />;
-  }
-
-  if (!data) return null;
-
-  const current = NAV.find((n) => n.id === view)!;
+  return <LoginScreen />;
+}
 
   return (
     <div className="flex min-h-screen bg-[oklch(.985_.005_295)] text-foreground">
