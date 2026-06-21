@@ -68,16 +68,16 @@ function useCountUp(target: number, duration = 1800) {
 export const Route = createFileRoute("/results")({
   head: () => ({
     meta: [
-      { title: "Results & Portfolio — Inspirova Marketing" },
+      { title: "$1M+ in tracked client revenue — Inspirova Marketing" },
       {
         name: "description",
         content:
-          "Real numbers from real brands. Inspirova's portfolio of paid ads, email and lead-gen campaigns generating millions in client revenue.",
+          "$1,037,785 in verified client revenue tracked across Shopify, Meta Ads and GHL dashboards. Real screenshots, real numbers, real brands.",
       },
-      { property: "og:title", content: "Results & Portfolio — Inspirova" },
+      { property: "og:title", content: "$1,037,785 generated for clients — Inspirova" },
       {
         property: "og:description",
-        content: "Real client results: 89× ROAS, $293K Q1 revenue, 4,000+ leads and counting.",
+        content: "A 7-figure milestone, screenshotted straight from client dashboards. See the receipts.",
       },
     ],
   }),
