@@ -257,35 +257,36 @@ export function loadData(): AdminData {
 export async function loadDataRemote(): Promise<AdminData> {
   const { supabase } = await import("@/integrations/supabase/client");
   const local = readLocal();
+  const userId = await currentUserId();
+  if (!userId) return local ?? seed();
   try {
     const { data: row, error } = await supabase
       .from("admin_state")
       .select("data")
-      .eq("id", SINGLETON_ID)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (error) throw error;
 
     const remote = row?.data as Partial<AdminData> | null | undefined;
+    const migratedKey = `${MIGRATED_KEY}.${userId}`;
     const alreadyMigrated =
-      typeof window !== "undefined" && window.localStorage.getItem(MIGRATED_KEY) === "1";
+      typeof window !== "undefined" && window.localStorage.getItem(migratedKey) === "1";
 
-    if (isEmptyRemote(remote)) {
+    if (!row || isEmptyRemote(remote)) {
       const base = local ?? seed();
       await pushRemote(base);
-      if (typeof window !== "undefined") window.localStorage.setItem(MIGRATED_KEY, "1");
+      if (typeof window !== "undefined") window.localStorage.setItem(migratedKey, "1");
       writeLocal(base);
       return base;
     }
 
     const merged = withSchemaDefaults(remote);
 
-    // First-run merge: fold any local-only rows into the cloud copy so
-    // nothing the user added before the migration disappears.
     if (!alreadyMigrated && local) {
       const mergedWithLocal = mergeLocalIntoRemote(merged, local);
       await pushRemote(mergedWithLocal);
-      if (typeof window !== "undefined") window.localStorage.setItem(MIGRATED_KEY, "1");
+      if (typeof window !== "undefined") window.localStorage.setItem(migratedKey, "1");
       writeLocal(mergedWithLocal);
       return mergedWithLocal;
     }
