@@ -683,8 +683,9 @@ async function ghlSend(request: Request, env: Env): Promise<Response> {
   } catch {
     return json({ error: "invalid json" }, 400);
   }
-  // Prefer the server secret; fall back to a key passed from the client.
-  const key = secret(env, "GHL_API_KEY") || payload.apiKey;
+  // Prefer the key currently entered in Settings; fall back to the server secret.
+  // This avoids a stale server key silently overriding a newly scoped GHL token.
+  const key = payload.apiKey || secret(env, "GHL_API_KEY");
   const recipients = payload.to ?? [];
   if (!key) {
     return json({
@@ -704,7 +705,7 @@ async function ghlSend(request: Request, env: Env): Promise<Response> {
   const ghlHeaders = {
     Authorization: `Bearer ${key}`,
     "Content-Type": "application/json",
-    Version: "2021-07-28",
+    Version: "v3",
     Accept: "application/json",
   };
   try {
