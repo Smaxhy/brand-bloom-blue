@@ -188,14 +188,13 @@ export function SettingsView({
       <Panel>
         <h3 className="font-display text-lg font-bold">Access</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Login is <code>InspirovaManagement</code> / <code>Kakapuma08</code>, defined in{" "}
-          <code>src/admin/store.ts</code>. Change <code>ADMIN_USER</code> / <code>ADMIN_PASS</code> there. For real protection, move this behind server-side auth.
+          Accounts are signed in through the backend. Each username opens that account's own data.
         </p>
       </Panel>
 
       <Panel>
         <h3 className="font-display text-lg font-bold">Data</h3>
-        <p className="mt-1 mb-3 text-sm text-muted-foreground">All admin data is stored in your browser. Reset to the demo seed any time.</p>
+        <p className="mt-1 mb-3 text-sm text-muted-foreground">All admin data is stored per account in the backend. Reset only affects the signed-in account.</p>
         <Btn variant="danger" onClick={reset}><RotateCcw className="h-4 w-4" /> Reset all data</Btn>
       </Panel>
     </div>
