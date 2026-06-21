@@ -374,26 +374,36 @@ export function subscribeRemote(cb: (data: AdminData) => void): () => void {
 }
 
 /* ----------------------------------------------------------------------- */
-/* Session                                                                  */
+/* Session — backed by Lovable Cloud auth + admin role check                */
 /* ----------------------------------------------------------------------- */
 
-export function isAuthed(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(SESSION_KEY) === "1";
-}
-
-export function login(user: string, pass: string): boolean {
-  if (user.trim() === ADMIN_USER && pass === ADMIN_PASS) {
-    window.localStorage.setItem(SESSION_KEY, "1");
-    return true;
+/**
+ * Sign in to Lovable Cloud and verify the user has the `admin` role.
+ * Returns null on success, otherwise a short error message.
+ */
+export async function login(email: string, password: string): Promise<string | null> {
+  const { supabase } = await import("@/integrations/supabase/client");
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email.trim(),
+    password,
+  });
+  if (error || !data.user) return error?.message ?? "Sign in failed.";
+  const { data: isAdmin, error: roleErr } = await supabase.rpc("has_role", {
+    _user_id: data.user.id,
+    _role: "admin",
+  });
+  if (roleErr || !isAdmin) {
+    await supabase.auth.signOut();
+    return "This account isn't authorised to use the admin panel.";
   }
-  return false;
+  return null;
 }
 
-export function logout() {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(SESSION_KEY);
+export async function logout(): Promise<void> {
+  const { supabase } = await import("@/integrations/supabase/client");
+  await supabase.auth.signOut();
 }
+
 
 /* ----------------------------------------------------------------------- */
 /* GoHighLevel helper                                                       */

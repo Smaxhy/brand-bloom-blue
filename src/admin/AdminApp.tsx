@@ -15,12 +15,12 @@ import {
   X,
 } from "lucide-react";
 import logo from "@/assets/inspirova-logo.png";
+import { supabase } from "@/integrations/supabase/client";
 import {
   loadData,
   loadDataRemote,
   saveData,
   subscribeRemote,
-  isAuthed,
   login as doLogin,
   logout as doLogout,
   type AdminData,
@@ -67,13 +67,48 @@ export function AdminApp() {
 
   useEffect(() => {
     setMounted(true);
-    setAuthed(isAuthed());
-    // Instant first paint from local cache, then hydrate from the cloud.
-    setData(loadData());
-    void loadDataRemote().then(setData);
-    // Live updates when a teammate edits on another device.
-    const unsub = subscribeRemote(setData);
-    return unsub;
+
+    // Subscribe to auth state first (synchronously), then check the
+    // existing session. Verifies the signed-in user has the `admin` role.
+    let unsubData: (() => void) | null = null;
+
+    async function verifyAndHydrate(userId: string | undefined) {
+      if (!userId) {
+        setAuthed(false);
+        setData(null);
+        unsubData?.();
+        unsubData = null;
+        return;
+      }
+      const { data: isAdmin } = await supabase.rpc("has_role", {
+        _user_id: userId,
+        _role: "admin",
+      });
+      if (!isAdmin) {
+        await supabase.auth.signOut();
+        setAuthed(false);
+        return;
+      }
+      setAuthed(true);
+      setData(loadData());
+      const remote = await loadDataRemote();
+      setData(remote);
+      unsubData?.();
+      unsubData = subscribeRemote(setData);
+    }
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      void verifyAndHydrate(session?.user?.id);
+    });
+
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      void verifyAndHydrate(session?.user?.id);
+    });
+
+    return () => {
+      sub.subscription.unsubscribe();
+      unsubData?.();
+    };
   }, []);
 
   // single setter the views use; persists immediately
@@ -98,10 +133,16 @@ export function AdminApp() {
   }
 
   if (!authed) {
-    return <LoginScreen onSuccess={() => setAuthed(true)} />;
+    return <LoginScreen />;
   }
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-muted-foreground text-sm">Loading data…</div>
+      </div>
+    );
+  }
 
   const current = NAV.find((n) => n.id === view)!;
 
@@ -157,8 +198,7 @@ export function AdminApp() {
         <div className="border-t border-border p-3">
           <button
             onClick={() => {
-              doLogout();
-              setAuthed(false);
+              void doLogout();
             }}
             className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
           >
@@ -202,17 +242,20 @@ export function AdminApp() {
 
 /* --------------------------------------------------------------------- */
 
-function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
-  const [user, setUser] = useState("");
+function LoginScreen() {
+  const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  function submit() {
-    if (doLogin(user, pass)) {
-      onSuccess();
-    } else {
-      setError("Incorrect username or password.");
-    }
+  async function submit() {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    const err = await doLogin(email, pass);
+    setBusy(false);
+    if (err) setError(err);
+    // On success the auth listener in AdminApp flips authed=true automatically.
   }
 
   return (
@@ -231,16 +274,17 @@ function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
 
         <div className="space-y-3">
           <input
-            value={user}
-            onChange={(e) => setUser(e.target.value)}
-            placeholder="Username"
-            autoComplete="username"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            type="email"
+            autoComplete="email"
             className="w-full rounded-xl border border-white/15 bg-white/[.06] px-4 py-3 text-sm text-white placeholder-white/40 outline-none focus:border-[var(--brand-light)]"
           />
           <input
             value={pass}
             onChange={(e) => setPass(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && submit()}
+            onKeyDown={(e) => e.key === "Enter" && void submit()}
             type="password"
             placeholder="Password"
             autoComplete="current-password"
@@ -248,16 +292,16 @@ function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
           />
           {error && <p className="text-sm text-[oklch(.72_.18_25)]">{error}</p>}
           <button
-            onClick={submit}
-            className="w-full rounded-xl bg-gradient-to-r from-[var(--brand-violet)] to-[var(--brand-coral)] px-4 py-3 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5"
+            onClick={() => void submit()}
+            disabled={busy}
+            className="w-full rounded-xl bg-gradient-to-r from-[var(--brand-violet)] to-[var(--brand-coral)] px-4 py-3 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5 disabled:opacity-60"
           >
-            Sign in
+            {busy ? "Signing in…" : "Sign in"}
           </button>
         </div>
 
         <p className="mt-6 text-center text-[.7rem] leading-relaxed text-white/35">
-          Heads up: this gate stores a session flag in the browser. For real
-          security, move credentials behind a server before going live.
+          Accounts are managed by Inspirova. Contact the team if you need access.
         </p>
       </div>
     </div>
