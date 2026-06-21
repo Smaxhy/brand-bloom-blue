@@ -132,8 +132,19 @@ export function AdminApp() {
     );
   }
 
-  return <LoginScreen />;
-}
+  if (!authed) {
+    return <LoginScreen />;
+  }
+
+  if (!data) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-muted-foreground text-sm">Loading data…</div>
+      </div>
+    );
+  }
+
+  const current = NAV.find((n) => n.id === view)!;
 
   return (
     <div className="flex min-h-screen bg-[oklch(.985_.005_295)] text-foreground">
