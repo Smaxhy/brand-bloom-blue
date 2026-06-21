@@ -8,14 +8,6 @@ import proof4 from "@/assets/proof-4.png";
 import proof5 from "@/assets/proof-5.png";
 import proof6 from "@/assets/proof-6.png";
 import proof7 from "@/assets/proof-7.png";
-import revTotalAsset from "@/assets/proof-revenue-total.png.asset.json";
-import rev659Asset from "@/assets/proof-revenue-659k.png.asset.json";
-import rev197Asset from "@/assets/proof-revenue-197k.png.asset.json";
-import rev114Asset from "@/assets/proof-revenue-114k.png.asset.json";
-import rev101Asset from "@/assets/proof-revenue-101k.png.asset.json";
-import rev98Asset from "@/assets/proof-revenue-98k.png.asset.json";
-import rev91Asset from "@/assets/proof-revenue-91k.png.asset.json";
-import rev84Asset from "@/assets/proof-revenue-84k.png.asset.json";
 import { ArrowLeft, TrendingUp, Target, Megaphone, Sparkles, Mail, ShoppingBag, Camera, BadgeCheck } from "lucide-react";
 
 const proofs = [
@@ -29,17 +21,6 @@ const proofs = [
 ];
 
 const REVENUE_TOTAL = 1037785;
-
-const receipts = [
-  { src: revTotalAsset.url, amount: "$1,037,785", label: "Aggregate revenue tracked", window: "Across all client dashboards", featured: true },
-  { src: rev659Asset.url, amount: "$659,262", label: "Single client", window: "Last 365 days" },
-  { src: rev197Asset.url, amount: "$197,736", label: "Lifetime to date", window: "Pushing $200K" },
-  { src: rev114Asset.url, amount: "$114,233", label: "Client revenue", window: "Jan – May 2025" },
-  { src: rev101Asset.url, amount: "$101,255", label: "Client revenue", window: "Jan – May 2025" },
-  { src: rev98Asset.url, amount: "$98,558", label: "Single client", window: "~30 days (Mar – Apr)" },
-  { src: rev91Asset.url, amount: "$91,439", label: "Single client", window: "1 month (March)" },
-  { src: rev84Asset.url, amount: "$84,343", label: "All channels", window: "30 days" },
-];
 
 function useCountUp(target: number, duration = 1800) {
   const [value, setValue] = useState(0);
@@ -210,41 +191,6 @@ function ResultsPage() {
         </div>
       </section>
 
-      <section className="pb-20 md:pb-28">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-            {receipts.map((r) => (
-              <figure
-                key={r.amount + r.window}
-                className={`group relative overflow-hidden rounded-2xl border border-border bg-card shadow-card transition-all hover:-translate-y-1 hover:shadow-glow ${
-                  r.featured ? "lg:col-span-2 lg:row-span-2" : ""
-                }`}
-              >
-                <div className="relative overflow-hidden">
-                  <img
-                    src={r.src}
-                    alt={`${r.amount} — ${r.label}, ${r.window}`}
-                    loading="lazy"
-                    className="block w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
-                  />
-                  {r.featured && (
-                    <span className="absolute right-3 top-3 rounded-full bg-background/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-primary shadow-card backdrop-blur">
-                      Aggregate
-                    </span>
-                  )}
-                </div>
-                <figcaption className="border-t border-border p-5">
-                  <div className={`font-semibold tracking-tight text-gradient-brand tabular-nums ${r.featured ? "text-4xl md:text-5xl" : "text-2xl md:text-3xl"}`}>
-                    {r.amount}
-                  </div>
-                  <div className="mt-1 text-sm font-medium text-foreground">{r.label}</div>
-                  <div className="mt-0.5 text-xs uppercase tracking-wider text-muted-foreground">{r.window}</div>
-                </figcaption>
-              </figure>
-            ))}
-          </div>
-        </div>
-      </section>
 
       <section className="pb-20 md:pb-24">
         <div className="mx-auto max-w-6xl px-6">
