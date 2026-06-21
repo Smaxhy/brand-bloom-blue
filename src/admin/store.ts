@@ -205,13 +205,6 @@ function isEmptyRemote(d: unknown): boolean {
 }
 
 /**
- * Synchronous fallback used only while the cloud fetch resolves.
- */
-export function loadData(): AdminData {
-  return seed();
-}
-
-/**
  * Fetch this account's admin state from Lovable Cloud.
  */
 export async function loadDataRemote(): Promise<AdminData> {
