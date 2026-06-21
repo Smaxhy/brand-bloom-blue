@@ -248,6 +248,14 @@ export function logout() {
  * forwards to https://services.leadconnectorhq.com), it will "just work".
  * Until then it returns a simulated success so the UI flow is testable.
  */
+export interface GhlSendDetail {
+  email: string;
+  ok: boolean;
+  status?: number;
+  error?: string;
+  simulated?: boolean;
+}
+
 export async function ghlSendEmail(opts: {
   apiKey: string;
   locationId: string;
@@ -256,20 +264,31 @@ export async function ghlSendEmail(opts: {
   body: string;
   fromName: string;
   fromEmail: string;
-}): Promise<{ ok: boolean; simulated?: boolean; message: string }> {
-  if (!opts.apiKey || !opts.locationId) {
-    return { ok: true, simulated: true, message: `Simulated send to ${opts.to.length} contact(s). Add your GoHighLevel API key + Location ID in Settings to send for real.` };
-  }
+}): Promise<{ ok: boolean; simulated?: boolean; message: string; details: GhlSendDetail[] }> {
   try {
     const res = await fetch("/api/ghl/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(opts),
     });
-    if (!res.ok) throw new Error(`Proxy responded ${res.status}`);
-    return { ok: true, message: `Sent to ${opts.to.length} contact(s) via GoHighLevel.` };
+    const j = (await res.json()) as {
+      ok?: boolean;
+      simulated?: boolean;
+      message?: string;
+      details?: GhlSendDetail[];
+    };
+    return {
+      ok: !!j.ok,
+      simulated: j.simulated,
+      message: j.message ?? (res.ok ? "Sent." : `Proxy responded ${res.status}`),
+      details: j.details ?? [],
+    };
   } catch (e) {
-    return { ok: false, message: `Could not reach the GHL proxy (${(e as Error).message}). Deploy /api/ghl/send to enable live sending.` };
+    return {
+      ok: false,
+      message: `Could not reach the GHL proxy (${(e as Error).message}).`,
+      details: [],
+    };
   }
 }
 
