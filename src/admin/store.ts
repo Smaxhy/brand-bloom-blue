@@ -1,11 +1,4 @@
-/**
- * Inspirova Admin — local data layer.
- *
- * Everything persists to localStorage so the panel works with zero backend.
- * When you are ready to go live with real auth + a real database, swap the
- * functions in this file for API calls (the rest of the panel reads/writes
- * exclusively through here, so nothing else has to change).
- */
+/** Inspirova Admin — per-account Lovable Cloud data layer. */
 
 export const SESSION_KEY = "inspirova.admin.session";
 export const ADMIN_USER = "InspirovaManagement";
@@ -139,8 +132,6 @@ export const DEAL_TEMPLATES: Record<string, Partial<Deal>> = {
 /* Persistence                                                              */
 /* ----------------------------------------------------------------------- */
 
-const STORE_KEY = "inspirova.admin.data";
-
 export function uid(prefix = "id"): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}${Date.now().toString(36).slice(-3)}`;
 }
@@ -188,17 +179,9 @@ function isoDaysAgo(n: number): string {
 
 /* ----------------------------------------------------------------------- */
 /* Remote (Lovable Cloud) sync                                              */
-/*                                                                          */
-/* Everything in the admin panel lives in a single shared JSON blob in the  */
-/* `admin_state` table (row id = "singleton"). That way any device logged   */
-/* into the InspirovaManagement account sees the same pipeline, raw data,   */
-/* clients, finance, templates, campaigns and settings.                     */
-/*                                                                          */
-/* localStorage is still used as an instant cache so the UI renders         */
-/* immediately while the cloud round-trip happens in the background.        */
+/* Each signed-in account gets its own `admin_state` row keyed by user_id.   */
+/* No admin data is read from or written to browser storage.                 */
 /* ----------------------------------------------------------------------- */
-
-const MIGRATED_KEY = "inspirova.admin.migrated";
 
 async function currentUserId(): Promise<string | null> {
   const { supabase } = await import("@/integrations/supabase/client");
@@ -216,49 +199,25 @@ function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData
   };
 }
 
-function readLocal(): AdminData | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(STORE_KEY);
-    if (!raw) return null;
-    return withSchemaDefaults(JSON.parse(raw) as AdminData);
-  } catch {
-    return null;
-  }
-}
-
-function writeLocal(data: AdminData) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORE_KEY, JSON.stringify(data));
-  } catch {
-    /* quota etc. — ignore */
-  }
-}
-
 function isEmptyRemote(d: unknown): boolean {
   if (!d || typeof d !== "object") return true;
   return Object.keys(d as Record<string, unknown>).length === 0;
 }
 
 /**
- * Synchronous fallback — returns whatever's cached locally (or the seed).
- * Used as the immediate first paint before the cloud fetch resolves.
+ * Synchronous fallback used only while the cloud fetch resolves.
  */
 export function loadData(): AdminData {
-  return readLocal() ?? seed();
+  return seed();
 }
 
 /**
- * Fetch the shared admin state from Lovable Cloud. On first run (remote
- * empty + local has data) the local copy is pushed up so this device's
- * existing pipeline / scrapes survive the migration.
+ * Fetch this account's admin state from Lovable Cloud.
  */
 export async function loadDataRemote(): Promise<AdminData> {
   const { supabase } = await import("@/integrations/supabase/client");
-  const local = readLocal();
   const userId = await currentUserId();
-  if (!userId) return local ?? seed();
+  if (!userId) return seed();
   try {
     const { data: row, error } = await supabase
       .from("admin_state")
@@ -269,50 +228,18 @@ export async function loadDataRemote(): Promise<AdminData> {
     if (error) throw error;
 
     const remote = row?.data as Partial<AdminData> | null | undefined;
-    const migratedKey = `${MIGRATED_KEY}.${userId}`;
-    const alreadyMigrated =
-      typeof window !== "undefined" && window.localStorage.getItem(migratedKey) === "1";
-
     if (!row || isEmptyRemote(remote)) {
-      const base = local ?? seed();
+      const base = seed();
       await pushRemote(base);
-      if (typeof window !== "undefined") window.localStorage.setItem(migratedKey, "1");
-      writeLocal(base);
       return base;
     }
 
     const merged = withSchemaDefaults(remote);
-
-    if (!alreadyMigrated && local) {
-      const mergedWithLocal = mergeLocalIntoRemote(merged, local);
-      await pushRemote(mergedWithLocal);
-      if (typeof window !== "undefined") window.localStorage.setItem(migratedKey, "1");
-      writeLocal(mergedWithLocal);
-      return mergedWithLocal;
-    }
-
-    writeLocal(merged);
     return merged;
   } catch (e) {
-    console.warn("[admin] cloud load failed, using local cache", e);
-    return local ?? seed();
+    console.warn("[admin] cloud load failed", e);
+    return seed();
   }
-}
-
-function mergeLocalIntoRemote(remote: AdminData, local: AdminData): AdminData {
-  const mergeById = <T extends { id: string }>(r: T[], l: T[]): T[] => {
-    const ids = new Set(r.map((x) => x.id));
-    return [...r, ...l.filter((x) => !ids.has(x.id))];
-  };
-  return {
-    ...remote,
-    deals: mergeById(remote.deals, local.deals),
-    raw: mergeById(remote.raw, local.raw),
-    clients: mergeById(remote.clients, local.clients),
-    transactions: mergeById(remote.transactions, local.transactions),
-    templates: mergeById(remote.templates, local.templates),
-    campaigns: mergeById(remote.campaigns, local.campaigns),
-  };
 }
 
 async function pushRemote(data: AdminData): Promise<void> {
@@ -331,18 +258,15 @@ async function pushRemote(data: AdminData): Promise<void> {
 }
 
 /**
- * Write-through save. Updates the local cache immediately (so the UI feels
- * instant) and fires the cloud upsert in the background.
+ * Save this account's data to Lovable Cloud.
  */
 export function saveData(data: AdminData) {
-  writeLocal(data);
   void pushRemote(data);
 }
 
-/** Reset the shared blob back to the seed — affects every signed-in device. */
+/** Reset this account's data back to the seed. */
 export async function resetData(): Promise<AdminData> {
   const s = seed();
-  writeLocal(s);
   await pushRemote(s);
   return s;
 }
@@ -367,7 +291,6 @@ export function subscribeRemote(cb: (data: AdminData) => void): () => void {
           const next = (payload.new as { data?: Partial<AdminData> } | null)?.data;
           if (!next) return;
           const merged = withSchemaDefaults(next);
-          writeLocal(merged);
           cb(merged);
         },
       )
