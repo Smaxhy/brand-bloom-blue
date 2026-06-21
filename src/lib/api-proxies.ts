@@ -701,25 +701,49 @@ async function ghlSend(request: Request, env: Env): Promise<Response> {
       details: recipients.map((r) => ({ email: r.email, ok: false, error: "missing locationId" })),
     });
   }
+  const ghlHeaders = {
+    Authorization: `Bearer ${key}`,
+    "Content-Type": "application/json",
+    Version: "2021-07-28",
+    Accept: "application/json",
+  };
   try {
     const details = await Promise.all(
       recipients.map(async (rcpt) => {
         try {
-          const res = await fetch("https://services.leadconnectorhq.com/emails/send", {
+          // Step 1: upsert contact to get a contactId (GHL requires it for email sends).
+          const [firstName, ...rest] = (rcpt.name || rcpt.email).split(" ");
+          const upsertRes = await fetch("https://services.leadconnectorhq.com/contacts/upsert", {
             method: "POST",
-            headers: {
-              Authorization: `Bearer ${key}`,
-              "Content-Type": "application/json",
-              Version: "2021-07-28",
-              Accept: "application/json",
-            },
+            headers: ghlHeaders,
             body: JSON.stringify({
               locationId: payload.locationId,
-              to: rcpt.email,
+              email: rcpt.email,
+              firstName: firstName || rcpt.email,
+              lastName: rest.join(" ") || undefined,
+            }),
+          });
+          if (!upsertRes.ok) {
+            const detail = (await upsertRes.text()).slice(0, 300);
+            return { email: rcpt.email, ok: false, status: upsertRes.status, error: `upsert: ${detail}` };
+          }
+          const upsertJson = (await upsertRes.json()) as { contact?: { id?: string }; id?: string };
+          const contactId = upsertJson.contact?.id ?? upsertJson.id;
+          if (!contactId) {
+            return { email: rcpt.email, ok: false, error: "upsert returned no contactId" };
+          }
+          // Step 2: send email through Conversations API.
+          const res = await fetch("https://services.leadconnectorhq.com/conversations/messages", {
+            method: "POST",
+            headers: ghlHeaders,
+            body: JSON.stringify({
+              type: "Email",
+              contactId,
               subject: payload.subject,
               html: (payload.body ?? "").replace(/\n/g, "<br>"),
-              fromName: payload.fromName,
-              fromEmail: payload.fromEmail,
+              emailFrom: payload.fromName
+                ? `${payload.fromName} <${payload.fromEmail}>`
+                : payload.fromEmail,
             }),
           });
           if (res.ok) return { email: rcpt.email, ok: true, status: res.status };
