@@ -246,8 +246,12 @@
   .totals-row.total .v{color:#fff}
   .totals-row.total .sub{color:rgba(255,255,255,.85)}
 
-  .bundles-title{font-family:var(--display);font-weight:800;letter-spacing:-.01em;font-size:1.4rem;color:#fff;margin:0 0 16px}
-  .bundles{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:8px}
+  .bundles-head{margin:0 0 18px}
+  .bundles-title{font-family:var(--display);font-weight:800;letter-spacing:-.01em;font-size:1.4rem;color:#fff;margin:0 0 6px}
+  .bundles-sub{margin:0;color:rgba(255,255,255,.7);font-size:.88rem;line-height:1.5;max-width:760px}
+  .bundles-sub strong{color:#fff}
+  .bundles-sub em{font-style:normal;color:#FF8366;font-weight:600}
+  .bundles{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:14px}
   .bundle{position:relative;display:flex;flex-direction:column;gap:8px;border:1.5px solid rgba(255,255,255,.1);border-radius:20px;padding:22px 22px 24px;background:rgba(255,255,255,.03);transition:transform .15s,box-shadow .15s,border-color .15s;color:#fff}
   .bundle:hover{transform:translateY(-2px);box-shadow:0 18px 40px -24px var(--glow);border-color:var(--violet-bright)}
   .bundle.featured{border-color:var(--violet-bright);background:linear-gradient(160deg,rgba(124,92,255,.18) 0%,rgba(255,131,102,.08) 100%);box-shadow:0 16px 40px -20px var(--glow)}
@@ -257,10 +261,18 @@
   .bundle-price{font-family:var(--display);font-weight:800;font-size:2rem;color:var(--violet-bright);line-height:1;margin-top:6px}
   .bundle-price small{font-family:var(--sans);font-weight:500;color:rgba(255,255,255,.6);font-size:.72rem;margin-left:4px}
   .bundle-sub{font-size:.82rem;color:rgba(255,255,255,.7);font-weight:600}
+  .bundle-vs{margin-top:10px;padding:10px 12px;border-radius:12px;border:1px dashed rgba(255,131,102,.35);background:rgba(255,131,102,.06)}
+  .bundle-vs .vs-lbl{font-family:var(--mono);font-weight:700;letter-spacing:.14em;font-size:.6rem;color:#FF8366;text-transform:uppercase}
+  .bundle-vs .vs-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-top:4px;font-size:.78rem;color:rgba(255,255,255,.8)}
+  .bundle-vs .vs-price{font-family:var(--display);font-weight:800;color:#fff;text-decoration:line-through;text-decoration-color:rgba(255,131,102,.7);font-size:.95rem}
+  .bundle-vs .vs-save{margin-top:6px;font-family:var(--mono);font-weight:700;font-size:.72rem;letter-spacing:.06em;color:#9CFFB7}
   .bundle-list{list-style:none;padding:0;margin:6px 0 4px;display:grid;gap:4px}
   .bundle-list li{position:relative;padding-left:18px;font-size:.82rem;color:rgba(255,255,255,.85)}
   .bundle-list li:before{content:"";position:absolute;left:0;top:8px;width:8px;height:8px;border-radius:50%;background:var(--violet-bright)}
   .bundle-btn{margin-top:auto;width:100%;justify-content:center}
+  .bundles-foot{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 4px}
+  .bundles-foot-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;background:rgba(156,255,183,.08);border:1px solid rgba(156,255,183,.25);color:#9CFFB7;font-family:var(--mono);font-weight:700;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase}
+  .bundles-foot-chip:before{content:"✓";font-size:.8rem}
 
   .divider{display:flex;align-items:center;gap:14px;margin:30px 0 20px;color:rgba(255,255,255,.55);font-family:var(--mono);font-weight:700;letter-spacing:.16em;font-size:.7rem;text-transform:uppercase}
   .divider:before,.divider:after{content:"";flex:1;height:1px;background:rgba(255,255,255,.1)}
@@ -466,8 +478,20 @@
   <div class="wrap">
     <div class="calc-card">
 
-      <h3 class="bundles-title">Bundle deals</h3>
+      <div class="bundles-head">
+        <h3 class="bundles-title">Bundle deals</h3>
+        <p class="bundles-sub">
+          One flat monthly price. <strong>No commission. No pay-per-lead.</strong>
+          Typical agencies charge a retainer <em>plus ~10% of ad spend</em> <em>plus ~€35 per lead</em> — our bundles replace all of it.
+        </p>
+      </div>
       <div class="bundles" id="bundlesGrid"><!-- injected --></div>
+      <div class="bundles-foot">
+        <span class="bundles-foot-chip">No commission</span>
+        <span class="bundles-foot-chip">No per-lead fee</span>
+        <span class="bundles-foot-chip">Cancel anytime</span>
+        <span class="bundles-foot-chip">You own your ad account</span>
+      </div>
 
       <div class="divider"><span>or build your own</span></div>
 
@@ -481,9 +505,7 @@
       </div>
 
       <p class="fineprint">
-        All payments are upfront. First invoice includes your first month plus any setup fees.
-        Additional fees may apply when integrating with existing CRMs or third-party tools.
-        You manage your own ad spend directly with the ad platforms.
+        No commission on results. No €35/lead surcharge. No long-term contract — monthly billing, cancel anytime.
       </p>
 
       <div class="calc-grid" style="margin-top:34px">
@@ -601,10 +623,15 @@
     ];
 
     var BUNDLES=[
-      { id:"deluxe",   name:"Deluxe Package",   tag:"Everything, site, automations & management.", first:2500, recurring:750, includes:["website","ads_setup","ads_management","email_sms","pixel_ecom"], badge:"Most popular" },
-      { id:"growth",   name:"Growth Package",   tag:"Ads setup, ongoing management & tracking.",     first:1200, recurring:500, includes:["ads_setup","ads_management","pixel_ecom"], badge:"" },
-      { id:"creation", name:"Creation Package", tag:"Ads setup, creative & video production.",       first:750,  recurring:0,   includes:["ads_setup","video_creation"], badge:"" }
+      { id:"deluxe",   name:"Deluxe Package",   tag:"Everything: site, automations, ads management.", first:2500, recurring:750, vsRetainer:1500, vsLeads:60, includes:["website","ads_setup","ads_management","email_sms","pixel_ecom"], badge:"Most popular" },
+      { id:"growth",   name:"Growth Package",   tag:"Ads setup, ongoing management & tracking.",      first:1200, recurring:500, vsRetainer:1000, vsLeads:40, includes:["ads_setup","ads_management","pixel_ecom"], badge:"Best value" },
+      { id:"creation", name:"Creation Package", tag:"Ads setup, creative & video production.",        first:750,  recurring:0,   vsRetainer:800,  vsLeads:25, includes:["ads_setup","video_creation"], badge:"" }
     ];
+
+    // Industry average: retainer + 10% of ad spend (assume €2,000/mo) + €35 per lead.
+    var AD_SPEND_ASSUMED = 2000;
+    var COMMISSION_RATE  = 0.10;
+    var COST_PER_LEAD    = 35;
 
     var euro=function(v){return "€"+v.toLocaleString("nl-BE",{minimumFractionDigits:2,maximumFractionDigits:2});};
     var euro0=function(v){return "€"+Math.round(v).toLocaleString("nl-BE");};
@@ -613,12 +640,21 @@
     function renderBundles(){
       bundlesGrid.innerHTML=BUNDLES.map(function(b){
         var items=b.includes.map(function(i){return '<li>'+nameById(i)+'</li>';}).join("");
+        var competitorMonthly = b.vsRetainer + (AD_SPEND_ASSUMED*COMMISSION_RATE) + (b.vsLeads*COST_PER_LEAD);
+        var ourMonthly = b.recurring>0 ? b.recurring : Math.round(b.first/3); // amortize one-off over 3mo for fair compare
+        var saved = Math.max(0, competitorMonthly - ourMonthly);
+        var pct = Math.round((saved/competitorMonthly)*100);
         return '<div class="bundle'+(b.badge?" featured":"")+'" data-id="'+b.id+'">'
           +(b.badge?'<div class="bundle-badge">'+b.badge+'</div>':'')
           +'<div class="bundle-name">'+b.name+'</div>'
           +'<div class="bundle-tag">'+b.tag+'</div>'
           +'<div class="bundle-price">'+euro0(b.first)+'<small> first month</small></div>'
-          +(b.recurring>0?'<div class="bundle-sub">then '+euro0(b.recurring)+' / month</div>':'<div class="bundle-sub">paid first month</div>')
+          +(b.recurring>0?'<div class="bundle-sub">then '+euro0(b.recurring)+' / month — flat, all-in</div>':'<div class="bundle-sub">one-time, no monthly</div>')
+          +'<div class="bundle-vs">'
+            +'<div class="vs-lbl">vs. typical agency</div>'
+            +'<div class="vs-row"><span>'+euro0(b.vsRetainer)+' retainer + 10% of ad spend + €35/lead</span><span class="vs-price">'+euro0(competitorMonthly)+'/mo</span></div>'
+            +'<div class="vs-save">You save ~'+euro0(saved)+'/mo · '+pct+'% less</div>'
+          +'</div>'
           +'<ul class="bundle-list">'+items+'</ul>'
           +'<button class="btn btn-primary bundle-btn" type="button">Select bundle</button>'
         +'</div>';
