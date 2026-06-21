@@ -495,10 +495,6 @@
           <!-- SLIDERS -->
           <div class="sliders">
             <div class="slider-row">
-              <label>Monthly ad spend (paid to platforms) <span id="valAdSpend">€2.000</span></label>
-              <input type="range" id="sliderAdSpend" min="500" max="15000" step="500" value="2000">
-            </div>
-            <div class="slider-row">
               <label>Leads per month (only for leadgen) <span id="valLeads">40</span></label>
               <input type="range" id="sliderLeads" min="5" max="200" step="5" value="40">
             </div>
@@ -541,11 +537,6 @@
               <div class="ct-lbl">Monthly retainer</div>
               <div class="ct-us" id="ctRetainerUs">€0</div>
               <div class="ct-them" id="ctRetainerThem">€1.000</div>
-            </div>
-            <div class="ct-row">
-              <div class="ct-lbl">Commission</div>
-              <div class="ct-us">€0</div>
-              <div class="ct-them" id="ctCommission">€200</div>
             </div>
             <div class="ct-row">
               <div class="ct-lbl">Cost per lead (only for leadgen)</div>
@@ -673,9 +664,7 @@
     var COMMISSION_RATE = 0.10;
     var COST_PER_LEAD = 35;
 
-    var sliderAd = document.getElementById("sliderAdSpend");
     var sliderLeads = document.getElementById("sliderLeads");
-    var valAd = document.getElementById("valAdSpend");
     var valLeads = document.getElementById("valLeads");
 
     var euro=function(v){return "€"+v.toLocaleString("nl-BE",{minimumFractionDigits:0,maximumFractionDigits:0});};
@@ -683,7 +672,6 @@
     var nameById=function(id){var s=SERVICES.find(function(x){return x.id===id;}); return s?s.name:id;};
 
     function updateSliders(){
-      if(sliderAd && valAd) valAd.textContent = euro(+sliderAd.value);
       if(sliderLeads && valLeads) valLeads.textContent = sliderLeads.value;
     }
 
@@ -702,10 +690,9 @@
         else upfront+=s.price;
       });
 
-      var adSpend = sliderAd ? +sliderAd.value : 2000;
       var leads = sliderLeads ? +sliderLeads.value : 40;
 
-      var competitorMonthly = COMPETITOR_RETAINER + (adSpend * COMMISSION_RATE) + (leads * COST_PER_LEAD);
+      var competitorMonthly = COMPETITOR_RETAINER + (leads * COST_PER_LEAD);
       var ourMonthly = monthly;
       var ourFirst = monthly + upfront;
       var saved = Math.max(0, competitorMonthly - ourMonthly);
@@ -719,7 +706,6 @@
       set("saveAmt", saved > 0 ? "~" + euro(saved) + "/month" : "Select services to compare");
       set("ctRetainerUs", euro(ourMonthly));
       set("ctRetainerThem", euro(COMPETITOR_RETAINER));
-      set("ctCommission", euro(adSpend * COMMISSION_RATE));
       set("ctLeadCost", euro(leads * COST_PER_LEAD));
       set("ctTotalUs", euro(ourMonthly));
       set("ctTotalThem", euro(competitorMonthly));
@@ -778,7 +764,7 @@
       });
     }
 
-    if(sliderAd) sliderAd.addEventListener("input", function(){ updateSliders(); calc(); });
+    
     if(sliderLeads) sliderLeads.addEventListener("input", function(){ updateSliders(); calc(); });
 
     updateSliders(); renderBundles(); render(); calc();
