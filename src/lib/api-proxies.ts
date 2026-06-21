@@ -708,18 +708,18 @@ async function ghlSend(request: Request, env: Env): Promise<Response> {
   const jsonHeaders = (token: string) => ({
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
-    Version: "v3",
+    Version: "2021-07-28",
     Accept: "application/json",
   });
   try {
     let activeKey = key;
     if (companyId) {
-      const tokenRes = await fetch("https://services.leadconnectorhq.com/oauth/location-token", {
+      const tokenRes = await fetch("https://services.leadconnectorhq.com/oauth/locationToken", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${key}`,
           "Content-Type": "application/x-www-form-urlencoded",
-          Version: "v3",
+          Version: "2021-07-28",
           Accept: "application/json",
         },
         body: new URLSearchParams({ companyId, locationId }).toString(),
