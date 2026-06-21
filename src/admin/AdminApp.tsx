@@ -300,9 +300,9 @@ function LoginScreen() {
           <input
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email"
-            type="email"
-            autoComplete="email"
+            placeholder="Username"
+            type="text"
+            autoComplete="username"
             className="w-full rounded-xl border border-white/15 bg-white/[.06] px-4 py-3 text-sm text-white placeholder-white/40 outline-none focus:border-[var(--brand-light)]"
           />
           <input
