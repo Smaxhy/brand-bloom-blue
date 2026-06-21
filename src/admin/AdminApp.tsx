@@ -67,13 +67,48 @@ export function AdminApp() {
 
   useEffect(() => {
     setMounted(true);
-    setAuthed(isAuthed());
-    // Instant first paint from local cache, then hydrate from the cloud.
-    setData(loadData());
-    void loadDataRemote().then(setData);
-    // Live updates when a teammate edits on another device.
-    const unsub = subscribeRemote(setData);
-    return unsub;
+
+    // Subscribe to auth state first (synchronously), then check the
+    // existing session. Verifies the signed-in user has the `admin` role.
+    let unsubData: (() => void) | null = null;
+
+    async function verifyAndHydrate(userId: string | undefined) {
+      if (!userId) {
+        setAuthed(false);
+        setData(null);
+        unsubData?.();
+        unsubData = null;
+        return;
+      }
+      const { data: isAdmin } = await supabase.rpc("has_role", {
+        _user_id: userId,
+        _role: "admin",
+      });
+      if (!isAdmin) {
+        await supabase.auth.signOut();
+        setAuthed(false);
+        return;
+      }
+      setAuthed(true);
+      setData(loadData());
+      const remote = await loadDataRemote();
+      setData(remote);
+      unsubData?.();
+      unsubData = subscribeRemote(setData);
+    }
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      void verifyAndHydrate(session?.user?.id);
+    });
+
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      void verifyAndHydrate(session?.user?.id);
+    });
+
+    return () => {
+      sub.subscription.unsubscribe();
+      unsubData?.();
+    };
   }, []);
 
   // single setter the views use; persists immediately
