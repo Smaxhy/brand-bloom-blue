@@ -397,6 +397,16 @@ export function Scraper({
 
   return (
     <div className="space-y-6">
+      {/* rules */}
+      <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+        <h3 className="mb-2 font-display text-lg font-bold text-red-500">(RULES)</h3>
+        <ul className="list-disc space-y-1 pl-5 text-sm font-semibold text-red-400">
+          <li>DONT ADD MULTIPLE PEOPLE FROM THE SAME COMPANY ONLY THE HIGHEST RANK</li>
+          <li>DONT DO 500+ SCRAPES FOR NOW</li>
+          <li>ONLY DO 100K+ BUSINESSES FOR NOW</li>
+        </ul>
+      </div>
+
       {/* intro */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-2xl text-sm text-muted-foreground">
