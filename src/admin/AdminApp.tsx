@@ -195,7 +195,7 @@ export function AdminApp() {
         </div>
 
         <nav className="flex-1 space-y-1 px-3 py-2">
-          {NAV.map((item) => {
+          {nav.map((item) => {
             const Icon = item.icon;
             const active = view === item.id;
             return (
@@ -256,6 +256,7 @@ export function AdminApp() {
           {view === "clients" && <Clients data={data} update={update} />}
           {view === "finance" && <Finance data={data} update={update} />}
           {view === "email" && <EmailHub data={data} update={update} />}
+          {view === "team" && role === "ceo" && <TeamUsers />}
           {view === "settings" && <SettingsView data={data} update={update} />}
         </main>
       </div>
