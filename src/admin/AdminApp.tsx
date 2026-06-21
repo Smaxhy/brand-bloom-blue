@@ -15,12 +15,12 @@ import {
   X,
 } from "lucide-react";
 import logo from "@/assets/inspirova-logo.png";
+import { supabase } from "@/integrations/supabase/client";
 import {
   loadData,
   loadDataRemote,
   saveData,
   subscribeRemote,
-  isAuthed,
   login as doLogin,
   logout as doLogout,
   type AdminData,
