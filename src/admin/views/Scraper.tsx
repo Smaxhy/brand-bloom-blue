@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Radar,
   MapPin,
@@ -31,35 +31,6 @@ import {
   uid,
 } from "../store";
 import { Panel, Field, inputCls, Btn } from "../ui";
-
-const SCRAPER_STATE_KEY = "inspirova.admin.scraper.state";
-
-interface PersistedScraperState {
-  results: ScrapedPerson[];
-  selected: Record<string, boolean>;
-  emailSource: Record<string, string>;
-  emailSourceUrl: Record<string, string>;
-  banner: { live: boolean; text: string } | null;
-}
-
-function loadScraperState(): PersistedScraperState | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(SCRAPER_STATE_KEY);
-    return raw ? (JSON.parse(raw) as PersistedScraperState) : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveScraperState(s: PersistedScraperState) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(SCRAPER_STATE_KEY, JSON.stringify(s));
-  } catch {
-    /* ignore */
-  }
-}
 
 const SIZE_PRESETS: { id: string; label: string }[] = [
   { id: "1,10", label: "1–10" },
@@ -130,23 +101,17 @@ export function Scraper({
   const [geo, setGeo] = useState<GeocodeResult | null>(null);
   const [geoBusy, setGeoBusy] = useState(false);
   const [scrapeBusy, setScrapeBusy] = useState(false);
-  const persisted = loadScraperState();
-  const [results, setResults] = useState<ScrapedPerson[]>(persisted?.results ?? []);
-  const [selected, setSelected] = useState<Record<string, boolean>>(persisted?.selected ?? {});
-  const [banner, setBanner] = useState<{ live: boolean; text: string } | null>(persisted?.banner ?? null);
+  const [results, setResults] = useState<ScrapedPerson[]>([]);
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [banner, setBanner] = useState<{ live: boolean; text: string } | null>(null);
   const [pushed, setPushed] = useState(0);
   const [revealPhone, setRevealPhone] = useState(false);
   const [enrichBusy, setEnrichBusy] = useState(false);
   const [enrichProgress, setEnrichProgress] = useState({ done: 0, total: 0 });
   // id -> which source revealed the email ("Apollo" | "Hunter" | "Google" | "demo")
-  const [emailSource, setEmailSource] = useState<Record<string, string>>(persisted?.emailSource ?? {});
+  const [emailSource, setEmailSource] = useState<Record<string, string>>({});
   // id -> URL where the email was found (Hunter source / Google result link)
-  const [emailSourceUrl, setEmailSourceUrl] = useState<Record<string, string>>(persisted?.emailSourceUrl ?? {});
-
-  // Persist scraper results across refreshes so accept/deny can be done later.
-  useEffect(() => {
-    saveScraperState({ results, selected, emailSource, emailSourceUrl, banner });
-  }, [results, selected, emailSource, emailSourceUrl, banner]);
+  const [emailSourceUrl, setEmailSourceUrl] = useState<Record<string, string>>({});
 
   function denySelected() {
     const ids = new Set(Object.keys(selected).filter((id) => selected[id]));
