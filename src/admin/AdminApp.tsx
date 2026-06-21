@@ -242,17 +242,20 @@ export function AdminApp() {
 
 /* --------------------------------------------------------------------- */
 
-function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
-  const [user, setUser] = useState("");
+function LoginScreen() {
+  const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  function submit() {
-    if (doLogin(user, pass)) {
-      onSuccess();
-    } else {
-      setError("Incorrect username or password.");
-    }
+  async function submit() {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    const err = await doLogin(email, pass);
+    setBusy(false);
+    if (err) setError(err);
+    // On success the auth listener in AdminApp flips authed=true automatically.
   }
 
   return (
@@ -271,16 +274,17 @@ function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
 
         <div className="space-y-3">
           <input
-            value={user}
-            onChange={(e) => setUser(e.target.value)}
-            placeholder="Username"
-            autoComplete="username"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            type="email"
+            autoComplete="email"
             className="w-full rounded-xl border border-white/15 bg-white/[.06] px-4 py-3 text-sm text-white placeholder-white/40 outline-none focus:border-[var(--brand-light)]"
           />
           <input
             value={pass}
             onChange={(e) => setPass(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && submit()}
+            onKeyDown={(e) => e.key === "Enter" && void submit()}
             type="password"
             placeholder="Password"
             autoComplete="current-password"
@@ -288,16 +292,16 @@ function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
           />
           {error && <p className="text-sm text-[oklch(.72_.18_25)]">{error}</p>}
           <button
-            onClick={submit}
-            className="w-full rounded-xl bg-gradient-to-r from-[var(--brand-violet)] to-[var(--brand-coral)] px-4 py-3 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5"
+            onClick={() => void submit()}
+            disabled={busy}
+            className="w-full rounded-xl bg-gradient-to-r from-[var(--brand-violet)] to-[var(--brand-coral)] px-4 py-3 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5 disabled:opacity-60"
           >
-            Sign in
+            {busy ? "Signing in…" : "Sign in"}
           </button>
         </div>
 
         <p className="mt-6 text-center text-[.7rem] leading-relaxed text-white/35">
-          Heads up: this gate stores a session flag in the browser. For real
-          security, move credentials behind a server before going live.
+          Accounts are managed by Inspirova. Contact the team if you need access.
         </p>
       </div>
     </div>
