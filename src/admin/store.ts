@@ -198,8 +198,13 @@ function isoDaysAgo(n: number): string {
 /* immediately while the cloud round-trip happens in the background.        */
 /* ----------------------------------------------------------------------- */
 
-const SINGLETON_ID = "singleton";
 const MIGRATED_KEY = "inspirova.admin.migrated";
+
+async function currentUserId(): Promise<string | null> {
+  const { supabase } = await import("@/integrations/supabase/client");
+  const { data } = await supabase.auth.getUser();
+  return data.user?.id ?? null;
+}
 
 function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData {
   const s = seed();
@@ -252,35 +257,36 @@ export function loadData(): AdminData {
 export async function loadDataRemote(): Promise<AdminData> {
   const { supabase } = await import("@/integrations/supabase/client");
   const local = readLocal();
+  const userId = await currentUserId();
+  if (!userId) return local ?? seed();
   try {
     const { data: row, error } = await supabase
       .from("admin_state")
       .select("data")
-      .eq("id", SINGLETON_ID)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (error) throw error;
 
     const remote = row?.data as Partial<AdminData> | null | undefined;
+    const migratedKey = `${MIGRATED_KEY}.${userId}`;
     const alreadyMigrated =
-      typeof window !== "undefined" && window.localStorage.getItem(MIGRATED_KEY) === "1";
+      typeof window !== "undefined" && window.localStorage.getItem(migratedKey) === "1";
 
-    if (isEmptyRemote(remote)) {
+    if (!row || isEmptyRemote(remote)) {
       const base = local ?? seed();
       await pushRemote(base);
-      if (typeof window !== "undefined") window.localStorage.setItem(MIGRATED_KEY, "1");
+      if (typeof window !== "undefined") window.localStorage.setItem(migratedKey, "1");
       writeLocal(base);
       return base;
     }
 
     const merged = withSchemaDefaults(remote);
 
-    // First-run merge: fold any local-only rows into the cloud copy so
-    // nothing the user added before the migration disappears.
     if (!alreadyMigrated && local) {
       const mergedWithLocal = mergeLocalIntoRemote(merged, local);
       await pushRemote(mergedWithLocal);
-      if (typeof window !== "undefined") window.localStorage.setItem(MIGRATED_KEY, "1");
+      if (typeof window !== "undefined") window.localStorage.setItem(migratedKey, "1");
       writeLocal(mergedWithLocal);
       return mergedWithLocal;
     }
@@ -311,10 +317,12 @@ function mergeLocalIntoRemote(remote: AdminData, local: AdminData): AdminData {
 
 async function pushRemote(data: AdminData): Promise<void> {
   const { supabase } = await import("@/integrations/supabase/client");
+  const userId = await currentUserId();
+  if (!userId) return;
   const { error } = await supabase
     .from("admin_state")
     .upsert({
-      id: SINGLETON_ID,
+      user_id: userId,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       data: data as any,
       updated_at: new Date().toISOString(),
@@ -348,12 +356,13 @@ export function subscribeRemote(cb: (data: AdminData) => void): () => void {
   let cleanup: (() => void) | null = null;
   void (async () => {
     const { supabase } = await import("@/integrations/supabase/client");
-    if (cancelled) return;
+    const userId = await currentUserId();
+    if (cancelled || !userId) return;
     const channel = supabase
-      .channel("admin_state_changes")
+      .channel(`admin_state_changes_${userId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "admin_state", filter: `id=eq.${SINGLETON_ID}` },
+        { event: "*", schema: "public", table: "admin_state", filter: `user_id=eq.${userId}` },
         (payload) => {
           const next = (payload.new as { data?: Partial<AdminData> } | null)?.data;
           if (!next) return;
