@@ -17,18 +17,18 @@ export type Database = {
       admin_state: {
         Row: {
           data: Json
-          id: string
           updated_at: string
+          user_id: string
         }
         Insert: {
           data?: Json
-          id?: string
           updated_at?: string
+          user_id: string
         }
         Update: {
           data?: Json
-          id?: string
           updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
