@@ -161,6 +161,7 @@ const caseStudies = [
 ];
 
 function ResultsPage() {
+  const animated = useCountUp(REVENUE_TOTAL);
   return (
     <main className="min-h-screen">
       <header className="fixed top-0 z-50 w-full border-b border-border/50 bg-background/70 backdrop-blur-xl">
@@ -178,21 +179,82 @@ function ResultsPage() {
         </div>
       </header>
 
-      <section className="relative overflow-hidden pt-32 pb-20 md:pt-44 md:pb-28">
+      <section className="relative overflow-hidden pt-32 pb-12 md:pt-44 md:pb-16">
         <div
           aria-hidden
-          className="absolute inset-0 -z-10 opacity-60"
+          className="absolute inset-0 -z-10 opacity-70"
           style={{
             background:
-              "radial-gradient(60% 50% at 50% 0%, color-mix(in oklab, var(--brand-purple) 22%, transparent) 0%, transparent 70%), radial-gradient(40% 40% at 80% 20%, color-mix(in oklab, var(--brand-blue) 25%, transparent) 0%, transparent 70%)",
+              "radial-gradient(60% 50% at 50% 0%, color-mix(in oklab, var(--brand-purple) 28%, transparent) 0%, transparent 70%), radial-gradient(40% 40% at 80% 20%, color-mix(in oklab, var(--brand-blue) 28%, transparent) 0%, transparent 70%)",
           }}
         />
         <div className="mx-auto max-w-6xl px-6 text-center">
-          <h1 className="mt-6 text-balance text-5xl font-semibold tracking-tight md:text-7xl">
-            Real businesses <span className="text-gradient-brand">real numbers.</span>
-          </h1>
+          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-primary backdrop-blur">
+            <BadgeCheck className="h-3.5 w-3.5" /> Verified client revenue
+          </div>
 
-          <div className="mx-auto mt-16 grid max-w-4xl grid-cols-2 gap-4 md:grid-cols-4">
+          <div className="mt-8 font-semibold tracking-tight tabular-nums text-gradient-brand text-6xl sm:text-7xl md:text-8xl lg:text-[9rem] leading-[0.95]">
+            ${animated.toLocaleString("en-US")}
+          </div>
+
+          <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground md:text-xl">
+            Tracked across client dashboards — Shopify, Meta Ads and GHL.
+            Every dollar below is screenshotted from a real account.
+          </p>
+
+          <div className="mx-auto mt-8 flex max-w-2xl flex-wrap items-center justify-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+            <span className="rounded-full border border-border bg-card px-3 py-1">7-figure milestone</span>
+            <span className="rounded-full border border-border bg-card px-3 py-1">8 client dashboards</span>
+            <span className="rounded-full border border-border bg-card px-3 py-1">Updated Jun 2026</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="pb-20 md:pb-28">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+            {receipts.map((r) => (
+              <figure
+                key={r.amount + r.window}
+                className={`group relative overflow-hidden rounded-2xl border border-border bg-card shadow-card transition-all hover:-translate-y-1 hover:shadow-glow ${
+                  r.featured ? "lg:col-span-2 lg:row-span-2" : ""
+                }`}
+              >
+                <div className="relative overflow-hidden">
+                  <img
+                    src={r.src}
+                    alt={`${r.amount} — ${r.label}, ${r.window}`}
+                    loading="lazy"
+                    className="block w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                  />
+                  {r.featured && (
+                    <span className="absolute right-3 top-3 rounded-full bg-background/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-primary shadow-card backdrop-blur">
+                      Aggregate
+                    </span>
+                  )}
+                </div>
+                <figcaption className="border-t border-border p-5">
+                  <div className={`font-semibold tracking-tight text-gradient-brand tabular-nums ${r.featured ? "text-4xl md:text-5xl" : "text-2xl md:text-3xl"}`}>
+                    {r.amount}
+                  </div>
+                  <div className="mt-1 text-sm font-medium text-foreground">{r.label}</div>
+                  <div className="mt-0.5 text-xs uppercase tracking-wider text-muted-foreground">{r.window}</div>
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="pb-20 md:pb-24">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="mb-10 max-w-2xl">
+            <div className="text-xs font-semibold uppercase tracking-widest text-primary">Snapshot</div>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">
+              The numbers <span className="text-gradient-brand">at a glance.</span>
+            </h2>
+          </div>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             {headlineStats.map((s) => (
               <div key={s.v} className="rounded-2xl border border-border bg-card p-6 shadow-card">
                 <s.icon className="h-5 w-5 text-primary" />
@@ -203,6 +265,7 @@ function ResultsPage() {
           </div>
         </div>
       </section>
+
 
       <section className="bg-gradient-soft py-20 md:py-28">
         <div className="mx-auto max-w-6xl px-6">
