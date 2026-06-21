@@ -9,17 +9,10 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SeedAdminRouteImport } from './routes/seed-admin'
 import { Route as ResultsRouteImport } from './routes/results'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ApiPublicSeedAdminOnceRouteImport } from './routes/api/public/seed-admin-once'
 
-const SeedAdminRoute = SeedAdminRouteImport.update({
-  id: '/seed-admin',
-  path: '/seed-admin',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ResultsRoute = ResultsRouteImport.update({
   id: '/results',
   path: '/results',
@@ -35,75 +28,39 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicSeedAdminOnceRoute = ApiPublicSeedAdminOnceRouteImport.update({
-  id: '/api/public/seed-admin-once',
-  path: '/api/public/seed-admin-once',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/results': typeof ResultsRoute
-  '/seed-admin': typeof SeedAdminRoute
-  '/api/public/seed-admin-once': typeof ApiPublicSeedAdminOnceRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/results': typeof ResultsRoute
-  '/seed-admin': typeof SeedAdminRoute
-  '/api/public/seed-admin-once': typeof ApiPublicSeedAdminOnceRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/results': typeof ResultsRoute
-  '/seed-admin': typeof SeedAdminRoute
-  '/api/public/seed-admin-once': typeof ApiPublicSeedAdminOnceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/admin'
-    | '/results'
-    | '/seed-admin'
-    | '/api/public/seed-admin-once'
+  fullPaths: '/' | '/admin' | '/results'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/admin'
-    | '/results'
-    | '/seed-admin'
-    | '/api/public/seed-admin-once'
-  id:
-    | '__root__'
-    | '/'
-    | '/admin'
-    | '/results'
-    | '/seed-admin'
-    | '/api/public/seed-admin-once'
+  to: '/' | '/admin' | '/results'
+  id: '__root__' | '/' | '/admin' | '/results'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   ResultsRoute: typeof ResultsRoute
-  SeedAdminRoute: typeof SeedAdminRoute
-  ApiPublicSeedAdminOnceRoute: typeof ApiPublicSeedAdminOnceRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/seed-admin': {
-      id: '/seed-admin'
-      path: '/seed-admin'
-      fullPath: '/seed-admin'
-      preLoaderRoute: typeof SeedAdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/results': {
       id: '/results'
       path: '/results'
@@ -125,13 +82,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/seed-admin-once': {
-      id: '/api/public/seed-admin-once'
-      path: '/api/public/seed-admin-once'
-      fullPath: '/api/public/seed-admin-once'
-      preLoaderRoute: typeof ApiPublicSeedAdminOnceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -139,8 +89,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   ResultsRoute: ResultsRoute,
-  SeedAdminRoute: SeedAdminRoute,
-  ApiPublicSeedAdminOnceRoute: ApiPublicSeedAdminOnceRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
