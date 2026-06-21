@@ -34,6 +34,8 @@ import { Clients } from "./views/Clients";
 import { Finance } from "./views/Finance";
 import { EmailHub } from "./views/EmailHub";
 import { SettingsView } from "./views/SettingsView";
+import { TeamUsers } from "./views/TeamUsers";
+import { UserPlus } from "lucide-react";
 
 type ViewId =
   | "dashboard"
@@ -44,9 +46,12 @@ type ViewId =
   | "clients"
   | "finance"
   | "email"
+  | "team"
   | "settings";
 
-const NAV: { id: ViewId; label: string; icon: React.ElementType }[] = [
+type TeamRole = "ceo" | "admin";
+
+const BASE_NAV: { id: ViewId; label: string; icon: React.ElementType }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "pipeline", label: "Pipeline", icon: GitBranch },
   { id: "leads", label: "Lead Generation", icon: Sparkles },
@@ -61,6 +66,7 @@ const NAV: { id: ViewId; label: string; icon: React.ElementType }[] = [
 export function AdminApp() {
   const [mounted, setMounted] = useState(false);
   const [authed, setAuthed] = useState(false);
+  const [role, setRole] = useState<TeamRole | null>(null);
   const [view, setView] = useState<ViewId>("dashboard");
   const [data, setData] = useState<AdminData | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -68,29 +74,34 @@ export function AdminApp() {
   useEffect(() => {
     setMounted(true);
 
-    // Subscribe to auth state first (synchronously), then check the
-    // existing session. Verifies the signed-in user has the `admin` role.
     let unsubData: (() => void) | null = null;
 
     async function verifyAndHydrate(userId: string | undefined) {
       if (!userId) {
         setAuthed(false);
+        setRole(null);
         setData(null);
         unsubData?.();
         unsubData = null;
         return;
       }
-      const { data: roleRow } = await supabase
+      const { data: roles } = await supabase
         .from("user_roles")
         .select("role")
-        .eq("user_id", userId)
-        .eq("role", "admin")
-        .maybeSingle();
-      if (!roleRow) {
+        .eq("user_id", userId);
+      const list = (roles ?? []).map((r) => r.role);
+      const resolved: TeamRole | null = list.includes("ceo")
+        ? "ceo"
+        : list.includes("admin")
+          ? "admin"
+          : null;
+      if (!resolved) {
         await supabase.auth.signOut();
         setAuthed(false);
+        setRole(null);
         return;
       }
+      setRole(resolved);
       setAuthed(true);
       setData(loadData());
       const remote = await loadDataRemote();
@@ -113,7 +124,6 @@ export function AdminApp() {
     };
   }, []);
 
-  // single setter the views use; persists immediately
   const update = useMemo(
     () => (next: AdminData | ((prev: AdminData) => AdminData)) => {
       setData((prev) => {
@@ -125,6 +135,17 @@ export function AdminApp() {
     },
     [],
   );
+
+  const nav = useMemo(() => {
+    if (role === "ceo") {
+      const items = [...BASE_NAV];
+      // Insert Team Members above Settings
+      const settingsIdx = items.findIndex((n) => n.id === "settings");
+      items.splice(settingsIdx, 0, { id: "team", label: "Team Members", icon: UserPlus });
+      return items;
+    }
+    return BASE_NAV;
+  }, [role]);
 
   if (!mounted) {
     return (
@@ -146,7 +167,7 @@ export function AdminApp() {
     );
   }
 
-  const current = NAV.find((n) => n.id === view)!;
+  const current = nav.find((n) => n.id === view) ?? nav[0];
 
   return (
     <div className="flex min-h-screen bg-[oklch(.985_.005_295)] text-foreground">
@@ -174,7 +195,7 @@ export function AdminApp() {
         </div>
 
         <nav className="flex-1 space-y-1 px-3 py-2">
-          {NAV.map((item) => {
+          {nav.map((item) => {
             const Icon = item.icon;
             const active = view === item.id;
             return (
@@ -235,6 +256,7 @@ export function AdminApp() {
           {view === "clients" && <Clients data={data} update={update} />}
           {view === "finance" && <Finance data={data} update={update} />}
           {view === "email" && <EmailHub data={data} update={update} />}
+          {view === "team" && role === "ceo" && <TeamUsers />}
           {view === "settings" && <SettingsView data={data} update={update} />}
         </main>
       </div>
@@ -278,9 +300,9 @@ function LoginScreen() {
           <input
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email"
-            type="email"
-            autoComplete="email"
+            placeholder="Username"
+            type="text"
+            autoComplete="username"
             className="w-full rounded-xl border border-white/15 bg-white/[.06] px-4 py-3 text-sm text-white placeholder-white/40 outline-none focus:border-[var(--brand-light)]"
           />
           <input
