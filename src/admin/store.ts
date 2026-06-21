@@ -317,10 +317,12 @@ function mergeLocalIntoRemote(remote: AdminData, local: AdminData): AdminData {
 
 async function pushRemote(data: AdminData): Promise<void> {
   const { supabase } = await import("@/integrations/supabase/client");
+  const userId = await currentUserId();
+  if (!userId) return;
   const { error } = await supabase
     .from("admin_state")
     .upsert({
-      id: SINGLETON_ID,
+      user_id: userId,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       data: data as any,
       updated_at: new Date().toISOString(),
