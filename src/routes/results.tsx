@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
 import logo from "@/assets/inspirova-logo.png";
 import proof1 from "@/assets/proof-1.png";
 import proof2 from "@/assets/proof-2.png";
@@ -7,7 +8,15 @@ import proof4 from "@/assets/proof-4.png";
 import proof5 from "@/assets/proof-5.png";
 import proof6 from "@/assets/proof-6.png";
 import proof7 from "@/assets/proof-7.png";
-import { ArrowLeft, TrendingUp, Target, Megaphone, Sparkles, Mail, ShoppingBag, Camera } from "lucide-react";
+import revTotalAsset from "@/assets/proof-revenue-total.png.asset.json";
+import rev659Asset from "@/assets/proof-revenue-659k.png.asset.json";
+import rev197Asset from "@/assets/proof-revenue-197k.png.asset.json";
+import rev114Asset from "@/assets/proof-revenue-114k.png.asset.json";
+import rev101Asset from "@/assets/proof-revenue-101k.png.asset.json";
+import rev98Asset from "@/assets/proof-revenue-98k.png.asset.json";
+import rev91Asset from "@/assets/proof-revenue-91k.png.asset.json";
+import rev84Asset from "@/assets/proof-revenue-84k.png.asset.json";
+import { ArrowLeft, TrendingUp, Target, Megaphone, Sparkles, Mail, ShoppingBag, Camera, BadgeCheck } from "lucide-react";
 
 const proofs = [
   { src: proof4, caption: "2× revenue in 60 days — client broke their first $35K month." },
@@ -18,6 +27,43 @@ const proofs = [
   { src: proof2, caption: "1,508× return on a single hero ad — $18.8K conversion value." },
   { src: proof6, caption: "Shopify store green for 4 straight months under our system." },
 ];
+
+const REVENUE_TOTAL = 1037785;
+
+const receipts = [
+  { src: revTotalAsset.url, amount: "$1,037,785", label: "Aggregate revenue tracked", window: "Across all client dashboards", featured: true },
+  { src: rev659Asset.url, amount: "$659,262", label: "Single client", window: "Last 365 days" },
+  { src: rev197Asset.url, amount: "$197,736", label: "Lifetime to date", window: "Pushing $200K" },
+  { src: rev114Asset.url, amount: "$114,233", label: "Client revenue", window: "Jan – May 2025" },
+  { src: rev101Asset.url, amount: "$101,255", label: "Client revenue", window: "Jan – May 2025" },
+  { src: rev98Asset.url, amount: "$98,558", label: "Single client", window: "~30 days (Mar – Apr)" },
+  { src: rev91Asset.url, amount: "$91,439", label: "Single client", window: "1 month (March)" },
+  { src: rev84Asset.url, amount: "$84,343", label: "All channels", window: "30 days" },
+];
+
+function useCountUp(target: number, duration = 1800) {
+  const [value, setValue] = useState(0);
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      setValue(target);
+      return;
+    }
+    const t0 = performance.now();
+    let raf = 0;
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - t0) / duration);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setValue(Math.round(target * eased));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return value;
+}
 
 export const Route = createFileRoute("/results")({
   head: () => ({
