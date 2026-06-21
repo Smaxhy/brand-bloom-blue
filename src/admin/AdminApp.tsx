@@ -94,7 +94,9 @@ export function AdminApp() {
         ? "ceo"
         : list.includes("admin")
           ? "admin"
-          : null;
+          : list.includes("user")
+            ? "user"
+            : null;
       if (!resolved) {
         await supabase.auth.signOut();
         setAuthed(false);
