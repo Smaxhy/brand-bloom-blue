@@ -623,10 +623,15 @@
     ];
 
     var BUNDLES=[
-      { id:"deluxe",   name:"Deluxe Package",   tag:"Everything, site, automations & management.", first:2500, recurring:750, includes:["website","ads_setup","ads_management","email_sms","pixel_ecom"], badge:"Most popular" },
-      { id:"growth",   name:"Growth Package",   tag:"Ads setup, ongoing management & tracking.",     first:1200, recurring:500, includes:["ads_setup","ads_management","pixel_ecom"], badge:"" },
-      { id:"creation", name:"Creation Package", tag:"Ads setup, creative & video production.",       first:750,  recurring:0,   includes:["ads_setup","video_creation"], badge:"" }
+      { id:"deluxe",   name:"Deluxe Package",   tag:"Everything: site, automations, ads management.", first:2500, recurring:750, vsRetainer:1500, vsLeads:60, includes:["website","ads_setup","ads_management","email_sms","pixel_ecom"], badge:"Most popular" },
+      { id:"growth",   name:"Growth Package",   tag:"Ads setup, ongoing management & tracking.",      first:1200, recurring:500, vsRetainer:1000, vsLeads:40, includes:["ads_setup","ads_management","pixel_ecom"], badge:"Best value" },
+      { id:"creation", name:"Creation Package", tag:"Ads setup, creative & video production.",        first:750,  recurring:0,   vsRetainer:800,  vsLeads:25, includes:["ads_setup","video_creation"], badge:"" }
     ];
+
+    // Industry average: retainer + 10% of ad spend (assume €2,000/mo) + €35 per lead.
+    var AD_SPEND_ASSUMED = 2000;
+    var COMMISSION_RATE  = 0.10;
+    var COST_PER_LEAD    = 35;
 
     var euro=function(v){return "€"+v.toLocaleString("nl-BE",{minimumFractionDigits:2,maximumFractionDigits:2});};
     var euro0=function(v){return "€"+Math.round(v).toLocaleString("nl-BE");};
@@ -635,12 +640,21 @@
     function renderBundles(){
       bundlesGrid.innerHTML=BUNDLES.map(function(b){
         var items=b.includes.map(function(i){return '<li>'+nameById(i)+'</li>';}).join("");
+        var competitorMonthly = b.vsRetainer + (AD_SPEND_ASSUMED*COMMISSION_RATE) + (b.vsLeads*COST_PER_LEAD);
+        var ourMonthly = b.recurring>0 ? b.recurring : Math.round(b.first/3); // amortize one-off over 3mo for fair compare
+        var saved = Math.max(0, competitorMonthly - ourMonthly);
+        var pct = Math.round((saved/competitorMonthly)*100);
         return '<div class="bundle'+(b.badge?" featured":"")+'" data-id="'+b.id+'">'
           +(b.badge?'<div class="bundle-badge">'+b.badge+'</div>':'')
           +'<div class="bundle-name">'+b.name+'</div>'
           +'<div class="bundle-tag">'+b.tag+'</div>'
           +'<div class="bundle-price">'+euro0(b.first)+'<small> first month</small></div>'
-          +(b.recurring>0?'<div class="bundle-sub">then '+euro0(b.recurring)+' / month</div>':'<div class="bundle-sub">paid first month</div>')
+          +(b.recurring>0?'<div class="bundle-sub">then '+euro0(b.recurring)+' / month — flat, all-in</div>':'<div class="bundle-sub">one-time, no monthly</div>')
+          +'<div class="bundle-vs">'
+            +'<div class="vs-lbl">vs. typical agency</div>'
+            +'<div class="vs-row"><span>'+euro0(b.vsRetainer)+' retainer + 10% of ad spend + €35/lead</span><span class="vs-price">'+euro0(competitorMonthly)+'/mo</span></div>'
+            +'<div class="vs-save">You save ~'+euro0(saved)+'/mo · '+pct+'% less</div>'
+          +'</div>'
           +'<ul class="bundle-list">'+items+'</ul>'
           +'<button class="btn btn-primary bundle-btn" type="button">Select bundle</button>'
         +'</div>';
