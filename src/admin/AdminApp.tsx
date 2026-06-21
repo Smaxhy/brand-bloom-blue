@@ -66,6 +66,7 @@ const BASE_NAV: { id: ViewId; label: string; icon: React.ElementType }[] = [
 export function AdminApp() {
   const [mounted, setMounted] = useState(false);
   const [authed, setAuthed] = useState(false);
+  const [role, setRole] = useState<TeamRole | null>(null);
   const [view, setView] = useState<ViewId>("dashboard");
   const [data, setData] = useState<AdminData | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -73,29 +74,34 @@ export function AdminApp() {
   useEffect(() => {
     setMounted(true);
 
-    // Subscribe to auth state first (synchronously), then check the
-    // existing session. Verifies the signed-in user has the `admin` role.
     let unsubData: (() => void) | null = null;
 
     async function verifyAndHydrate(userId: string | undefined) {
       if (!userId) {
         setAuthed(false);
+        setRole(null);
         setData(null);
         unsubData?.();
         unsubData = null;
         return;
       }
-      const { data: roleRow } = await supabase
+      const { data: roles } = await supabase
         .from("user_roles")
         .select("role")
-        .eq("user_id", userId)
-        .eq("role", "admin")
-        .maybeSingle();
-      if (!roleRow) {
+        .eq("user_id", userId);
+      const list = (roles ?? []).map((r) => r.role);
+      const resolved: TeamRole | null = list.includes("ceo")
+        ? "ceo"
+        : list.includes("admin")
+          ? "admin"
+          : null;
+      if (!resolved) {
         await supabase.auth.signOut();
         setAuthed(false);
+        setRole(null);
         return;
       }
+      setRole(resolved);
       setAuthed(true);
       setData(loadData());
       const remote = await loadDataRemote();
@@ -118,7 +124,6 @@ export function AdminApp() {
     };
   }, []);
 
-  // single setter the views use; persists immediately
   const update = useMemo(
     () => (next: AdminData | ((prev: AdminData) => AdminData)) => {
       setData((prev) => {
@@ -130,6 +135,17 @@ export function AdminApp() {
     },
     [],
   );
+
+  const nav = useMemo(() => {
+    if (role === "ceo") {
+      const items = [...BASE_NAV];
+      // Insert Team Members above Settings
+      const settingsIdx = items.findIndex((n) => n.id === "settings");
+      items.splice(settingsIdx, 0, { id: "team", label: "Team Members", icon: UserPlus });
+      return items;
+    }
+    return BASE_NAV;
+  }, [role]);
 
   if (!mounted) {
     return (
@@ -151,7 +167,7 @@ export function AdminApp() {
     );
   }
 
-  const current = NAV.find((n) => n.id === view)!;
+  const current = nav.find((n) => n.id === view) ?? nav[0];
 
   return (
     <div className="flex min-h-screen bg-[oklch(.985_.005_295)] text-foreground">
