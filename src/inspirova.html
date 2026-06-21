@@ -483,7 +483,7 @@
         </div>
         <div class="comp-col them">
           <h3>Typical agency</h3>
-          <div class="comp-sub">Retainer + 10% + €35/lead</div>
+          <div class="comp-sub">Retainer + 10% of profit + €35/lead</div>
           <div class="comp-price" id="compThem">€0</div>
         </div>
       </div>
@@ -539,7 +539,7 @@
               <div class="ct-them" id="ctRetainerThem">€1.000</div>
             </div>
             <div class="ct-row">
-              <div class="ct-lbl">Commission (10% of ad spend)</div>
+              <div class="ct-lbl">Commission (10% of profit generated)</div>
               <div class="ct-us">€0</div>
               <div class="ct-them" id="ctCommission">€200</div>
             </div>
@@ -702,8 +702,8 @@
 
       var leads = sliderLeads ? +sliderLeads.value : 40;
 
-      var assumedAdSpend = leads * 50; // €50 ad spend per lead assumption
-      var commission = assumedAdSpend * COMMISSION_RATE;
+      var assumedProfit = leads * 250; // €250 profit per lead assumption
+      var commission = assumedProfit * COMMISSION_RATE;
       var competitorMonthly = COMPETITOR_RETAINER + commission + (leads * COST_PER_LEAD);
       var ourMonthly = monthly;
       var ourFirst = monthly + upfront;
