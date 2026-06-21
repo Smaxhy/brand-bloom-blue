@@ -3,6 +3,7 @@ import { Plus, Send, Pencil, Trash2, Mail, Users, FileText, CheckCircle2 } from 
 import {
   type AdminData,
   type EmailTemplate,
+  type GhlSendDetail,
   uid,
   ghlSendEmail,
   fillTemplate,
@@ -26,7 +27,7 @@ export function EmailHub({
   const [selected, setSelected] = useState<string[]>(accepted.map((r) => r.id));
   const [tplId, setTplId] = useState(data.templates[0]?.id ?? "");
   const [sending, setSending] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; message: string; details: GhlSendDetail[] } | null>(null);
 
   const tpl = data.templates.find((t) => t.id === tplId);
   const recipients = accepted.filter((r) => selected.includes(r.id));
@@ -146,8 +147,26 @@ export function EmailHub({
             )}
 
             {result && (
-              <div className={`mt-3 rounded-lg px-3 py-2 text-sm ${result.ok ? "bg-[oklch(.7_.18_150)]/12 text-[oklch(.45_.15_150)]" : "bg-destructive/10 text-destructive"}`}>
-                {result.message}
+              <div className="mt-3 space-y-2">
+                <div className={`rounded-lg px-3 py-2 text-sm ${result.ok ? "bg-[oklch(.7_.18_150)]/12 text-[oklch(.45_.15_150)]" : "bg-destructive/10 text-destructive"}`}>
+                  {result.message}
+                </div>
+                {result.details.length > 0 && (
+                  <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-border bg-background p-2">
+                    {result.details.map((d, i) => (
+                      <div key={i} className="flex items-start justify-between gap-2 text-xs">
+                        <span className="truncate font-mono">{d.email}</span>
+                        {d.ok ? (
+                          <span className="shrink-0 text-[oklch(.55_.15_150)]">✓ {d.simulated ? "simulated" : "sent"}</span>
+                        ) : (
+                          <span className="shrink-0 text-destructive truncate max-w-[60%]" title={d.error}>
+                            ✗ {d.status ? `HTTP ${d.status}` : ""} {d.error?.slice(0, 80)}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
