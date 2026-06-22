@@ -64,7 +64,7 @@ export function RawData({
       const next = new Set(prev);
       for (const id of selectedIds) next.delete(id);
       return next;
-    }));
+    });
   }
   function toggleReveal(id: string) {
     setRevealedIds((prev) => {
