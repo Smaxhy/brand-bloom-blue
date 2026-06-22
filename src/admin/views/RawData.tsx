@@ -248,6 +248,14 @@ export function RawData({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <th className="w-10 px-2 py-3 text-center">
+                <input
+                  type="checkbox"
+                  checked={rows.length > 0 && rows.every((r) => selectedIds.has(r.id))}
+                  onChange={(e) => { if (e.target.checked) selectAllVisible(); else clearSelection(); }}
+                  className="h-4 w-4 rounded border-border"
+                />
+              </th>
               <th className="px-4 py-3 font-semibold">Business</th>
               <th className="px-4 py-3 font-semibold">Email</th>
               <th className="px-4 py-3 font-semibold">Phone</th>
