@@ -102,6 +102,14 @@ export interface DenylistEntry {
   domain?: string;
 }
 
+export interface ScraperState {
+  results: ScrapedPerson[];
+  emailSource: Record<string, string>;
+  emailSourceUrl: Record<string, string>;
+  discoverSources: Record<string, ScrapeSource[]>;
+  updatedAt: number;
+}
+
 export interface AdminData {
   deals: Deal[];
   raw: RawBusiness[];
@@ -112,7 +120,10 @@ export interface AdminData {
   settings: Settings;
   /** Per-account persistent denylist — never re-surface these contacts. */
   denylist?: Record<string, DenylistEntry>;
+  /** Persisted scraper results so a page refresh keeps them. */
+  scraper?: ScraperState;
 }
+
 
 /* ----------------------------------------------------------------------- */
 /* Pipeline stage config                                                    */
