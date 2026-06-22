@@ -146,12 +146,12 @@ export function EmailHub({
                     <button
                       onClick={() => {
                         setSelected((s) => s.filter((x) => x !== r.id));
-                        update((p) => ({ ...p, raw: p.raw.map((x) => (x.id === r.id ? { ...x, status: "rejected" } : x)) }));
+                        update((p) => ({ ...p, raw: p.raw.map((x) => (x.id === r.id ? { ...x, lastEmailedAt: Date.now() } : x)) }));
                       }}
                       className="rounded-lg px-2 py-1 text-xs text-muted-foreground hover:bg-secondary"
-                      title="Move to rejected"
+                      title="Move to Sent tab"
                     >
-                      Move
+                      Move to sent
                     </button>
                     <button
                       onClick={() => {
