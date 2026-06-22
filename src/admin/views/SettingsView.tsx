@@ -15,6 +15,7 @@ export function SettingsView({
   const [testTo, setTestTo] = useState("");
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string; details: GhlSendDetail[] } | null>(null);
+  const dark = s.theme === "dark";
 
   function save() {
     update((p) => ({ ...p, settings: s }));
