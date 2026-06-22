@@ -798,3 +798,335 @@ async function ghlSend(request: Request, env: Env): Promise<Response> {
     return json({ ok: false, message: (e as Error).message, details: [] }, 500);
   }
 }
+
+/* --------------------------------------------------------------------- */
+/* Google Maps business discovery (via SerpApi / Serper)                   */
+/* --------------------------------------------------------------------- */
+
+interface GoogleBusinessFilters {
+  location?: string;
+  industry?: string; // comma-separated keywords
+  perPage?: number;
+}
+
+interface DiscoveredBusiness {
+  id: string;
+  company: string;
+  website: string;
+  phone: string;
+  address: string;
+  city: string;
+  industry: string;
+  rating?: number;
+  reviews?: number;
+  source: "Google Maps" | "Google";
+}
+
+async function googleBusinesses(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") return json({ error: "POST only" }, 405);
+  const key = secret(env, "SERPAPI_API_KEY") || secret(env, "SERPER_API_KEY");
+  if (!key) return json({ demo: true, reason: "missing_key", businesses: [] });
+
+  let f: GoogleBusinessFilters = {};
+  try {
+    f = (await request.json()) as GoogleBusinessFilters;
+  } catch {
+    return json({ error: "invalid json" }, 400);
+  }
+
+  const wanted = Math.min(Math.max(f.perPage ?? 25, 1), 200);
+  const keywords = (f.industry ?? "")
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean)
+    .slice(0, 6);
+  const queries = keywords.length ? keywords : ["business"];
+  const location = (f.location ?? "").trim();
+
+  const byKey = new Map<string, DiscoveredBusiness>();
+  const perQuery = Math.ceil(wanted / queries.length);
+
+  for (const kw of queries) {
+    if (byKey.size >= wanted) break;
+    const q = location ? `${kw} in ${location}` : kw;
+    try {
+      if (isSerpApi(key)) {
+        // Try Google Maps engine first (richest local data).
+        const pages = Math.ceil(perQuery / 20);
+        for (let page = 0; page < pages; page++) {
+          const u = new URL("https://serpapi.com/search.json");
+          u.searchParams.set("engine", "google_maps");
+          u.searchParams.set("q", q);
+          u.searchParams.set("type", "search");
+          u.searchParams.set("start", String(page * 20));
+          u.searchParams.set("api_key", key);
+          const res = await fetch(u.toString());
+          if (!res.ok) break;
+          const d = (await res.json()) as {
+            local_results?: Array<{
+              place_id?: string;
+              title?: string;
+              website?: string;
+              phone?: string;
+              address?: string;
+              type?: string;
+              types?: string[];
+              rating?: number;
+              reviews?: number;
+              gps_coordinates?: { latitude?: number; longitude?: number };
+            }>;
+          };
+          const batch = d.local_results ?? [];
+          if (!batch.length) break;
+          for (const r of batch) {
+            const id =
+              r.place_id ||
+              `${(r.title || "").toLowerCase()}|${cleanDomain(r.website)}`;
+            if (byKey.has(id)) continue;
+            byKey.set(id, {
+              id,
+              company: r.title || "",
+              website: cleanDomain(r.website || ""),
+              phone: r.phone || "",
+              address: r.address || "",
+              city: location.split(",")[0] || "",
+              industry: r.type || (r.types?.[0] ?? kw),
+              rating: r.rating,
+              reviews: r.reviews,
+              source: "Google Maps",
+            });
+            if (byKey.size >= wanted) break;
+          }
+          if (byKey.size >= wanted) break;
+        }
+      } else {
+        // Serper.dev — use /places endpoint.
+        const res = await fetch("https://google.serper.dev/places", {
+          method: "POST",
+          headers: { "X-API-KEY": key, "Content-Type": "application/json" },
+          body: JSON.stringify({ q, num: Math.min(perQuery, 20) }),
+        });
+        if (res.ok) {
+          const d = (await res.json()) as {
+            places?: Array<{
+              title?: string;
+              address?: string;
+              phoneNumber?: string;
+              website?: string;
+              category?: string;
+              rating?: number;
+              ratingCount?: number;
+              cid?: string;
+            }>;
+          };
+          for (const r of d.places ?? []) {
+            const id = r.cid || `${(r.title || "").toLowerCase()}|${cleanDomain(r.website || "")}`;
+            if (byKey.has(id)) continue;
+            byKey.set(id, {
+              id,
+              company: r.title || "",
+              website: cleanDomain(r.website || ""),
+              phone: r.phoneNumber || "",
+              address: r.address || "",
+              city: location.split(",")[0] || "",
+              industry: r.category || kw,
+              rating: r.rating,
+              reviews: r.ratingCount,
+              source: "Google Maps",
+            });
+            if (byKey.size >= wanted) break;
+          }
+        }
+      }
+    } catch {
+      /* keep trying remaining keywords */
+    }
+  }
+
+  const businesses = Array.from(byKey.values()).slice(0, wanted);
+  if (!businesses.length) return json({ demo: true, reason: "no_results", businesses: [] });
+  return json({ demo: false, businesses });
+}
+
+/* --------------------------------------------------------------------- */
+/* Scrape a single website -> plain text (for Claude extraction)           */
+/* --------------------------------------------------------------------- */
+
+async function scrapeSite(request: Request, env: Env): Promise<Response> {
+  void env;
+  if (request.method !== "POST") return json({ error: "POST only" }, 405);
+  let body: { url?: string } = {};
+  try {
+    body = (await request.json()) as { url?: string };
+  } catch {
+    return json({ error: "invalid json" }, 400);
+  }
+  let target = (body.url || "").trim();
+  if (!target) return json({ error: "missing url" }, 400);
+  if (!/^https?:\/\//i.test(target)) target = `https://${target}`;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+    const res = await fetch(target, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (compatible; Inspirova-Scraper/1.0; +https://inspirovamarketing.com)",
+        Accept: "text/html,*/*",
+      },
+      signal: controller.signal,
+      redirect: "follow",
+    });
+    clearTimeout(timer);
+    if (!res.ok) return json({ ok: false, status: res.status });
+    const html = (await res.text()).slice(0, 200000);
+    // Try /contact + /about in parallel for richer data (best effort).
+    const extras = await Promise.all(
+      ["/contact", "/about", "/team", "/contact-us", "/about-us"].map(async (p) => {
+        try {
+          const r = await fetch(new URL(p, target).toString(), {
+            headers: { "User-Agent": "Inspirova-Scraper/1.0" },
+            signal: AbortSignal.timeout(6000),
+          });
+          if (!r.ok) return "";
+          return (await r.text()).slice(0, 60000);
+        } catch {
+          return "";
+        }
+      }),
+    );
+    const combined = [html, ...extras].filter(Boolean).join("\n\n");
+    const text = htmlToText(combined).slice(0, 18000);
+    return json({ ok: true, text });
+  } catch (e) {
+    return json({ ok: false, error: (e as Error).message });
+  }
+}
+
+function htmlToText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#?\w+;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/* --------------------------------------------------------------------- */
+/* Claude — extract decision-maker contact from a scraped website          */
+/* --------------------------------------------------------------------- */
+
+interface ClaudeExtractInput {
+  company?: string;
+  website?: string;
+  text?: string;
+  hint?: string;
+}
+
+async function claudeExtract(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") return json({ error: "POST only" }, 405);
+  const key = secret(env, "ANTHROPIC_API_KEY");
+  if (!key) return json({ demo: true, reason: "missing_key", extracted: null });
+  let body: ClaudeExtractInput = {};
+  try {
+    body = (await request.json()) as ClaudeExtractInput;
+  } catch {
+    return json({ error: "invalid json" }, 400);
+  }
+  const company = (body.company || "").slice(0, 200);
+  const website = (body.website || "").slice(0, 200);
+  const text = (body.text || "").slice(0, 16000);
+  if (!text) return json({ ok: false, reason: "no_text" });
+
+  const system = `You are a B2B lead-research assistant. Extract the SINGLE most senior decision-maker (Owner/Founder/CEO/Managing Director > C-Suite > VP > Director > Manager) plus reachable contact info from the provided website text.
+
+Respond with ONLY a JSON object, no prose, no markdown fences, matching:
+{
+  "ownerName": string,           // person's full name, "" if not found
+  "ownerTitle": string,          // job title, "" if not found
+  "email": string,               // most relevant email at the company's domain, "" if not found
+  "phone": string,               // primary phone, "" if not found
+  "linkedin": string,            // LinkedIn URL of the person, "" if not found
+  "industry": string,            // 1-3 words describing what the company does
+  "city": string,                // primary city
+  "confidence": number           // 0..1, your confidence in the person identification
+}
+
+Rules:
+- Prefer emails on the company's own domain over generic gmail/hotmail addresses.
+- Never invent. If you can't find a field, return "".
+- If you only find a generic info@/contact@ email but no person, still return the email with ownerName="" and confidence ~0.3.`;
+
+  const user = `Company: ${company}
+Website: ${website}
+${body.hint ? `Hint: ${body.hint}\n` : ""}
+
+Website text (truncated):
+"""
+${text}
+"""`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5",
+        max_tokens: 600,
+        system,
+        messages: [{ role: "user", content: user }],
+      }),
+    });
+    if (!res.ok) {
+      const detail = (await res.text()).slice(0, 300);
+      // Fallback to Sonnet alias on bad model.
+      if (res.status === 404 || res.status === 400) {
+        const retry = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "x-api-key": key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "claude-3-5-haiku-latest",
+            max_tokens: 600,
+            system,
+            messages: [{ role: "user", content: user }],
+          }),
+        });
+        if (retry.ok) {
+          const data = (await retry.json()) as { content?: { text?: string }[] };
+          return json({ ok: true, extracted: parseClaudeJson(data.content?.[0]?.text || "") });
+        }
+      }
+      return json({ ok: false, status: res.status, detail });
+    }
+    const data = (await res.json()) as { content?: { text?: string }[] };
+    const raw = data.content?.[0]?.text || "";
+    return json({ ok: true, extracted: parseClaudeJson(raw) });
+  } catch (e) {
+    return json({ ok: false, error: (e as Error).message });
+  }
+}
+
+function parseClaudeJson(raw: string): unknown {
+  if (!raw) return null;
+  const m = raw.match(/\{[\s\S]*\}/);
+  const slice = m ? m[0] : raw;
+  try {
+    return JSON.parse(slice);
+  } catch {
+    return null;
+  }
+}
