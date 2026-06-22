@@ -120,6 +120,7 @@ export function RawData({
               <th className="px-4 py-3 font-semibold">Business</th>
               <th className="px-4 py-3 font-semibold">Email</th>
               <th className="px-4 py-3 font-semibold">Phone</th>
+              <th className="hidden px-4 py-3 font-semibold md:table-cell">Website</th>
               <th className="hidden px-4 py-3 font-semibold lg:table-cell">City</th>
               <th className="hidden px-4 py-3 font-semibold lg:table-cell">Industry</th>
               <th className="px-4 py-3 font-semibold">Status</th>
