@@ -93,6 +93,15 @@ export interface Settings {
   fromEmail: string;
 }
 
+export interface DenylistEntry {
+  reason: "denied" | "accepted";
+  ts: number;
+  name: string;
+  company: string;
+  email?: string;
+  domain?: string;
+}
+
 export interface AdminData {
   deals: Deal[];
   raw: RawBusiness[];
@@ -101,6 +110,8 @@ export interface AdminData {
   templates: EmailTemplate[];
   campaigns: EmailCampaign[];
   settings: Settings;
+  /** Per-account persistent denylist — never re-surface these contacts. */
+  denylist?: Record<string, DenylistEntry>;
 }
 
 /* ----------------------------------------------------------------------- */
