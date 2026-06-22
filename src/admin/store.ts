@@ -216,8 +216,10 @@ function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData
     ...d,
     settings: { ...s.settings, ...(d.settings ?? {}) },
     denylist: { ...(s.denylist ?? {}), ...((d.denylist ?? {}) as Record<string, DenylistEntry>) },
+    scraper: (d.scraper as ScraperState | undefined) ?? s.scraper,
   };
 }
+
 
 function isEmptyRemote(d: unknown): boolean {
   if (!d || typeof d !== "object") return true;
