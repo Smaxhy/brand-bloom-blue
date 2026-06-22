@@ -1,49 +1,76 @@
 ## Goal
-At the top of `/results`, lead with the exact summed client revenue figure pulled from the uploaded dashboards, then back it with a curated gallery of the strongest screenshots.
 
-## What I found in the zip
-50 screenshots, OCR'd. The cleanest, non-overlapping headline figures (the rest are duplicates, smaller campaign tiles, or sub-views of these dashboards):
+Make the scraper actually pull businesses from Google (not only Apollo), permanently remember every denied/accepted contact so they never resurface, and use Claude to read scraped web pages for the highest-quality contact data.
 
-| Screenshot | Figure | Window / context |
-|---|---|---|
-| 185007 | **$1,037,785** | Grand total — revenue generated across clients |
-| 185110 | $659,262 | Last 365 days (single client) |
-| 185051 | $197,736 | ~Lifetime ("push 200K") |
-| 185038 | $114,233 | Jan–May 2025 |
-| 185019 | $101,255 | Jan–May 2025 |
-| 185652 | $98,558 | ~1 month (Mar–Apr) |
-| 185628 | $91,439 | 1 month (March) |
-| 185128 | $84,343 | 30 days, all channels |
+## What's broken / missing today
 
-The $1,037,785 dashboard is the aggregate; the other 7 are the underlying client receipts that prove it.
+- Apollo is the only source of *people*. If Apollo has no record for a local SMB, you get nothing.
+- "Deny" only hides a row in the current session — same person comes back next scrape.
+- Google is used only as a *fallback for emails*, never to discover businesses.
+- No AI step; results are whatever the third-party API returns verbatim.
 
-## Build plan
+## Plan
 
-### 1. Upload the 8 screenshots as CDN assets
-`lovable-assets create` for each of the 8 PNGs above → `src/assets/proof-revenue-*.png.asset.json`.
+### 1. New Google business discovery source
 
-### 2. New hero block at top of `/results` (above existing headline stats)
-- Eyebrow: "Verified client revenue"
-- Massive animated count-up to **$1,037,785** (Inter tabular-nums, `text-gradient-brand`, ~text-7xl/8xl)
-- Subline: "Tracked across client dashboards — Shopify, Meta Ads, GHL. Screenshots below."
-- Small meta row: "7-figure milestone · 2025" · "8 client dashboards" · "Updated Jun 2026"
-- Count-up runs once on mount with `requestAnimationFrame` (no extra deps), respects `prefers-reduced-motion`.
+Add a second discovery pipeline that runs in parallel with Apollo:
 
-### 3. New "Receipts" gallery directly under the hero
-Replace nothing — insert between the new hero and the existing `headlineStats` grid.
-- Grid of 8 cards (1 col mobile / 2 md / 4 lg), `aspect-[4/3]` screenshot on top, caption bar below.
-- Each card shows the figure as a large overlay chip (`$659,262`) + the context line ("Last 365 days").
-- Same `rounded-2xl border bg-card shadow-card hover:-translate-y-1 hover:shadow-glow` treatment used elsewhere on the page for visual consistency.
-- The $1,037,785 card spans 2 cols on `lg` and is flagged "Aggregate" so the hierarchy reads correctly.
+- **Server route** `/api/google/businesses` (new function in `src/lib/api-proxies.ts`).
+  - Uses existing `SERPAPI_API_KEY` with `engine=google_maps` (SerpApi Maps) → returns local business listings with name, website, phone, address, rating, type.
+  - Falls back to `engine=google` organic + Serper if Maps unavailable.
+  - Geocodes location (already supported) and passes `ll` for accurate local results.
+  - Pagination across multiple `start` offsets up to the user's `perPage`.
+- **Server route** `/api/scrape-site` — fetches a business website (HTML → text, capped ~50KB) so Claude can extract owner/decision-maker info.
+- New normalizer converts Google Maps results to the same `ScrapedPerson`-ish shape (company-level rows; person fields filled by Claude step).
 
-### 4. SEO
-Update the route's `head()` title/description to mention "$1M+ in tracked client revenue".
+### 2. Claude-powered enrichment
 
-## Out of scope
-- Not touching the existing headline stats, case studies, picture-proof masonry, or CTA — they stay as-is below the new section.
-- Not migrating the existing `proof-1..7.png` imports.
-- No new dependencies.
+- Add `ANTHROPIC_API_KEY` via the secrets tool (request it after plan approval).
+- New server route `/api/claude/extract`:
+  - Input: business name + website HTML + any Google snippet.
+  - Asks Claude (haiku for speed) to return strict JSON: `{ ownerName, ownerTitle, email, phone, linkedin, confidence }`.
+  - Used to enrich Google Maps results that have a website but no person, and to verify/improve Apollo results when confidence is low.
+- All Claude calls server-side only.
 
-## Files touched
-- `src/routes/results.tsx` — add hero + receipts section, update `head()`.
-- `src/assets/proof-revenue-{total,659k,197k,114k,101k,98k,91k,84k}.png.asset.json` — 8 new CDN pointers.
+### 3. Persistent denylist (per account, backend)
+
+- Extend the per-account `admin_state.data` JSON with a new `denylist` object:
+  ```ts
+  denylist: {
+    byKey: Record<string, { reason: "denied" | "accepted"; ts: number }>
+  }
+  ```
+  Key = stable hash of `lower(email) || lower(company)+"|"+lower(name) || domain`.
+- Store helpers in `src/admin/store.ts`: `denyPerson(person)`, `denyMany(people)`, `isDenied(person)`.
+- When a contact is accepted into Raw Data (`sendToRaw`), also auto-add it to the denylist as `accepted` so it never re-scrapes.
+- When the user clicks "Deny" (single or bulk) in the scraper, write to denylist *before* removing from the list.
+- Filter every fresh scrape result through `isDenied` server response handler (client-side filter is enough since denylist lives in `data`).
+- Add a small **"Denied & accepted history"** panel in the Scraper view: shows count, search box, "Restore" button per entry.
+
+### 4. Accuracy & dedup improvements
+
+- Merge Apollo + Google Maps results by normalized domain → one row per business, prefer the row that has the most fields filled.
+- Drop rows whose website is a known directory/social (reuse existing `SOCIAL_RE`).
+- After Claude extraction, drop rows where `confidence < 0.4` and no email/phone found.
+- Add a "Sources used" chip on each result (Apollo / Google Maps / Claude+site).
+
+### 5. UI changes (`src/admin/views/Scraper.tsx`)
+
+- New toggle group: **Sources** — `Apollo`, `Google Maps`, `Deep scrape (Claude)` — all on by default.
+- Existing "Deny" buttons now persist; tooltip updated to "Hide forever from this account".
+- Progress bar shows three phases: discover → enrich → AI extract.
+- New collapsible "History (denied / accepted)" section.
+
+### Files touched
+
+- `src/lib/api-proxies.ts` — add `googleBusinesses`, `scrapeSite`, `claudeExtract` handlers; wire into `handleApiRequest`.
+- `src/admin/store.ts` — add `denylist` to `AdminData`, helpers, new `searchBusinesses(filters)` that fan-outs to Apollo + Google + Claude.
+- `src/admin/views/Scraper.tsx` — sources toggle, persistent deny wiring, history panel, accept-also-denies.
+- `src/integrations/supabase/types.ts` — no schema change needed (denylist lives inside existing `admin_state.data` JSON).
+- New secret: `ANTHROPIC_API_KEY` (requested via secret tool after approval).
+
+### Out of scope
+
+- No new DB tables — denylist fits in the existing per-account JSON blob and is already auto-synced.
+- Not rebuilding the Apollo path; it stays as-is and runs alongside Google.
+- No phone reveal changes beyond what Claude finds in page text.
