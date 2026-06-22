@@ -141,6 +141,15 @@ export function RawData({
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">{r.email}</td>
                 <td className="px-4 py-3 text-muted-foreground">{r.phone}</td>
+                <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
+                  {r.website ? (
+                    <a href={r.website.startsWith("http") ? r.website : `https://${r.website}`} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                      {r.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                    </a>
+                  ) : (
+                    <span className="text-muted-foreground/60">—</span>
+                  )}
+                </td>
                 <td className="hidden px-4 py-3 text-muted-foreground lg:table-cell">{r.city}</td>
                 <td className="hidden px-4 py-3 text-muted-foreground lg:table-cell">{r.industry}</td>
                 <td className="px-4 py-3">
