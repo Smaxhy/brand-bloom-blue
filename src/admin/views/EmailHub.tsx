@@ -324,18 +324,30 @@ export function EmailHub({
                         <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">{r.city}</td>
                         <td className="px-4 py-3 text-muted-foreground">{new Date(r.lastEmailedAt!).toLocaleString()}</td>
                         <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={() =>
-                              update((p) => ({
-                                ...p,
-                                raw: p.raw.map((x) => (x.id === r.id ? { ...x, lastEmailedAt: undefined } : x)),
-                              }))
-                            }
-                            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
-                            title="Remove from sent"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" /> Remove
-                          </button>
+                          <div className="flex justify-end gap-1">
+                            <button
+                              onClick={() =>
+                                update((p) => ({
+                                  ...p,
+                                  raw: p.raw.map((x) => (x.id === r.id ? { ...x, lastEmailedAt: undefined } : x)),
+                                }))
+                              }
+                              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted-foreground hover:bg-secondary"
+                              title="Move back to recipients"
+                            >
+                              Move back
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (!confirm(`Delete ${r.business}?`)) return;
+                                update((p) => ({ ...p, raw: p.raw.filter((x) => x.id !== r.id) }));
+                              }}
+                              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
+                              title="Delete contact"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" /> Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
