@@ -93,6 +93,7 @@ export interface Settings {
   ghlLocationId: string;
   fromName: string;
   fromEmail: string;
+  theme?: "light" | "dark";
 }
 
 export interface DenylistEntry {

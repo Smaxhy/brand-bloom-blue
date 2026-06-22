@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Save, RotateCcw, KeyRound, Radar, Globe, Send, CheckCircle2, XCircle } from "lucide-react";
+import { Save, RotateCcw, KeyRound, Radar, Globe, Send, CheckCircle2, XCircle, Moon, Sun } from "lucide-react";
 import { type AdminData, type GhlSendDetail, resetData, ghlSendEmail } from "../store";
 import { Panel, Field, inputCls, Btn } from "../ui";
 
@@ -15,6 +15,7 @@ export function SettingsView({
   const [testTo, setTestTo] = useState("");
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string; details: GhlSendDetail[] } | null>(null);
+  const dark = s.theme === "dark";
 
   function save() {
     update((p) => ({ ...p, settings: s }));
@@ -51,6 +52,36 @@ export function SettingsView({
 
   return (
     <div className="max-w-2xl space-y-6">
+      <Panel>
+        <div className="mb-4 flex items-center gap-2">
+          <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-[var(--brand-violet)] to-[var(--brand-coral)] text-white">
+            {dark ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+          </div>
+          <div>
+            <h3 className="font-display text-lg font-bold">Appearance</h3>
+            <p className="text-xs text-muted-foreground">Choose your preferred admin theme.</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setS({ ...s, theme: "light" })}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
+              !dark ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:bg-secondary"
+            }`}
+          >
+            <Sun className="h-4 w-4" /> Light
+          </button>
+          <button
+            onClick={() => setS({ ...s, theme: "dark" })}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
+              dark ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:bg-secondary"
+            }`}
+          >
+            <Moon className="h-4 w-4" /> Dark
+          </button>
+        </div>
+      </Panel>
+
       <Panel>
         <div className="mb-4 flex items-center gap-2">
           <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-[var(--brand-violet)] to-[var(--brand-coral)] text-white"><KeyRound className="h-4 w-4" /></div>

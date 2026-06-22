@@ -72,6 +72,16 @@ export function AdminApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
+    if (!data) return;
+    const html = document.documentElement;
+    if (data.settings.theme === "dark") {
+      html.classList.add("dark");
+    } else {
+      html.classList.remove("dark");
+    }
+  }, [data?.settings.theme]);
+
+  useEffect(() => {
     setMounted(true);
 
     let unsubData: (() => void) | null = null;
@@ -188,7 +198,7 @@ export function AdminApp() {
   const current = nav.find((n) => n.id === view) ?? nav[0];
 
   return (
-    <div className="flex min-h-screen bg-[oklch(.985_.005_295)] text-foreground">
+    <div className="flex min-h-screen bg-background text-foreground">
       {/* mobile overlay */}
       {sidebarOpen && (
         <button
