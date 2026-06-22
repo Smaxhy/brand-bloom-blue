@@ -38,6 +38,43 @@ export function RawData({
     update((p) => ({ ...p, raw: p.raw.filter((r) => r.id !== id) }));
   }
 
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function selectAllVisible() {
+    setSelectedIds(new Set(rows.map((r) => r.id)));
+  }
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+  function revealSelected() {
+    setRevealedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of selectedIds) next.add(id);
+      return next;
+    });
+  }
+  function hideSelected() {
+    setRevealedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of selectedIds) next.delete(id);
+      return next;
+    }));
+  }
+  function toggleReveal(id: string) {
+    setRevealedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   function pushToPipeline(r: RawBusiness) {
     update((p) => ({
       ...p,
