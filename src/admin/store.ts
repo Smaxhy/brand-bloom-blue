@@ -204,6 +204,7 @@ function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData
     ...s,
     ...d,
     settings: { ...s.settings, ...(d.settings ?? {}) },
+    denylist: { ...(s.denylist ?? {}), ...((d.denylist ?? {}) as Record<string, DenylistEntry>) },
   };
 }
 
