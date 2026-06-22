@@ -105,7 +105,8 @@ export function Scraper({
   const [geo, setGeo] = useState<GeocodeResult | null>(null);
   const [geoBusy, setGeoBusy] = useState(false);
   const [scrapeBusy, setScrapeBusy] = useState(false);
-  const [results, setResults] = useState<ScrapedPerson[]>([]);
+  const saved = data.scraper;
+  const [results, setResults] = useState<ScrapedPerson[]>(saved?.results ?? []);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [banner, setBanner] = useState<{ live: boolean; text: string } | null>(null);
   const [pushed, setPushed] = useState(0);
@@ -113,11 +114,12 @@ export function Scraper({
   const [enrichBusy, setEnrichBusy] = useState(false);
   const [enrichProgress, setEnrichProgress] = useState({ done: 0, total: 0 });
   // id -> which source revealed the email ("Apollo" | "Hunter" | "Google" | "demo")
-  const [emailSource, setEmailSource] = useState<Record<string, string>>({});
+  const [emailSource, setEmailSource] = useState<Record<string, string>>(saved?.emailSource ?? {});
   // id -> URL where the email was found (Hunter source / Google result link)
-  const [emailSourceUrl, setEmailSourceUrl] = useState<Record<string, string>>({});
+  const [emailSourceUrl, setEmailSourceUrl] = useState<Record<string, string>>(saved?.emailSourceUrl ?? {});
   // id -> sources used to discover this row (apollo / google / claude)
-  const [discoverSources, setDiscoverSources] = useState<Record<string, ScrapeSource[]>>({});
+  const [discoverSources, setDiscoverSources] = useState<Record<string, ScrapeSource[]>>(saved?.discoverSources ?? {});
+
   // Which discovery sources to run
   const [sources, setSources] = useState<Record<ScrapeSource, boolean>>({
     apollo: true,
