@@ -1,7 +1,18 @@
 import { useState, useMemo } from "react";
-import { Plus, Check, X, Upload, Trash2, ArrowRightCircle, Search, Mail, AlertTriangle } from "lucide-react";
+import { Plus, Check, X, Upload, Trash2, ArrowRightCircle, Search, Mail, AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { type AdminData, type RawBusiness, uid } from "../store";
 import { Panel, StatCard, Modal, Field, inputCls, Btn } from "../ui";
+
+function maskEmail(email: string): string {
+  if (!email.includes("@")) return "***";
+  const [local, domain] = email.split("@");
+  const maskedLocal = local.length > 2 ? local[0] + "***" : "***";
+  const domainParts = domain.split(".");
+  const maskedDomain = domainParts.length > 1
+    ? domainParts[0][0] + "***." + domainParts.slice(1).join(".")
+    : "***";
+  return `${maskedLocal}@${maskedDomain}`;
+}
 
 
 export function RawData({
