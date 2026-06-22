@@ -898,6 +898,80 @@ export function Scraper({
           </p>
         </div>
       )}
+
+      {/* Deny / accepted memory */}
+      <Panel>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-display text-lg font-bold">Deny memory</h3>
+            <p className="text-xs text-muted-foreground">
+              {history.length} contact(s) the scraper will never resurface for this account
+              (denied + accepted are both remembered).
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {showHistory && (
+              <input
+                className={inputCls + " w-60"}
+                placeholder="Search name, company, email…"
+                value={historyFilter}
+                onChange={(e) => setHistoryFilter(e.target.value)}
+              />
+            )}
+            <Btn variant="ghost" onClick={() => setShowHistory((v) => !v)}>
+              {showHistory ? "Hide" : "Show"}
+            </Btn>
+          </div>
+        </div>
+        {showHistory && history.length > 0 && (
+          <div className="mt-3 max-h-80 space-y-1.5 overflow-auto">
+            {history
+              .filter((h) => {
+                if (!historyFilter.trim()) return true;
+                const q = historyFilter.toLowerCase();
+                const e = h.entry;
+                return (
+                  e.name.toLowerCase().includes(q) ||
+                  e.company.toLowerCase().includes(q) ||
+                  (e.email ?? "").toLowerCase().includes(q) ||
+                  (e.domain ?? "").toLowerCase().includes(q)
+                );
+              })
+              .slice(0, 200)
+              .map(({ key, entry }) => (
+                <div
+                  key={key}
+                  className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                >
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-[.62rem] font-bold uppercase tracking-wider ${
+                      entry.reason === "accepted"
+                        ? "bg-[oklch(.7_.18_150)]/15 text-[oklch(.45_.15_150)]"
+                        : "bg-[oklch(.7_.16_25)]/15 text-[oklch(.5_.18_25)]"
+                    }`}
+                  >
+                    {entry.reason}
+                  </span>
+                  <span className="min-w-[120px] font-semibold">{entry.name || "—"}</span>
+                  <span className="min-w-[120px] text-muted-foreground">{entry.company || "—"}</span>
+                  <span className="min-w-[160px] text-muted-foreground truncate">{entry.email || entry.domain || "—"}</span>
+                  <span className="text-muted-foreground">
+                    {new Date(entry.ts).toLocaleDateString()}
+                  </span>
+                  <button
+                    onClick={() => update((prev) => restoreFromDenylist(prev, key))}
+                    className="ml-auto rounded-md border border-border px-2 py-1 font-semibold text-primary hover:bg-secondary"
+                  >
+                    Restore
+                  </button>
+                </div>
+              ))}
+          </div>
+        )}
+        {showHistory && history.length === 0 && (
+          <p className="mt-3 text-sm text-muted-foreground">Nothing here yet.</p>
+        )}
+      </Panel>
     </div>
   );
 }
