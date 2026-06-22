@@ -224,35 +224,101 @@ export function EmailHub({
       )}
 
       {tab === "sent" && (
-        <Panel className="p-0 overflow-x-auto">
-          {sentList.length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground">No emails sent yet. Send your first campaign from the New campaign tab.</p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="px-4 py-3 font-semibold">Business</th>
-                  <th className="px-4 py-3 font-semibold">Email</th>
-                  <th className="hidden px-4 py-3 font-semibold md:table-cell">City</th>
-                  <th className="px-4 py-3 font-semibold">Sent</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sentList
-                  .slice()
-                  .sort((a, b) => (b.lastEmailedAt ?? 0) - (a.lastEmailedAt ?? 0))
-                  .map((r) => (
-                    <tr key={r.id} className="border-b border-border last:border-0">
-                      <td className="px-4 py-3 font-semibold">{r.business}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{r.email}</td>
-                      <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">{r.city}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{new Date(r.lastEmailedAt!).toLocaleString()}</td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          )}
-        </Panel>
+        <div className="space-y-5">
+          <Panel>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="font-display text-lg font-bold">Mark accepted as already sent</h3>
+                <p className="text-xs text-muted-foreground">Move accepted clients you've already contacted into the sent list.</p>
+              </div>
+              {pending.length > 0 && (
+                <Btn
+                  variant="ghost"
+                  onClick={() => {
+                    const sentAt = Date.now();
+                    const ids = pending.map((r) => r.id);
+                    update((p) => ({
+                      ...p,
+                      raw: p.raw.map((r) => (ids.includes(r.id) ? { ...r, lastEmailedAt: sentAt } : r)),
+                    }));
+                  }}
+                >
+                  Mark all ({pending.length})
+                </Btn>
+              )}
+            </div>
+            {pending.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No accepted clients left to mark — all caught up.</p>
+            ) : (
+              <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                {pending.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold">{r.business}</div>
+                      <div className="truncate text-xs text-muted-foreground">{r.email}</div>
+                    </div>
+                    <Btn
+                      variant="ghost"
+                      onClick={() =>
+                        update((p) => ({
+                          ...p,
+                          raw: p.raw.map((x) => (x.id === r.id ? { ...x, lastEmailedAt: Date.now() } : x)),
+                        }))
+                      }
+                    >
+                      <Plus className="h-4 w-4" /> Add to sent
+                    </Btn>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Panel>
+
+          <Panel className="p-0 overflow-x-auto">
+            {sentList.length === 0 ? (
+              <p className="p-6 text-sm text-muted-foreground">No emails sent yet. Send your first campaign from the New campaign tab.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="px-4 py-3 font-semibold">Business</th>
+                    <th className="px-4 py-3 font-semibold">Email</th>
+                    <th className="hidden px-4 py-3 font-semibold md:table-cell">City</th>
+                    <th className="px-4 py-3 font-semibold">Sent</th>
+                    <th className="px-4 py-3 font-semibold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sentList
+                    .slice()
+                    .sort((a, b) => (b.lastEmailedAt ?? 0) - (a.lastEmailedAt ?? 0))
+                    .map((r) => (
+                      <tr key={r.id} className="border-b border-border last:border-0">
+                        <td className="px-4 py-3 font-semibold">{r.business}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{r.email}</td>
+                        <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">{r.city}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{new Date(r.lastEmailedAt!).toLocaleString()}</td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            onClick={() =>
+                              update((p) => ({
+                                ...p,
+                                raw: p.raw.map((x) => (x.id === r.id ? { ...x, lastEmailedAt: undefined } : x)),
+                              }))
+                            }
+                            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
+                            title="Remove from sent"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            )}
+          </Panel>
+        </div>
       )}
 
 
