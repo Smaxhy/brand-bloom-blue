@@ -145,11 +145,15 @@ export function Scraper({
   function denySelected() {
     const ids = new Set(Object.keys(selected).filter((id) => selected[id]));
     if (!ids.size) return;
+    const toDeny = results.filter((p) => ids.has(p.id));
+    persistDeny(toDeny);
     setResults((prev) => prev.filter((p) => !ids.has(p.id)));
     setSelected({});
   }
 
   function denyOne(id: string) {
+    const target = results.find((p) => p.id === id);
+    if (target) persistDeny([target]);
     setResults((prev) => prev.filter((p) => p.id !== id));
     setSelected((s) => {
       const { [id]: _omit, ...rest } = s;
