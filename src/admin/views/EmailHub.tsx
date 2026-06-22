@@ -137,13 +137,34 @@ export function EmailHub({
             ) : (
               <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
                 {pending.map((r) => (
-                  <label key={r.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2 hover:bg-secondary/50">
-                    <input type="checkbox" checked={selected.includes(r.id)} onChange={() => toggle(r.id)} className="h-4 w-4 accent-[var(--brand-violet)]" />
+                  <div key={r.id} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2 hover:bg-secondary/50">
+                    <input type="checkbox" checked={selected.includes(r.id)} onChange={() => toggle(r.id)} className="h-4 w-4 cursor-pointer accent-[var(--brand-violet)]" />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold">{r.business}</div>
                       <div className="truncate text-xs text-muted-foreground">{r.email}</div>
                     </div>
-                  </label>
+                    <button
+                      onClick={() => {
+                        setSelected((s) => s.filter((x) => x !== r.id));
+                        update((p) => ({ ...p, raw: p.raw.map((x) => (x.id === r.id ? { ...x, status: "rejected" } : x)) }));
+                      }}
+                      className="rounded-lg px-2 py-1 text-xs text-muted-foreground hover:bg-secondary"
+                      title="Move to rejected"
+                    >
+                      Move
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!confirm(`Delete ${r.business}?`)) return;
+                        setSelected((s) => s.filter((x) => x !== r.id));
+                        update((p) => ({ ...p, raw: p.raw.filter((x) => x.id !== r.id) }));
+                      }}
+                      className="grid h-7 w-7 place-items-center rounded-lg text-destructive hover:bg-destructive/10"
+                      title="Delete contact"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
@@ -303,18 +324,30 @@ export function EmailHub({
                         <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">{r.city}</td>
                         <td className="px-4 py-3 text-muted-foreground">{new Date(r.lastEmailedAt!).toLocaleString()}</td>
                         <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={() =>
-                              update((p) => ({
-                                ...p,
-                                raw: p.raw.map((x) => (x.id === r.id ? { ...x, lastEmailedAt: undefined } : x)),
-                              }))
-                            }
-                            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
-                            title="Remove from sent"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" /> Remove
-                          </button>
+                          <div className="flex justify-end gap-1">
+                            <button
+                              onClick={() =>
+                                update((p) => ({
+                                  ...p,
+                                  raw: p.raw.map((x) => (x.id === r.id ? { ...x, lastEmailedAt: undefined } : x)),
+                                }))
+                              }
+                              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted-foreground hover:bg-secondary"
+                              title="Move back to recipients"
+                            >
+                              Move back
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (!confirm(`Delete ${r.business}?`)) return;
+                                update((p) => ({ ...p, raw: p.raw.filter((x) => x.id !== r.id) }));
+                              }}
+                              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
+                              title="Delete contact"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" /> Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
