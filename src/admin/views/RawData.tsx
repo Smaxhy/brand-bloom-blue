@@ -73,16 +73,36 @@ export function RawData({
     setImportOpen(false);
   }
 
+  // Map of normalized email → count of times it appears in raw[]
+  const emailCounts = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const r of data.raw) {
+      const k = (r.email || "").trim().toLowerCase();
+      if (!k) continue;
+      m[k] = (m[k] ?? 0) + 1;
+    }
+    return m;
+  }, [data.raw]);
+
   const rows = data.raw
-    .filter((r) => filter === "all" || r.status === filter)
+    .filter((r) => {
+      if (filter === "sent") return !!r.lastEmailedAt;
+      if (filter === "all") return true;
+      return r.status === filter;
+    })
     .filter((r) => !q || (r.business + r.email + r.city + r.industry).toLowerCase().includes(q.toLowerCase()));
+
+  const sentCount = data.raw.filter((r) => r.lastEmailedAt).length;
+  const lastSentAt = data.raw.reduce((m, r) => Math.max(m, r.lastEmailedAt ?? 0), 0);
 
   const counts = {
     all: data.raw.length,
     raw: data.raw.filter((r) => r.status === "raw").length,
     accepted: data.raw.filter((r) => r.status === "accepted").length,
     rejected: data.raw.filter((r) => r.status === "rejected").length,
+    sent: sentCount,
   };
+
 
   return (
     <div className="space-y-5">
