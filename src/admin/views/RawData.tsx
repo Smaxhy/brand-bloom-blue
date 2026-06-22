@@ -269,6 +269,14 @@ export function RawData({
           <tbody>
             {rows.map((r) => (
               <tr key={r.id} className="border-b border-border last:border-0 hover:bg-secondary/40">
+                <td className="px-2 py-3 text-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(r.id)}
+                    onChange={() => toggleSelect(r.id)}
+                    className="h-4 w-4 rounded border-border"
+                  />
+                </td>
                 <td className="px-4 py-3 font-semibold">
                   {r.business}
                   {r.contactName && (
@@ -280,7 +288,14 @@ export function RawData({
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span>{r.email}</span>
+                    <span className="font-mono text-xs">{revealedIds.has(r.id) ? r.email : maskEmail(r.email)}</span>
+                    <button
+                      onClick={() => toggleReveal(r.id)}
+                      className="inline-flex items-center rounded p-0.5 text-muted-foreground hover:bg-secondary"
+                      title={revealedIds.has(r.id) ? "Hide email" : "Reveal email"}
+                    >
+                      {revealedIds.has(r.id) ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                    </button>
                     {r.email && emailCounts[r.email.trim().toLowerCase()] > 1 && (
                       <span title="This email address appears more than once in your data" className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[.6rem] font-semibold uppercase" style={{ background: "color-mix(in oklab, var(--brand-coral) 15%, transparent)", color: "var(--brand-coral)" }}>
                         <AlertTriangle className="h-2.5 w-2.5" /> dup
