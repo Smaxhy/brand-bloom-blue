@@ -177,6 +177,7 @@ function seed(): AdminData {
     ],
     campaigns: [],
     settings: { ghlApiKey: "", ghlCompanyId: "", ghlLocationId: "", fromName: "Inspirova", fromEmail: "hello@inspirova.com" },
+    denylist: {},
   };
 }
 
