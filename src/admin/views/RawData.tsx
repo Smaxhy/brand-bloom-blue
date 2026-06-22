@@ -361,7 +361,7 @@ export function RawData({
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">No rows. Import some scraped data to get started.</td></tr>
+              <tr><td colSpan={9} className="px-4 py-10 text-center text-sm text-muted-foreground">No rows. Import some scraped data to get started.</td></tr>
             )}
           </tbody>
         </table>
