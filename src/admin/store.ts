@@ -257,16 +257,26 @@ export async function loadDataRemote(): Promise<AdminData> {
   }
 }
 
-async function pushRemote(data: AdminData): Promise<void> {
+async function pushRemote(data: AdminData, opts: { allowScraperClear?: boolean } = {}): Promise<void> {
   const { supabase } = await import("@/integrations/supabase/client");
   const userId = await currentUserId();
   if (!userId) return;
+  let nextData = data;
+  if (!opts.allowScraperClear && !data.scraper) {
+    const { data: existing } = await supabase
+      .from("admin_state")
+      .select("data")
+      .eq("user_id", userId)
+      .maybeSingle();
+    const existingData = withSchemaDefaults(existing?.data as Partial<AdminData> | null | undefined);
+    if (existingData.scraper) nextData = { ...data, scraper: existingData.scraper };
+  }
   const { error } = await supabase
     .from("admin_state")
     .upsert({
       user_id: userId,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      data: data as any,
+      data: nextData as any,
       updated_at: new Date().toISOString(),
     });
   if (error) console.warn("[admin] cloud save failed", error);
@@ -282,7 +292,7 @@ export function saveData(data: AdminData) {
 /** Reset this account's data back to the seed. */
 export async function resetData(): Promise<AdminData> {
   const s = seed();
-  await pushRemote(s);
+  await pushRemote(s, { allowScraperClear: true });
   return s;
 }
 
