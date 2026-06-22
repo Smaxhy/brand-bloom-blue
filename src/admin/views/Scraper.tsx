@@ -133,6 +133,19 @@ export function Scraper({
   const denylist = data.denylist ?? {};
   const history = denylistEntries(denylist);
 
+  // Persist scraper state per-account so a page refresh keeps results.
+  const firstSync = useRef(true);
+  useEffect(() => {
+    if (firstSync.current) {
+      firstSync.current = false;
+      return;
+    }
+    const snap = { results, emailSource, emailSourceUrl, discoverSources, updatedAt: Date.now() };
+    update((prev) => ({ ...prev, scraper: snap }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results, emailSource, emailSourceUrl, discoverSources]);
+
+
   function persistDeny(people: ScrapedPerson[]) {
     if (!people.length) return;
     update((prev) =>
