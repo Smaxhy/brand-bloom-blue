@@ -24,10 +24,14 @@ import {
   type ScrapeFilters,
   type ScrapedPerson,
   type GeocodeResult,
+  type ScrapeSource,
   SENIORITIES,
-  apolloSearch,
   geocodeLocation,
   enrichContacts,
+  discoverLeads,
+  addToDenylist,
+  restoreFromDenylist,
+  denylistEntries,
   uid,
 } from "../store";
 import { Panel, Field, inputCls, Btn } from "../ui";
@@ -112,15 +116,44 @@ export function Scraper({
   const [emailSource, setEmailSource] = useState<Record<string, string>>({});
   // id -> URL where the email was found (Hunter source / Google result link)
   const [emailSourceUrl, setEmailSourceUrl] = useState<Record<string, string>>({});
+  // id -> sources used to discover this row (apollo / google / claude)
+  const [discoverSources, setDiscoverSources] = useState<Record<string, ScrapeSource[]>>({});
+  // Which discovery sources to run
+  const [sources, setSources] = useState<Record<ScrapeSource, boolean>>({
+    apollo: true,
+    google: true,
+    claude: true,
+  });
+  const [aiProgress, setAiProgress] = useState({ done: 0, total: 0 });
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState("");
+
+  const denylist = data.denylist ?? {};
+  const history = denylistEntries(denylist);
+
+  function persistDeny(people: ScrapedPerson[]) {
+    if (!people.length) return;
+    update((prev) =>
+      addToDenylist(
+        prev,
+        "denied",
+        people.map((p) => ({ name: p.name, company: p.company, email: p.email, website: p.website })),
+      ),
+    );
+  }
 
   function denySelected() {
     const ids = new Set(Object.keys(selected).filter((id) => selected[id]));
     if (!ids.size) return;
+    const toDeny = results.filter((p) => ids.has(p.id));
+    persistDeny(toDeny);
     setResults((prev) => prev.filter((p) => !ids.has(p.id)));
     setSelected({});
   }
 
   function denyOne(id: string) {
+    const target = results.find((p) => p.id === id);
+    if (target) persistDeny([target]);
     setResults((prev) => prev.filter((p) => p.id !== id));
     setSelected((s) => {
       const { [id]: _omit, ...rest } = s;
@@ -269,19 +302,32 @@ export function Scraper({
 
   async function runScrape() {
     if (!filters.location.trim()) return;
+    if (!sources.apollo && !sources.google) {
+      setBanner({ live: false, text: "Pick at least one discovery source (Apollo or Google Maps)." });
+      return;
+    }
     setScrapeBusy(true);
     setBanner(null);
     setPushed(0);
-    // kick off geocode in parallel if we don't have it yet
+    setAiProgress({ done: 0, total: 0 });
     if (!geo) locate();
-    const res = await apolloSearch(filters);
+    const res = await discoverLeads(filters, {
+      sources,
+      denylist,
+      onProgress: (phase, done, total) => {
+        if (phase === "ai") setAiProgress({ done, total });
+      },
+    });
     setResults(res.people);
+    setDiscoverSources(res.sources);
     setSelected(Object.fromEntries(res.people.map((p) => [p.id, true])));
-    setBanner({ live: res.live, text: res.message });
+    setBanner({ live: res.liveApollo || res.liveGoogle, text: res.message });
     setScrapeBusy(false);
-    // Automatically reveal emails + websites for the results we just found.
-    if (res.live && res.people.length) {
-      await revealEmails(res.people);
+    setAiProgress({ done: 0, total: 0 });
+    // Reveal emails for Apollo-discovered rows that don't yet have one
+    const needsReveal = res.people.filter((p) => p.emailLocked || !p.email || !p.website);
+    if ((res.liveApollo || res.liveGoogle) && needsReveal.length) {
+      await revealEmails(needsReveal);
     }
   }
 
@@ -303,11 +349,17 @@ export function Scraper({
       contactTitle: p.title,
       seniority: p.seniority,
       linkedin: p.linkedin,
-      source: "Apollo",
+      source: (discoverSources[p.id] ?? []).map((s) => s[0].toUpperCase() + s.slice(1)).join("+") || "Apollo",
     }));
-    update((prev) => ({ ...prev, raw: [...rows, ...prev.raw] }));
+    update((prev) => {
+      const withDenied = addToDenylist(
+        prev,
+        "accepted",
+        selectedPeople.map((p) => ({ name: p.name, company: p.company, email: p.email, website: p.website })),
+      );
+      return { ...withDenied, raw: [...rows, ...withDenied.raw] };
+    });
     setPushed(rows.length);
-    // Remove accepted contacts from the scraper queue so it acts as an inbox.
     const acceptedIds = new Set(selectedPeople.map((p) => p.id));
     setResults((prev) => prev.filter((p) => !acceptedIds.has(p.id)));
     setSelected({});
@@ -551,6 +603,37 @@ export function Scraper({
               </div>
             </div>
 
+            <div>
+              <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
+                Discovery sources <span className="font-normal">(combine for the widest net)</span>
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  { id: "apollo", label: "Apollo (people)" },
+                  { id: "google", label: "Google Maps (local businesses)" },
+                  { id: "claude", label: "Claude — deep website scrape" },
+                ] as { id: ScrapeSource; label: string }[]).map((s) => {
+                  const on = sources[s.id];
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => setSources({ ...sources, [s.id]: !on })}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        on
+                          ? "border-transparent bg-[var(--brand-violet)] text-white"
+                          : "border-border bg-background text-muted-foreground hover:bg-secondary"
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-[.7rem] text-muted-foreground">
+                Google Maps finds local businesses Apollo doesn't list. Claude reads each website to extract the real owner/decision-maker, their email and phone.
+              </p>
+            </div>
+
             <div className="flex flex-wrap items-end gap-3 pt-1">
               <Field label="Results to pull">
                 <select
@@ -567,8 +650,15 @@ export function Scraper({
               </Field>
               <Btn onClick={runScrape} className="px-5">
                 {scrapeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radar className="h-4 w-4" />}
-                {scrapeBusy ? "Scraping…" : "Scrape leads"}
+                {scrapeBusy
+                  ? aiProgress.total
+                    ? `AI scrape ${aiProgress.done}/${aiProgress.total}…`
+                    : "Discovering…"
+                  : "Scrape leads"}
               </Btn>
+              <div className="text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">{Object.keys(denylist).length > 0 ? Object.keys(denylist).length : 0}</span> entries in deny-memory
+              </div>
             </div>
           </div>
 
@@ -710,11 +800,27 @@ export function Scraper({
                   </button>
 
                   <div className="min-w-[180px] flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold">{p.name}</span>
-                      <span className="rounded-full bg-secondary px-2 py-0.5 text-[.62rem] font-bold uppercase tracking-wider text-muted-foreground">
-                        {p.seniority.replace("_", " ")}
-                      </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold">{p.name || <span className="text-muted-foreground italic">No person yet</span>}</span>
+                      {p.seniority && (
+                        <span className="rounded-full bg-secondary px-2 py-0.5 text-[.62rem] font-bold uppercase tracking-wider text-muted-foreground">
+                          {p.seniority.replace("_", " ")}
+                        </span>
+                      )}
+                      {(discoverSources[p.id] ?? []).map((s) => (
+                        <span
+                          key={s}
+                          className={`rounded-full px-2 py-0.5 text-[.6rem] font-bold uppercase tracking-wider ${
+                            s === "apollo"
+                              ? "bg-[var(--brand-violet)]/15 text-[var(--brand-violet)]"
+                              : s === "google"
+                              ? "bg-[oklch(.7_.18_150)]/15 text-[oklch(.45_.15_150)]"
+                              : "bg-[var(--brand-coral)]/15 text-[var(--brand-coral)]"
+                          }`}
+                        >
+                          {s === "claude" ? "AI" : s}
+                        </span>
+                      ))}
                     </div>
                     <div className="text-xs text-muted-foreground">{p.title}</div>
                   </div>
@@ -808,6 +914,80 @@ export function Scraper({
           </p>
         </div>
       )}
+
+      {/* Deny / accepted memory */}
+      <Panel>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-display text-lg font-bold">Deny memory</h3>
+            <p className="text-xs text-muted-foreground">
+              {history.length} contact(s) the scraper will never resurface for this account
+              (denied + accepted are both remembered).
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {showHistory && (
+              <input
+                className={inputCls + " w-60"}
+                placeholder="Search name, company, email…"
+                value={historyFilter}
+                onChange={(e) => setHistoryFilter(e.target.value)}
+              />
+            )}
+            <Btn variant="ghost" onClick={() => setShowHistory((v) => !v)}>
+              {showHistory ? "Hide" : "Show"}
+            </Btn>
+          </div>
+        </div>
+        {showHistory && history.length > 0 && (
+          <div className="mt-3 max-h-80 space-y-1.5 overflow-auto">
+            {history
+              .filter((h) => {
+                if (!historyFilter.trim()) return true;
+                const q = historyFilter.toLowerCase();
+                const e = h.entry;
+                return (
+                  e.name.toLowerCase().includes(q) ||
+                  e.company.toLowerCase().includes(q) ||
+                  (e.email ?? "").toLowerCase().includes(q) ||
+                  (e.domain ?? "").toLowerCase().includes(q)
+                );
+              })
+              .slice(0, 200)
+              .map(({ key, entry }) => (
+                <div
+                  key={key}
+                  className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                >
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-[.62rem] font-bold uppercase tracking-wider ${
+                      entry.reason === "accepted"
+                        ? "bg-[oklch(.7_.18_150)]/15 text-[oklch(.45_.15_150)]"
+                        : "bg-[oklch(.7_.16_25)]/15 text-[oklch(.5_.18_25)]"
+                    }`}
+                  >
+                    {entry.reason}
+                  </span>
+                  <span className="min-w-[120px] font-semibold">{entry.name || "—"}</span>
+                  <span className="min-w-[120px] text-muted-foreground">{entry.company || "—"}</span>
+                  <span className="min-w-[160px] text-muted-foreground truncate">{entry.email || entry.domain || "—"}</span>
+                  <span className="text-muted-foreground">
+                    {new Date(entry.ts).toLocaleDateString()}
+                  </span>
+                  <button
+                    onClick={() => update((prev) => restoreFromDenylist(prev, key))}
+                    className="ml-auto rounded-md border border-border px-2 py-1 font-semibold text-primary hover:bg-secondary"
+                  >
+                    Restore
+                  </button>
+                </div>
+              ))}
+          </div>
+        )}
+        {showHistory && history.length === 0 && (
+          <p className="mt-3 text-sm text-muted-foreground">Nothing here yet.</p>
+        )}
+      </Panel>
     </div>
   );
 }

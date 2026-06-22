@@ -93,6 +93,15 @@ export interface Settings {
   fromEmail: string;
 }
 
+export interface DenylistEntry {
+  reason: "denied" | "accepted";
+  ts: number;
+  name: string;
+  company: string;
+  email?: string;
+  domain?: string;
+}
+
 export interface AdminData {
   deals: Deal[];
   raw: RawBusiness[];
@@ -101,6 +110,8 @@ export interface AdminData {
   templates: EmailTemplate[];
   campaigns: EmailCampaign[];
   settings: Settings;
+  /** Per-account persistent denylist — never re-surface these contacts. */
+  denylist?: Record<string, DenylistEntry>;
 }
 
 /* ----------------------------------------------------------------------- */
@@ -166,6 +177,7 @@ function seed(): AdminData {
     ],
     campaigns: [],
     settings: { ghlApiKey: "", ghlCompanyId: "", ghlLocationId: "", fromName: "Inspirova", fromEmail: "hello@inspirova.com" },
+    denylist: {},
   };
 }
 
@@ -192,6 +204,7 @@ function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData
     ...s,
     ...d,
     settings: { ...s.settings, ...(d.settings ?? {}) },
+    denylist: { ...(s.denylist ?? {}), ...((d.denylist ?? {}) as Record<string, DenylistEntry>) },
   };
 }
 
@@ -637,4 +650,358 @@ export function fmtEuro(n: number): string {
 
 export function fillTemplate(tpl: string, vars: Record<string, string>): string {
   return tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? `{{${k}}}`);
+}
+
+/* ----------------------------------------------------------------------- */
+/* Denylist — persistent per-account "never show again" memory              */
+/* ----------------------------------------------------------------------- */
+
+function norm(s: string | undefined): string {
+  return (s || "").trim().toLowerCase();
+}
+
+export function cleanDomain(s: string | undefined): string {
+  if (!s) return "";
+  return s.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "").trim().toLowerCase();
+}
+
+/** Stable lookup keys for a contact — any match means "denied". */
+export function denyKeysFor(p: {
+  name?: string;
+  company?: string;
+  email?: string;
+  website?: string;
+}): string[] {
+  const keys: string[] = [];
+  const email = norm(p.email);
+  if (email) keys.push(`e:${email}`);
+  const dom = cleanDomain(p.website);
+  const name = norm(p.name);
+  const company = norm(p.company);
+  if (name && company) keys.push(`nc:${name}|${company}`);
+  if (dom && name) keys.push(`nd:${name}|${dom}`);
+  if (dom && !name) keys.push(`d:${dom}`);
+  return keys;
+}
+
+export function isDenied(
+  denylist: Record<string, DenylistEntry> | undefined,
+  p: { name?: string; company?: string; email?: string; website?: string },
+): boolean {
+  if (!denylist) return false;
+  return denyKeysFor(p).some((k) => !!denylist[k]);
+}
+
+export function addToDenylist(
+  data: AdminData,
+  reason: "denied" | "accepted",
+  people: { name?: string; company?: string; email?: string; website?: string }[],
+): AdminData {
+  const next = { ...(data.denylist ?? {}) };
+  const ts = Date.now();
+  for (const p of people) {
+    const entry: DenylistEntry = {
+      reason,
+      ts,
+      name: p.name ?? "",
+      company: p.company ?? "",
+      email: p.email ?? "",
+      domain: cleanDomain(p.website),
+    };
+    for (const k of denyKeysFor(p)) next[k] = entry;
+  }
+  return { ...data, denylist: next };
+}
+
+export function restoreFromDenylist(data: AdminData, key: string): AdminData {
+  const entry = data.denylist?.[key];
+  if (!entry) return data;
+  const next = { ...(data.denylist ?? {}) };
+  // Remove all keys belonging to this same entry (same contact, multiple aliases).
+  for (const k of Object.keys(next)) {
+    const e = next[k];
+    if (
+      e.reason === entry.reason &&
+      e.name === entry.name &&
+      e.company === entry.company &&
+      e.email === entry.email &&
+      e.domain === entry.domain
+    ) {
+      delete next[k];
+    }
+  }
+  return { ...data, denylist: next };
+}
+
+/** Collapse alias keys into one logical entry per contact for display. */
+export function denylistEntries(
+  denylist: Record<string, DenylistEntry> | undefined,
+): { key: string; entry: DenylistEntry }[] {
+  if (!denylist) return [];
+  const seen = new Set<string>();
+  const out: { key: string; entry: DenylistEntry }[] = [];
+  for (const [key, entry] of Object.entries(denylist)) {
+    const sig = `${entry.name}|${entry.company}|${entry.email}|${entry.domain}|${entry.reason}`;
+    if (seen.has(sig)) continue;
+    seen.add(sig);
+    out.push({ key, entry });
+  }
+  return out.sort((a, b) => b.entry.ts - a.entry.ts);
+}
+
+/* ----------------------------------------------------------------------- */
+/* Google Maps business discovery                                          */
+/* ----------------------------------------------------------------------- */
+
+export interface DiscoveredBusiness {
+  id: string;
+  company: string;
+  website: string;
+  phone: string;
+  address: string;
+  city: string;
+  industry: string;
+  rating?: number;
+  reviews?: number;
+  source: "Google Maps" | "Google";
+}
+
+export async function googleBusinessSearch(filters: {
+  location: string;
+  industry: string;
+  perPage: number;
+}): Promise<{ live: boolean; businesses: DiscoveredBusiness[]; reason?: string }> {
+  try {
+    const res = await fetch("/api/google/businesses", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(filters),
+    });
+    if (!res.ok) return { live: false, businesses: [], reason: `HTTP ${res.status}` };
+    const j = (await res.json()) as {
+      demo?: boolean;
+      businesses?: DiscoveredBusiness[];
+      reason?: string;
+    };
+    return {
+      live: !j.demo,
+      businesses: j.businesses ?? [],
+      reason: j.reason,
+    };
+  } catch (e) {
+    return { live: false, businesses: [], reason: (e as Error).message };
+  }
+}
+
+/* ----------------------------------------------------------------------- */
+/* Claude-powered website extraction                                       */
+/* ----------------------------------------------------------------------- */
+
+export interface ClaudeExtracted {
+  ownerName: string;
+  ownerTitle: string;
+  email: string;
+  phone: string;
+  linkedin: string;
+  industry: string;
+  city: string;
+  confidence: number;
+}
+
+/** Scrape a website and ask Claude to extract the senior decision-maker. */
+export async function claudeExtractFromSite(input: {
+  company: string;
+  website: string;
+}): Promise<ClaudeExtracted | null> {
+  if (!input.website) return null;
+  try {
+    const siteRes = await fetch("/api/scrape-site", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: input.website }),
+    });
+    if (!siteRes.ok) return null;
+    const siteJ = (await siteRes.json()) as { ok?: boolean; text?: string };
+    if (!siteJ.ok || !siteJ.text) return null;
+    const extractRes = await fetch("/api/claude/extract", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ company: input.company, website: input.website, text: siteJ.text }),
+    });
+    if (!extractRes.ok) return null;
+    const ej = (await extractRes.json()) as { ok?: boolean; extracted?: ClaudeExtracted | null };
+    if (!ej.ok || !ej.extracted) return null;
+    const e = ej.extracted;
+    return {
+      ownerName: e.ownerName || "",
+      ownerTitle: e.ownerTitle || "",
+      email: e.email || "",
+      phone: e.phone || "",
+      linkedin: e.linkedin || "",
+      industry: e.industry || "",
+      city: e.city || "",
+      confidence: Number(e.confidence ?? 0),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/* ----------------------------------------------------------------------- */
+/* Unified discovery — fan-out across Apollo + Google + Claude              */
+/* ----------------------------------------------------------------------- */
+
+export type ScrapeSource = "apollo" | "google" | "claude";
+
+export interface DiscoverOptions {
+  sources: Record<ScrapeSource, boolean>;
+  denylist?: Record<string, DenylistEntry>;
+  onProgress?: (phase: string, done: number, total: number) => void;
+}
+
+function googleToPerson(b: DiscoveredBusiness, kw: string): ScrapedPerson {
+  return {
+    id: uid("gp"),
+    name: "",
+    title: "",
+    seniority: "",
+    email: "",
+    emailLocked: true,
+    phone: b.phone,
+    linkedin: "",
+    company: b.company,
+    website: b.website,
+    city: b.city || b.address || "",
+    industry: b.industry || kw,
+  };
+}
+
+/**
+ * Run Apollo + Google Maps in parallel, merge by company/domain, filter denied,
+ * then optionally use Claude to read each site for the senior decision-maker.
+ */
+export async function discoverLeads(
+  filters: ScrapeFilters,
+  opts: DiscoverOptions,
+): Promise<{
+  people: ScrapedPerson[];
+  sources: Record<string, ScrapeSource[]>; // person.id -> sources that produced it
+  liveApollo: boolean;
+  liveGoogle: boolean;
+  message: string;
+  skippedDenied: number;
+}> {
+  const wanted = filters.perPage;
+  const sourcesById: Record<string, ScrapeSource[]> = {};
+  const sources = opts.sources;
+
+  const [apolloRes, googleRes] = await Promise.all([
+    sources.apollo
+      ? apolloSearch(filters)
+      : Promise.resolve({ live: false, people: [], message: "" } as ScrapeResponse),
+    sources.google
+      ? googleBusinessSearch({
+          location: filters.location,
+          industry: filters.industry,
+          perPage: wanted,
+        })
+      : Promise.resolve({ live: false, businesses: [], reason: "off" } as {
+          live: boolean;
+          businesses: DiscoveredBusiness[];
+          reason?: string;
+        }),
+  ]);
+
+  // Merge by normalized domain (fallback: lowercased company name).
+  const merged = new Map<string, ScrapedPerson>();
+  const kw = filters.industry.split(",")[0]?.trim() || "";
+
+  for (const p of apolloRes.people) {
+    const key = cleanDomain(p.website) || norm(p.company) || p.id;
+    if (!merged.has(key)) {
+      merged.set(key, { ...p });
+      sourcesById[p.id] = ["apollo"];
+    }
+  }
+  for (const b of googleRes.businesses) {
+    const key = cleanDomain(b.website) || norm(b.company) || b.id;
+    const existing = merged.get(key);
+    if (existing) {
+      // Backfill missing fields from Google
+      if (!existing.phone && b.phone) existing.phone = b.phone;
+      if (!existing.website && b.website) existing.website = b.website;
+      if (!existing.city && (b.city || b.address)) existing.city = b.city || b.address;
+      if (!existing.industry && b.industry) existing.industry = b.industry;
+      sourcesById[existing.id] = [...(sourcesById[existing.id] ?? []), "google"];
+    } else {
+      const person = googleToPerson(b, kw);
+      merged.set(key, person);
+      sourcesById[person.id] = ["google"];
+    }
+  }
+
+  // Filter denied + low-signal rows
+  let skippedDenied = 0;
+  let people = Array.from(merged.values()).filter((p) => {
+    if (isDenied(opts.denylist, p)) {
+      skippedDenied++;
+      return false;
+    }
+    // Drop rows that are pure noise (no company, no website)
+    return !!(p.company || p.website);
+  });
+
+  // Cap at requested size before expensive AI step
+  people = people.slice(0, wanted);
+
+  // Claude pass — only run for rows that have a website but no person yet,
+  // or whose website looks like a legit business site.
+  if (sources.claude && people.length) {
+    const targets = people.filter((p) => p.website && (!p.name || !p.email));
+    opts.onProgress?.("ai", 0, targets.length);
+    let done = 0;
+    const CONCURRENCY = 4;
+    for (let i = 0; i < targets.length; i += CONCURRENCY) {
+      const batch = targets.slice(i, i + CONCURRENCY);
+      await Promise.all(
+        batch.map(async (p) => {
+          const ex = await claudeExtractFromSite({ company: p.company, website: p.website });
+          done++;
+          opts.onProgress?.("ai", done, targets.length);
+          if (!ex) return;
+          if (ex.ownerName && !p.name) p.name = ex.ownerName;
+          if (ex.ownerTitle && !p.title) p.title = ex.ownerTitle;
+          if (ex.email) {
+            p.email = ex.email;
+            p.emailLocked = false;
+          }
+          if (ex.phone && !p.phone) p.phone = ex.phone;
+          if (ex.linkedin && !p.linkedin) p.linkedin = ex.linkedin;
+          if (ex.industry && !p.industry) p.industry = ex.industry;
+          if (ex.city && !p.city) p.city = ex.city;
+          sourcesById[p.id] = [...(sourcesById[p.id] ?? []), "claude"];
+        }),
+      );
+    }
+    // Drop low-confidence ghosts (no person, no email, no phone) after AI pass
+    people = people.filter((p) => p.company && (p.name || p.email || p.phone));
+  }
+
+  const bits: string[] = [];
+  if (sources.apollo) bits.push(apolloRes.live ? `Apollo: ${apolloRes.people.length}` : `Apollo: demo`);
+  if (sources.google)
+    bits.push(googleRes.live ? `Google Maps: ${googleRes.businesses.length}` : `Google: ${googleRes.reason ?? "off"}`);
+  if (sources.claude) bits.push("Claude: enriched");
+  const message = `${people.length} unique business(es) after merge. ${bits.join(" · ")}${
+    skippedDenied ? ` · ${skippedDenied} skipped (denied)` : ""
+  }`;
+
+  return {
+    people,
+    sources: sourcesById,
+    liveApollo: apolloRes.live,
+    liveGoogle: googleRes.live,
+    message,
+    skippedDenied,
+  };
 }
