@@ -120,6 +120,7 @@ export function RawData({
               <th className="px-4 py-3 font-semibold">Business</th>
               <th className="px-4 py-3 font-semibold">Email</th>
               <th className="px-4 py-3 font-semibold">Phone</th>
+              <th className="hidden px-4 py-3 font-semibold md:table-cell">Website</th>
               <th className="hidden px-4 py-3 font-semibold lg:table-cell">City</th>
               <th className="hidden px-4 py-3 font-semibold lg:table-cell">Industry</th>
               <th className="px-4 py-3 font-semibold">Status</th>
@@ -140,6 +141,15 @@ export function RawData({
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">{r.email}</td>
                 <td className="px-4 py-3 text-muted-foreground">{r.phone}</td>
+                <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
+                  {r.website ? (
+                    <a href={r.website.startsWith("http") ? r.website : `https://${r.website}`} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                      {r.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                    </a>
+                  ) : (
+                    <span className="text-muted-foreground/60">—</span>
+                  )}
+                </td>
                 <td className="hidden px-4 py-3 text-muted-foreground lg:table-cell">{r.city}</td>
                 <td className="hidden px-4 py-3 text-muted-foreground lg:table-cell">{r.industry}</td>
                 <td className="px-4 py-3">
@@ -182,7 +192,7 @@ export function RawData({
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">No rows. Import some scraped data to get started.</td></tr>
+              <tr><td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">No rows. Import some scraped data to get started.</td></tr>
             )}
           </tbody>
         </table>
