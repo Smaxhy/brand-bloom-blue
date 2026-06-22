@@ -942,7 +942,7 @@ export function Scraper({
                     onClick={() => acceptOne(p.id)}
                     aria-label="Accept"
                     title="Accept & send to Raw Data"
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border text-[oklch(.55_.15_150)] hover:bg-[oklch(.*/95_.04_150)]"
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border text-[oklch(.55_.15_150)] hover:bg-[oklch(.95_.04_150)]"
                   >
                     <Check className="h-4 w-4" />
                   </button>
