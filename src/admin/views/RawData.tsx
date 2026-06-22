@@ -190,7 +190,22 @@ export function RawData({
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-muted-foreground">{r.email}</td>
+                <td className="px-4 py-3 text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span>{r.email}</span>
+                    {r.email && emailCounts[r.email.trim().toLowerCase()] > 1 && (
+                      <span title="This email address appears more than once in your data" className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[.6rem] font-semibold uppercase" style={{ background: "color-mix(in oklab, var(--brand-coral) 15%, transparent)", color: "var(--brand-coral)" }}>
+                        <AlertTriangle className="h-2.5 w-2.5" /> dup
+                      </span>
+                    )}
+                    {r.lastEmailedAt && (
+                      <span title={`Emailed ${new Date(r.lastEmailedAt).toLocaleString()}`} className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[.6rem] font-semibold uppercase" style={{ background: "color-mix(in oklab, oklch(.7 .18 150) 18%, transparent)", color: "oklch(.45 .15 150)" }}>
+                        <Mail className="h-2.5 w-2.5" /> sent
+                      </span>
+                    )}
+                  </div>
+                </td>
+
                 <td className="px-4 py-3 text-muted-foreground">{r.phone}</td>
                 <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
                   {r.website ? (
