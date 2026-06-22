@@ -11,6 +11,7 @@ import {
   Phone,
   Mail,
   ArrowRightCircle,
+  Check,
   CheckSquare,
   Square,
   Building2,
@@ -170,6 +171,39 @@ export function Scraper({
     const target = results.find((p) => p.id === id);
     if (target) persistDeny([target]);
     setResults((prev) => prev.filter((p) => p.id !== id));
+    setSelected((s) => {
+      const { [id]: _omit, ...rest } = s;
+      return rest;
+    });
+  }
+
+  function acceptOne(id: string) {
+    const p = results.find((x) => x.id === id);
+    if (!p) return;
+    const row: RawBusiness = {
+      id: uid("r"),
+      business: p.company,
+      email: p.emailLocked ? "" : p.email,
+      phone: p.phone,
+      website: p.website,
+      city: p.city,
+      industry: p.industry,
+      status: "raw",
+      scrapedAt: Date.now(),
+      contactName: p.name,
+      contactTitle: p.title,
+      seniority: p.seniority,
+      linkedin: p.linkedin,
+      source: (discoverSources[p.id] ?? []).map((s) => s[0].toUpperCase() + s.slice(1)).join("+") || "Apollo",
+    };
+    update((prev) => {
+      const withDenied = addToDenylist(prev, "accepted", [
+        { name: p.name, company: p.company, email: p.email, website: p.website },
+      ]);
+      return { ...withDenied, raw: [row, ...withDenied.raw] };
+    });
+    setPushed((driven) => driven + 1);
+    setResults((prev) => prev.filter((x) => x.id !== id));
     setSelected((s) => {
       const { [id]: _omit, ...rest } = s;
       return rest;
@@ -904,6 +938,14 @@ export function Scraper({
                       <Linkedin className="h-4 w-4" />
                     </a>
                   )}
+                  <button
+                    onClick={() => acceptOne(p.id)}
+                    aria-label="Accept"
+                    title="Accept & send to Raw Data"
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border text-[oklch(.55_.15_150)] hover:bg-[oklch(.95_.04_150)]"
+                  >
+                    <Check className="h-4 w-4" />
+                  </button>
                   <button
                     onClick={() => denyOne(p.id)}
                     aria-label="Deny / remove"
