@@ -116,6 +116,31 @@ export function Scraper({
   const [emailSource, setEmailSource] = useState<Record<string, string>>({});
   // id -> URL where the email was found (Hunter source / Google result link)
   const [emailSourceUrl, setEmailSourceUrl] = useState<Record<string, string>>({});
+  // id -> sources used to discover this row (apollo / google / claude)
+  const [discoverSources, setDiscoverSources] = useState<Record<string, ScrapeSource[]>>({});
+  // Which discovery sources to run
+  const [sources, setSources] = useState<Record<ScrapeSource, boolean>>({
+    apollo: true,
+    google: true,
+    claude: true,
+  });
+  const [aiProgress, setAiProgress] = useState({ done: 0, total: 0 });
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState("");
+
+  const denylist = data.denylist ?? {};
+  const history = denylistEntries(denylist);
+
+  function persistDeny(people: ScrapedPerson[]) {
+    if (!people.length) return;
+    update((prev) =>
+      addToDenylist(
+        prev,
+        "denied",
+        people.map((p) => ({ name: p.name, company: p.company, email: p.email, website: p.website })),
+      ),
+    );
+  }
 
   function denySelected() {
     const ids = new Set(Object.keys(selected).filter((id) => selected[id]));
