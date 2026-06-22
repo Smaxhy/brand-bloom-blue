@@ -28,6 +28,8 @@ export function RawData({
   const [paste, setPaste] = useState("");
   const [filter, setFilter] = useState<"all" | "raw" | "accepted" | "rejected" | "sent">("all");
   const [q, setQ] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
 
   function setStatus(id: string, status: RawBusiness["status"]) {
     update((p) => ({ ...p, raw: p.raw.map((r) => (r.id === id ? { ...r, status } : r)) }));
