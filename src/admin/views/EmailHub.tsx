@@ -53,12 +53,16 @@ export function EmailHub({
       fromEmail: data.settings.fromEmail,
     });
     setResult(res);
-    if (res.ok) {
-      const okEmails = new Set(
-        (res.details.length ? res.details.filter((d) => d.ok).map((d) => d.email.toLowerCase()) : recipients.map((r) => r.email.toLowerCase())),
-      );
+    const okEmails = new Set(
+      res.details.length
+        ? res.details.filter((d) => d.ok).map((d) => d.email.toLowerCase())
+        : res.ok
+          ? recipients.map((r) => r.email.toLowerCase())
+          : [],
+    );
+    const sentIds = recipients.filter((r) => okEmails.has(r.email.toLowerCase())).map((r) => r.id);
+    if (sentIds.length > 0) {
       const sentAt = Date.now();
-      const sentIds = recipients.filter((r) => okEmails.has(r.email.toLowerCase())).map((r) => r.id);
       update((p) => ({
         ...p,
         raw: p.raw.map((r) => (sentIds.includes(r.id) ? { ...r, lastEmailedAt: sentAt } : r)),
