@@ -190,7 +190,7 @@ export function RawData({
           {(["all", "raw", "accepted", "rejected", "sent"] as const).map((f) => (
             <button
               key={f}
-              onClick={() => setFilter(f)}
+              onClick={() => { setFilter(f); clearSelection(); }}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition-colors ${
                 filter === f ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary"
               }`}
@@ -202,12 +202,42 @@ export function RawData({
 
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className={`${inputCls} pl-8`} />
+          <input value={q} onChange={(e) => { setQ(e.target.value); clearSelection(); }} placeholder="Search…" className={`${inputCls} pl-8`} />
         </div>
         <Btn className="ml-auto" onClick={() => setImportOpen(true)}>
           <Upload className="h-4 w-4" /> Import scraped data
         </Btn>
       </div>
+
+      {rows.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={rows.length > 0 && rows.every((r) => selectedIds.has(r.id))}
+              onChange={(e) => { if (e.target.checked) selectAllVisible(); else clearSelection(); }}
+              className="h-4 w-4 rounded border-border"
+            />
+            <span className="text-muted-foreground">{selectedIds.size} selected</span>
+          </label>
+          {selectedIds.size > 0 && (
+            <>
+              <button
+                onClick={revealSelected}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20"
+              >
+                <Eye className="h-3.5 w-3.5" /> Reveal emails
+              </button>
+              <button
+                onClick={hideSelected}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-secondary px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-secondary/80"
+              >
+                <EyeOff className="h-3.5 w-3.5" /> Hide emails
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       <p className="text-sm text-muted-foreground">
         Your scraping dump lives here. <strong className="text-foreground">Accept</strong> the businesses worth contacting — accepted
