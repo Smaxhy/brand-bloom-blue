@@ -11,6 +11,7 @@ import {
   Phone,
   Mail,
   ArrowRightCircle,
+  Check,
   CheckSquare,
   Square,
   Building2,
