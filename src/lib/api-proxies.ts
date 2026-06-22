@@ -41,6 +41,9 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   if (path === "/api/enrich") return enrich(request, env);
   if (path === "/api/hunter/domain") return hunterDomain(url, env);
   if (path === "/api/ghl/send") return ghlSend(request, env);
+  if (path === "/api/google/businesses") return googleBusinesses(request, env);
+  if (path === "/api/scrape-site") return scrapeSite(request, env);
+  if (path === "/api/claude/extract") return claudeExtract(request, env);
 
   return null;
 }
