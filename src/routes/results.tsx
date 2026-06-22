@@ -287,16 +287,14 @@ function ResultsPage() {
             Want to be the <span className="text-gradient-brand">next case study?</span>
           </h2>
           <p className="mx-auto mt-6 max-w-xl text-lg text-muted-foreground">
-            Slide into the DMs. We'll come back with a plan tailored to your brand.
+            Tell us about your brand and we'll build a tailored growth plan.
           </p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
             <a
-              href="https://instagram.com/max.grchv"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="/#pricing"
               className="inline-flex items-center gap-2 rounded-full bg-gradient-brand px-6 py-3 text-sm font-medium text-white shadow-glow transition-transform hover:scale-[1.03]"
             >
-              DM @max.grchv
+              Request your quote
             </a>
             <Link
               to="/"
@@ -309,11 +307,7 @@ function ResultsPage() {
       </section>
 
       <footer className="border-t border-border py-10">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 text-sm text-muted-foreground md:flex-row">
-          <div className="flex items-center gap-2">
-            <img src={logo} alt="" className="h-6 w-6 rounded object-cover" />
-            <span>© {new Date().getFullYear()} Inspirova Marketing</span>
-          </div>
+        <div className="mx-auto flex max-w-6xl items-center justify-center px-6 text-sm text-muted-foreground">
           <div>Built to market.</div>
         </div>
       </footer>
