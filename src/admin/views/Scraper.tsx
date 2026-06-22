@@ -302,19 +302,32 @@ export function Scraper({
 
   async function runScrape() {
     if (!filters.location.trim()) return;
+    if (!sources.apollo && !sources.google) {
+      setBanner({ live: false, text: "Pick at least one discovery source (Apollo or Google Maps)." });
+      return;
+    }
     setScrapeBusy(true);
     setBanner(null);
     setPushed(0);
-    // kick off geocode in parallel if we don't have it yet
+    setAiProgress({ done: 0, total: 0 });
     if (!geo) locate();
-    const res = await apolloSearch(filters);
+    const res = await discoverLeads(filters, {
+      sources,
+      denylist,
+      onProgress: (phase, done, total) => {
+        if (phase === "ai") setAiProgress({ done, total });
+      },
+    });
     setResults(res.people);
+    setDiscoverSources(res.sources);
     setSelected(Object.fromEntries(res.people.map((p) => [p.id, true])));
-    setBanner({ live: res.live, text: res.message });
+    setBanner({ live: res.liveApollo || res.liveGoogle, text: res.message });
     setScrapeBusy(false);
-    // Automatically reveal emails + websites for the results we just found.
-    if (res.live && res.people.length) {
-      await revealEmails(res.people);
+    setAiProgress({ done: 0, total: 0 });
+    // Reveal emails for Apollo-discovered rows that don't yet have one
+    const needsReveal = res.people.filter((p) => p.emailLocked || !p.email || !p.website);
+    if ((res.liveApollo || res.liveGoogle) && needsReveal.length) {
+      await revealEmails(needsReveal);
     }
   }
 
@@ -336,11 +349,17 @@ export function Scraper({
       contactTitle: p.title,
       seniority: p.seniority,
       linkedin: p.linkedin,
-      source: "Apollo",
+      source: (discoverSources[p.id] ?? []).map((s) => s[0].toUpperCase() + s.slice(1)).join("+") || "Apollo",
     }));
-    update((prev) => ({ ...prev, raw: [...rows, ...prev.raw] }));
+    update((prev) => {
+      const withDenied = addToDenylist(
+        prev,
+        "accepted",
+        selectedPeople.map((p) => ({ name: p.name, company: p.company, email: p.email, website: p.website })),
+      );
+      return { ...withDenied, raw: [...rows, ...withDenied.raw] };
+    });
     setPushed(rows.length);
-    // Remove accepted contacts from the scraper queue so it acts as an inbox.
     const acceptedIds = new Set(selectedPeople.map((p) => p.id));
     setResults((prev) => prev.filter((p) => !acceptedIds.has(p.id)));
     setSelected({});
