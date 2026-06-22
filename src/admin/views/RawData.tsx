@@ -87,7 +87,7 @@ export function RawData({
   const rows = data.raw
     .filter((r) => {
       if (filter === "sent") return !!r.lastEmailedAt;
-      if (filter === "all") return true;
+      if (filter === "all") return r.status !== "accepted";
       return r.status === filter;
     })
     .filter((r) => !q || (r.business + r.email + r.city + r.industry).toLowerCase().includes(q.toLowerCase()));
@@ -96,7 +96,7 @@ export function RawData({
   const lastSentAt = data.raw.reduce((m, r) => Math.max(m, r.lastEmailedAt ?? 0), 0);
 
   const counts = {
-    all: data.raw.length,
+    all: data.raw.filter((r) => r.status !== "accepted").length,
     raw: data.raw.filter((r) => r.status === "raw").length,
     accepted: data.raw.filter((r) => r.status === "accepted").length,
     rejected: data.raw.filter((r) => r.status === "rejected").length,
