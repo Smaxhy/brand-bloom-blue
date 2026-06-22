@@ -603,6 +603,37 @@ export function Scraper({
               </div>
             </div>
 
+            <div>
+              <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
+                Discovery sources <span className="font-normal">(combine for the widest net)</span>
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  { id: "apollo", label: "Apollo (people)" },
+                  { id: "google", label: "Google Maps (local businesses)" },
+                  { id: "claude", label: "Claude — deep website scrape" },
+                ] as { id: ScrapeSource; label: string }[]).map((s) => {
+                  const on = sources[s.id];
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => setSources({ ...sources, [s.id]: !on })}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        on
+                          ? "border-transparent bg-[var(--brand-violet)] text-white"
+                          : "border-border bg-background text-muted-foreground hover:bg-secondary"
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-[.7rem] text-muted-foreground">
+                Google Maps finds local businesses Apollo doesn't list. Claude reads each website to extract the real owner/decision-maker, their email and phone.
+              </p>
+            </div>
+
             <div className="flex flex-wrap items-end gap-3 pt-1">
               <Field label="Results to pull">
                 <select
@@ -619,8 +650,15 @@ export function Scraper({
               </Field>
               <Btn onClick={runScrape} className="px-5">
                 {scrapeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radar className="h-4 w-4" />}
-                {scrapeBusy ? "Scraping…" : "Scrape leads"}
+                {scrapeBusy
+                  ? aiProgress.total
+                    ? `AI scrape ${aiProgress.done}/${aiProgress.total}…`
+                    : "Discovering…"
+                  : "Scrape leads"}
               </Btn>
+              <div className="text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">{Object.keys(denylist).length > 0 ? Object.keys(denylist).length : 0}</span> entries in deny-memory
+              </div>
             </div>
           </div>
 
