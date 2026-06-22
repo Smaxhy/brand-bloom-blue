@@ -112,9 +112,9 @@ export function EmailHub({
       </div>
 
       <div className="flex gap-1 rounded-xl border border-border bg-card p-1">
-        {(["campaign", "templates"] as const).map((t) => (
+        {(["campaign", "templates", "sent"] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold capitalize transition-colors ${tab === t ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary"}`}>
-            {t === "campaign" ? "New campaign" : "Templates"}
+            {t === "campaign" ? "New campaign" : t === "templates" ? "Templates" : `Sent (${sentList.length})`}
           </button>
         ))}
       </div>
@@ -123,11 +123,16 @@ export function EmailHub({
         <div className="grid gap-5 lg:grid-cols-2">
           <Panel>
             <h3 className="mb-3 font-display text-lg font-bold">Recipients</h3>
-            {accepted.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No accepted leads yet. Accept some businesses in the Raw Data tab first.</p>
+            <p className="mb-2 text-xs text-muted-foreground">Already-emailed contacts are hidden — see the Sent tab.</p>
+            {pending.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {accepted.length === 0
+                  ? "No accepted leads yet. Accept some businesses in the Raw Data tab first."
+                  : "Every accepted lead has already received an email. Accept more leads to keep sending."}
+              </p>
             ) : (
               <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-                {accepted.map((r) => (
+                {pending.map((r) => (
                   <label key={r.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2 hover:bg-secondary/50">
                     <input type="checkbox" checked={selected.includes(r.id)} onChange={() => toggle(r.id)} className="h-4 w-4 accent-[var(--brand-violet)]" />
                     <div className="min-w-0 flex-1">
@@ -140,6 +145,7 @@ export function EmailHub({
             )}
             <div className="mt-3 text-xs text-muted-foreground">{recipients.length} selected</div>
           </Panel>
+
 
           <Panel className="flex flex-col">
             <h3 className="mb-3 font-display text-lg font-bold">Message</h3>
