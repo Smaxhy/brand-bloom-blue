@@ -102,6 +102,14 @@ export interface DenylistEntry {
   domain?: string;
 }
 
+export interface ScraperState {
+  results: ScrapedPerson[];
+  emailSource: Record<string, string>;
+  emailSourceUrl: Record<string, string>;
+  discoverSources: Record<string, ScrapeSource[]>;
+  updatedAt: number;
+}
+
 export interface AdminData {
   deals: Deal[];
   raw: RawBusiness[];
@@ -112,7 +120,10 @@ export interface AdminData {
   settings: Settings;
   /** Per-account persistent denylist — never re-surface these contacts. */
   denylist?: Record<string, DenylistEntry>;
+  /** Persisted scraper results so a page refresh keeps them. */
+  scraper?: ScraperState;
 }
+
 
 /* ----------------------------------------------------------------------- */
 /* Pipeline stage config                                                    */
@@ -205,8 +216,10 @@ function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData
     ...d,
     settings: { ...s.settings, ...(d.settings ?? {}) },
     denylist: { ...(s.denylist ?? {}), ...((d.denylist ?? {}) as Record<string, DenylistEntry>) },
+    scraper: (d.scraper as ScraperState | undefined) ?? s.scraper,
   };
 }
+
 
 function isEmptyRemote(d: unknown): boolean {
   if (!d || typeof d !== "object") return true;
