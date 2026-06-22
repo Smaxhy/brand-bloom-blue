@@ -54,6 +54,36 @@ export function SettingsView({
     <div className="max-w-2xl space-y-6">
       <Panel>
         <div className="mb-4 flex items-center gap-2">
+          <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-[var(--brand-violet)] to-[var(--brand-coral)] text-white">
+            {dark ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+          </div>
+          <div>
+            <h3 className="font-display text-lg font-bold">Appearance</h3>
+            <p className="text-xs text-muted-foreground">Choose your preferred admin theme.</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setS({ ...s, theme: "light" })}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
+              !dark ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:bg-secondary"
+            }`}
+          >
+            <Sun className="h-4 w-4" /> Light
+          </button>
+          <button
+            onClick={() => setS({ ...s, theme: "dark" })}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
+              dark ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:bg-secondary"
+            }`}
+          >
+            <Moon className="h-4 w-4" /> Dark
+          </button>
+        </div>
+      </Panel>
+
+      <Panel>
+        <div className="mb-4 flex items-center gap-2">
           <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-[var(--brand-violet)] to-[var(--brand-coral)] text-white"><KeyRound className="h-4 w-4" /></div>
           <div>
             <h3 className="font-display text-lg font-bold">GoHighLevel</h3>
