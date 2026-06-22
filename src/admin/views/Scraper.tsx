@@ -177,6 +177,39 @@ export function Scraper({
     });
   }
 
+  function acceptOne(id: string) {
+    const p = results.find((x) => x.id === id);
+    if (!p) return;
+    const row: RawBusiness = {
+      id: uid("r"),
+      business: p.company,
+      email: p.emailLocked ? "" : p.email,
+      phone: p.phone,
+      website: p.website,
+      city: p.city,
+      industry: p.industry,
+      status: "raw",
+      scrapedAt: Date.now(),
+      contactName: p.name,
+      contactTitle: p.title,
+      seniority: p.seniority,
+      linkedin: p.linkedin,
+      source: (discoverSources[p.id] ?? []).map((s) => s[0].toUpperCase() + s.slice(1)).join("+") || "Apollo",
+    };
+    update((prev) => {
+      const withDenied = addToDenylist(prev, "accepted", [
+        { name: p.name, company: p.company, email: p.email, website: p.website },
+      ]);
+      return { ...withDenied, raw: [row, ...withDenied.raw] };
+    });
+    setPushed((driven => driven + 1);
+    setResults((prev) => prev.filter((x) => x.id !== id));
+    setSelected((s) => {
+      const { [id]: _omit, ...rest } = s;
+      return rest;
+    });
+  }
+
   function clearAllResults() {
     if (!results.length) return;
     if (typeof window !== "undefined" && !window.confirm(`Remove all ${results.length} scraped contacts?`)) return;
