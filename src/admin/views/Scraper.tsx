@@ -800,11 +800,27 @@ export function Scraper({
                   </button>
 
                   <div className="min-w-[180px] flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold">{p.name}</span>
-                      <span className="rounded-full bg-secondary px-2 py-0.5 text-[.62rem] font-bold uppercase tracking-wider text-muted-foreground">
-                        {p.seniority.replace("_", " ")}
-                      </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold">{p.name || <span className="text-muted-foreground italic">No person yet</span>}</span>
+                      {p.seniority && (
+                        <span className="rounded-full bg-secondary px-2 py-0.5 text-[.62rem] font-bold uppercase tracking-wider text-muted-foreground">
+                          {p.seniority.replace("_", " ")}
+                        </span>
+                      )}
+                      {(discoverSources[p.id] ?? []).map((s) => (
+                        <span
+                          key={s}
+                          className={`rounded-full px-2 py-0.5 text-[.6rem] font-bold uppercase tracking-wider ${
+                            s === "apollo"
+                              ? "bg-[var(--brand-violet)]/15 text-[var(--brand-violet)]"
+                              : s === "google"
+                              ? "bg-[oklch(.7_.18_150)]/15 text-[oklch(.45_.15_150)]"
+                              : "bg-[var(--brand-coral)]/15 text-[var(--brand-coral)]"
+                          }`}
+                        >
+                          {s === "claude" ? "AI" : s}
+                        </span>
+                      ))}
                     </div>
                     <div className="text-xs text-muted-foreground">{p.title}</div>
                   </div>
