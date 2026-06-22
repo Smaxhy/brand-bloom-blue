@@ -64,7 +64,11 @@ export function SettingsView({
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => setS({ ...s, theme: "light" })}
+            onClick={() => {
+              const next = { ...s, theme: "light" as const };
+              setS(next);
+              update((p) => ({ ...p, settings: next }));
+            }}
             className={`flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
               !dark ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:bg-secondary"
             }`}
@@ -72,7 +76,11 @@ export function SettingsView({
             <Sun className="h-4 w-4" /> Light
           </button>
           <button
-            onClick={() => setS({ ...s, theme: "dark" })}
+            onClick={() => {
+              const next = { ...s, theme: "dark" as const };
+              setS(next);
+              update((p) => ({ ...p, settings: next }));
+            }}
             className={`flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
               dark ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:bg-secondary"
             }`}
