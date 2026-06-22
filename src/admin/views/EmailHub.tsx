@@ -19,18 +19,20 @@ export function EmailHub({
   data: AdminData;
   update: (fn: (p: AdminData) => AdminData) => void;
 }) {
-  const [tab, setTab] = useState<"campaign" | "templates">("campaign");
+  const [tab, setTab] = useState<"campaign" | "templates" | "sent">("campaign");
   const [editTpl, setEditTpl] = useState<EmailTemplate | null>(null);
 
   // campaign builder state
   const accepted = data.raw.filter((r) => r.status === "accepted");
-  const [selected, setSelected] = useState<string[]>(accepted.map((r) => r.id));
+  const pending = accepted.filter((r) => !r.lastEmailedAt);
+  const sentList = data.raw.filter((r) => r.lastEmailedAt);
+  const [selected, setSelected] = useState<string[]>(pending.map((r) => r.id));
   const [tplId, setTplId] = useState(data.templates[0]?.id ?? "");
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string; details: GhlSendDetail[] } | null>(null);
 
   const tpl = data.templates.find((t) => t.id === tplId);
-  const recipients = accepted.filter((r) => selected.includes(r.id));
+  const recipients = pending.filter((r) => selected.includes(r.id));
 
   function toggle(id: string) {
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
@@ -52,16 +54,24 @@ export function EmailHub({
     });
     setResult(res);
     if (res.ok) {
+      const okEmails = new Set(
+        (res.details.length ? res.details.filter((d) => d.ok).map((d) => d.email.toLowerCase()) : recipients.map((r) => r.email.toLowerCase())),
+      );
+      const sentAt = Date.now();
+      const sentIds = recipients.filter((r) => okEmails.has(r.email.toLowerCase())).map((r) => r.id);
       update((p) => ({
         ...p,
+        raw: p.raw.map((r) => (sentIds.includes(r.id) ? { ...r, lastEmailedAt: sentAt } : r)),
         campaigns: [
-          { id: uid("cmp"), name: tpl.name, templateId: tpl.id, recipientIds: recipients.map((r) => r.id), status: "sent", sentAt: Date.now(), createdAt: Date.now() },
+          { id: uid("cmp"), name: tpl.name, templateId: tpl.id, recipientIds: sentIds, status: "sent", sentAt, createdAt: sentAt },
           ...p.campaigns,
         ],
       }));
+      setSelected((s) => s.filter((id) => !sentIds.includes(id)));
     }
     setSending(false);
   }
+
 
   function saveTpl(t: EmailTemplate) {
     update((p) => {
