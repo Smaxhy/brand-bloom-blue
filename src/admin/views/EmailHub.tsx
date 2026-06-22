@@ -19,18 +19,20 @@ export function EmailHub({
   data: AdminData;
   update: (fn: (p: AdminData) => AdminData) => void;
 }) {
-  const [tab, setTab] = useState<"campaign" | "templates">("campaign");
+  const [tab, setTab] = useState<"campaign" | "templates" | "sent">("campaign");
   const [editTpl, setEditTpl] = useState<EmailTemplate | null>(null);
 
   // campaign builder state
   const accepted = data.raw.filter((r) => r.status === "accepted");
-  const [selected, setSelected] = useState<string[]>(accepted.map((r) => r.id));
+  const pending = accepted.filter((r) => !r.lastEmailedAt);
+  const sentList = data.raw.filter((r) => r.lastEmailedAt);
+  const [selected, setSelected] = useState<string[]>(pending.map((r) => r.id));
   const [tplId, setTplId] = useState(data.templates[0]?.id ?? "");
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string; details: GhlSendDetail[] } | null>(null);
 
   const tpl = data.templates.find((t) => t.id === tplId);
-  const recipients = accepted.filter((r) => selected.includes(r.id));
+  const recipients = pending.filter((r) => selected.includes(r.id));
 
   function toggle(id: string) {
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
@@ -52,16 +54,24 @@ export function EmailHub({
     });
     setResult(res);
     if (res.ok) {
+      const okEmails = new Set(
+        (res.details.length ? res.details.filter((d) => d.ok).map((d) => d.email.toLowerCase()) : recipients.map((r) => r.email.toLowerCase())),
+      );
+      const sentAt = Date.now();
+      const sentIds = recipients.filter((r) => okEmails.has(r.email.toLowerCase())).map((r) => r.id);
       update((p) => ({
         ...p,
+        raw: p.raw.map((r) => (sentIds.includes(r.id) ? { ...r, lastEmailedAt: sentAt } : r)),
         campaigns: [
-          { id: uid("cmp"), name: tpl.name, templateId: tpl.id, recipientIds: recipients.map((r) => r.id), status: "sent", sentAt: Date.now(), createdAt: Date.now() },
+          { id: uid("cmp"), name: tpl.name, templateId: tpl.id, recipientIds: sentIds, status: "sent", sentAt, createdAt: sentAt },
           ...p.campaigns,
         ],
       }));
+      setSelected((s) => s.filter((id) => !sentIds.includes(id)));
     }
     setSending(false);
   }
+
 
   function saveTpl(t: EmailTemplate) {
     update((p) => {
@@ -102,9 +112,9 @@ export function EmailHub({
       </div>
 
       <div className="flex gap-1 rounded-xl border border-border bg-card p-1">
-        {(["campaign", "templates"] as const).map((t) => (
+        {(["campaign", "templates", "sent"] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)} className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold capitalize transition-colors ${tab === t ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary"}`}>
-            {t === "campaign" ? "New campaign" : "Templates"}
+            {t === "campaign" ? "New campaign" : t === "templates" ? "Templates" : `Sent (${sentList.length})`}
           </button>
         ))}
       </div>
@@ -113,11 +123,16 @@ export function EmailHub({
         <div className="grid gap-5 lg:grid-cols-2">
           <Panel>
             <h3 className="mb-3 font-display text-lg font-bold">Recipients</h3>
-            {accepted.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No accepted leads yet. Accept some businesses in the Raw Data tab first.</p>
+            <p className="mb-2 text-xs text-muted-foreground">Already-emailed contacts are hidden — see the Sent tab.</p>
+            {pending.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {accepted.length === 0
+                  ? "No accepted leads yet. Accept some businesses in the Raw Data tab first."
+                  : "Every accepted lead has already received an email. Accept more leads to keep sending."}
+              </p>
             ) : (
               <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-                {accepted.map((r) => (
+                {pending.map((r) => (
                   <label key={r.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2 hover:bg-secondary/50">
                     <input type="checkbox" checked={selected.includes(r.id)} onChange={() => toggle(r.id)} className="h-4 w-4 accent-[var(--brand-violet)]" />
                     <div className="min-w-0 flex-1">
@@ -130,6 +145,7 @@ export function EmailHub({
             )}
             <div className="mt-3 text-xs text-muted-foreground">{recipients.length} selected</div>
           </Panel>
+
 
           <Panel className="flex flex-col">
             <h3 className="mb-3 font-display text-lg font-bold">Message</h3>
@@ -206,6 +222,39 @@ export function EmailHub({
           </p>
         </div>
       )}
+
+      {tab === "sent" && (
+        <Panel className="p-0 overflow-x-auto">
+          {sentList.length === 0 ? (
+            <p className="p-6 text-sm text-muted-foreground">No emails sent yet. Send your first campaign from the New campaign tab.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-3 font-semibold">Business</th>
+                  <th className="px-4 py-3 font-semibold">Email</th>
+                  <th className="hidden px-4 py-3 font-semibold md:table-cell">City</th>
+                  <th className="px-4 py-3 font-semibold">Sent</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sentList
+                  .slice()
+                  .sort((a, b) => (b.lastEmailedAt ?? 0) - (a.lastEmailedAt ?? 0))
+                  .map((r) => (
+                    <tr key={r.id} className="border-b border-border last:border-0">
+                      <td className="px-4 py-3 font-semibold">{r.business}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{r.email}</td>
+                      <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">{r.city}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{new Date(r.lastEmailedAt!).toLocaleString()}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          )}
+        </Panel>
+      )}
+
 
       <Modal open={!!editTpl} onClose={() => setEditTpl(null)} title="Email template" wide>
         {editTpl && (

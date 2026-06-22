@@ -37,6 +37,8 @@ export interface RawBusiness {
   industry: string;
   status: "raw" | "accepted" | "rejected";
   scrapedAt: number;
+  /** Timestamp of the last successful email sent to this contact. */
+  lastEmailedAt?: number;
   // Optional fields populated by the Data Scraper (Apollo.io)
   contactName?: string;
   contactTitle?: string;
