@@ -1,7 +1,18 @@
 import { useState, useMemo } from "react";
-import { Plus, Check, X, Upload, Trash2, ArrowRightCircle, Search, Mail, AlertTriangle } from "lucide-react";
+import { Plus, Check, X, Upload, Trash2, ArrowRightCircle, Search, Mail, AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { type AdminData, type RawBusiness, uid } from "../store";
 import { Panel, StatCard, Modal, Field, inputCls, Btn } from "../ui";
+
+function maskEmail(email: string): string {
+  if (!email.includes("@")) return "***";
+  const [local, domain] = email.split("@");
+  const maskedLocal = local.length > 2 ? local[0] + "***" : "***";
+  const domainParts = domain.split(".");
+  const maskedDomain = domainParts.length > 1
+    ? domainParts[0][0] + "***." + domainParts.slice(1).join(".")
+    : "***";
+  return `${maskedLocal}@${maskedDomain}`;
+}
 
 
 export function RawData({
@@ -17,12 +28,51 @@ export function RawData({
   const [paste, setPaste] = useState("");
   const [filter, setFilter] = useState<"all" | "raw" | "accepted" | "rejected" | "sent">("all");
   const [q, setQ] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
 
   function setStatus(id: string, status: RawBusiness["status"]) {
     update((p) => ({ ...p, raw: p.raw.map((r) => (r.id === id ? { ...r, status } : r)) }));
   }
   function remove(id: string) {
     update((p) => ({ ...p, raw: p.raw.filter((r) => r.id !== id) }));
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function selectAllVisible() {
+    setSelectedIds(new Set(rows.map((r) => r.id)));
+  }
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+  function revealSelected() {
+    setRevealedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of selectedIds) next.add(id);
+      return next;
+    });
+  }
+  function hideSelected() {
+    setRevealedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of selectedIds) next.delete(id);
+      return next;
+    });
+  }
+  function toggleReveal(id: string) {
+    setRevealedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   function pushToPipeline(r: RawBusiness) {
@@ -140,7 +190,7 @@ export function RawData({
           {(["all", "raw", "accepted", "rejected", "sent"] as const).map((f) => (
             <button
               key={f}
-              onClick={() => setFilter(f)}
+              onClick={() => { setFilter(f); clearSelection(); }}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition-colors ${
                 filter === f ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary"
               }`}
@@ -152,12 +202,42 @@ export function RawData({
 
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className={`${inputCls} pl-8`} />
+          <input value={q} onChange={(e) => { setQ(e.target.value); clearSelection(); }} placeholder="Search…" className={`${inputCls} pl-8`} />
         </div>
         <Btn className="ml-auto" onClick={() => setImportOpen(true)}>
           <Upload className="h-4 w-4" /> Import scraped data
         </Btn>
       </div>
+
+      {rows.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={rows.length > 0 && rows.every((r) => selectedIds.has(r.id))}
+              onChange={(e) => { if (e.target.checked) selectAllVisible(); else clearSelection(); }}
+              className="h-4 w-4 rounded border-border"
+            />
+            <span className="text-muted-foreground">{selectedIds.size} selected</span>
+          </label>
+          {selectedIds.size > 0 && (
+            <>
+              <button
+                onClick={revealSelected}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20"
+              >
+                <Eye className="h-3.5 w-3.5" /> Reveal emails
+              </button>
+              <button
+                onClick={hideSelected}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-secondary px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-secondary/80"
+              >
+                <EyeOff className="h-3.5 w-3.5" /> Hide emails
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       <p className="text-sm text-muted-foreground">
         Your scraping dump lives here. <strong className="text-foreground">Accept</strong> the businesses worth contacting — accepted
@@ -168,6 +248,14 @@ export function RawData({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <th className="w-10 px-2 py-3 text-center">
+                <input
+                  type="checkbox"
+                  checked={rows.length > 0 && rows.every((r) => selectedIds.has(r.id))}
+                  onChange={(e) => { if (e.target.checked) selectAllVisible(); else clearSelection(); }}
+                  className="h-4 w-4 rounded border-border"
+                />
+              </th>
               <th className="px-4 py-3 font-semibold">Business</th>
               <th className="px-4 py-3 font-semibold">Email</th>
               <th className="px-4 py-3 font-semibold">Phone</th>
@@ -181,6 +269,14 @@ export function RawData({
           <tbody>
             {rows.map((r) => (
               <tr key={r.id} className="border-b border-border last:border-0 hover:bg-secondary/40">
+                <td className="px-2 py-3 text-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(r.id)}
+                    onChange={() => toggleSelect(r.id)}
+                    className="h-4 w-4 rounded border-border"
+                  />
+                </td>
                 <td className="px-4 py-3 font-semibold">
                   {r.business}
                   {r.contactName && (
@@ -192,7 +288,14 @@ export function RawData({
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span>{r.email}</span>
+                    <span className="font-mono text-xs">{revealedIds.has(r.id) ? r.email : maskEmail(r.email)}</span>
+                    <button
+                      onClick={() => toggleReveal(r.id)}
+                      className="inline-flex items-center rounded p-0.5 text-muted-foreground hover:bg-secondary"
+                      title={revealedIds.has(r.id) ? "Hide email" : "Reveal email"}
+                    >
+                      {revealedIds.has(r.id) ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                    </button>
                     {r.email && emailCounts[r.email.trim().toLowerCase()] > 1 && (
                       <span title="This email address appears more than once in your data" className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[.6rem] font-semibold uppercase" style={{ background: "color-mix(in oklab, var(--brand-coral) 15%, transparent)", color: "var(--brand-coral)" }}>
                         <AlertTriangle className="h-2.5 w-2.5" /> dup
@@ -258,7 +361,7 @@ export function RawData({
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">No rows. Import some scraped data to get started.</td></tr>
+              <tr><td colSpan={9} className="px-4 py-10 text-center text-sm text-muted-foreground">No rows. Import some scraped data to get started.</td></tr>
             )}
           </tbody>
         </table>
