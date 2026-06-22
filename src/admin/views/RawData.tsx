@@ -15,7 +15,7 @@ export function RawData({
 }) {
   const [importOpen, setImportOpen] = useState(false);
   const [paste, setPaste] = useState("");
-  const [filter, setFilter] = useState<"all" | "raw" | "accepted" | "rejected">("all");
+  const [filter, setFilter] = useState<"all" | "raw" | "accepted" | "rejected" | "sent">("all");
   const [q, setQ] = useState("");
 
   function setStatus(id: string, status: RawBusiness["status"]) {
