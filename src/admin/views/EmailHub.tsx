@@ -223,6 +223,39 @@ export function EmailHub({
         </div>
       )}
 
+      {tab === "sent" && (
+        <Panel className="p-0 overflow-x-auto">
+          {sentList.length === 0 ? (
+            <p className="p-6 text-sm text-muted-foreground">No emails sent yet. Send your first campaign from the New campaign tab.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-3 font-semibold">Business</th>
+                  <th className="px-4 py-3 font-semibold">Email</th>
+                  <th className="hidden px-4 py-3 font-semibold md:table-cell">City</th>
+                  <th className="px-4 py-3 font-semibold">Sent</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sentList
+                  .slice()
+                  .sort((a, b) => (b.lastEmailedAt ?? 0) - (a.lastEmailedAt ?? 0))
+                  .map((r) => (
+                    <tr key={r.id} className="border-b border-border last:border-0">
+                      <td className="px-4 py-3 font-semibold">{r.business}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{r.email}</td>
+                      <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">{r.city}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{new Date(r.lastEmailedAt!).toLocaleString()}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          )}
+        </Panel>
+      )}
+
+
       <Modal open={!!editTpl} onClose={() => setEditTpl(null)} title="Email template" wide>
         {editTpl && (
           <div className="space-y-3">
