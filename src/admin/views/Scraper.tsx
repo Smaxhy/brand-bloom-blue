@@ -202,7 +202,7 @@ export function Scraper({
       ]);
       return { ...withDenied, raw: [row, ...withDenied.raw] };
     });
-    setPushed((driven => driven + 1);
+    setPushed((driven) => driven + 1);
     setResults((prev) => prev.filter((x) => x.id !== id));
     setSelected((s) => {
       const { [id]: _omit, ...rest } = s;
