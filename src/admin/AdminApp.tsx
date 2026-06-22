@@ -75,9 +75,11 @@ export function AdminApp() {
     setMounted(true);
 
     let unsubData: (() => void) | null = null;
+    let currentUserId: string | null = null;
 
     async function verifyAndHydrate(userId: string | undefined) {
       if (!userId) {
+        currentUserId = null;
         setAuthed(false);
         setRole(null);
         setAccountName("");
@@ -86,6 +88,10 @@ export function AdminApp() {
         unsubData = null;
         return;
       }
+      // Skip re-hydration if the same user is already loaded — e.g. TOKEN_REFRESHED
+      // fires when the tab regains focus; we don't want to clear state.
+      if (userId === currentUserId) return;
+      currentUserId = userId;
       const { data: roles } = await supabase
         .from("user_roles")
         .select("role")
@@ -100,6 +106,7 @@ export function AdminApp() {
             : null;
       if (!resolved) {
         await supabase.auth.signOut();
+        currentUserId = null;
         setAuthed(false);
         setRole(null);
         setAccountName("");
@@ -117,7 +124,10 @@ export function AdminApp() {
       unsubData = subscribeRemote(setData);
     }
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      // Only react to real sign-in/out. TOKEN_REFRESHED / USER_UPDATED fire
+      // on tab focus and would otherwise cause a flicker / data reload.
+      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "INITIAL_SESSION") return;
       void verifyAndHydrate(session?.user?.id);
     });
 
