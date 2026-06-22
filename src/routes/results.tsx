@@ -144,7 +144,7 @@ const caseStudies = [
 function ResultsPage() {
   const animated = useCountUp(REVENUE_TOTAL);
   return (
-    <main className="min-h-screen">
+    <main className="dark min-h-screen bg-background text-foreground">
       <header className="fixed top-0 z-50 w-full border-b border-border/50 bg-background/70 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Link to="/" className="flex items-center gap-2">
