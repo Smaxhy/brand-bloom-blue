@@ -106,9 +106,38 @@ export function RawData({
 
   return (
     <div className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard label="Emails Sent" value={String(sentCount)} hint={lastSentAt ? `Last: ${new Date(lastSentAt).toLocaleString()}` : "No sends yet"} icon={Mail} accent="oklch(.7 .18 150)" />
+        <StatCard label="Accepted" value={String(counts.accepted)} hint="Ready to email" icon={Check} accent="var(--brand-violet)" />
+        <StatCard label="Duplicate emails" value={String(Object.values(emailCounts).filter((n) => n > 1).length)} hint="Same address appears more than once" icon={AlertTriangle} accent="var(--brand-coral)" />
+      </div>
+
+      {sentCount > 0 && (
+        <Panel>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="font-display text-base font-bold">Businesses we've emailed ({sentCount})</h3>
+          </div>
+          <div className="max-h-56 space-y-1 overflow-y-auto pr-1 text-sm">
+            {data.raw
+              .filter((r) => r.lastEmailedAt)
+              .slice()
+              .sort((a, b) => (b.lastEmailedAt ?? 0) - (a.lastEmailedAt ?? 0))
+              .map((r) => (
+                <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+                  <div className="min-w-0">
+                    <div className="truncate font-semibold">{r.business}</div>
+                    <div className="truncate text-xs text-muted-foreground">{r.email}</div>
+                  </div>
+                  <div className="shrink-0 text-xs text-muted-foreground">{new Date(r.lastEmailedAt!).toLocaleDateString()}</div>
+                </div>
+              ))}
+          </div>
+        </Panel>
+      )}
+
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-1 rounded-xl border border-border bg-card p-1">
-          {(["all", "raw", "accepted", "rejected"] as const).map((f) => (
+          {(["all", "raw", "accepted", "rejected", "sent"] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -120,6 +149,7 @@ export function RawData({
             </button>
           ))}
         </div>
+
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className={`${inputCls} pl-8`} />
