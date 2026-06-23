@@ -337,76 +337,9 @@ async function enrich(request: Request, env: Env): Promise<Response> {
     }
   }
 
-  // 2) Per-contact gap-filling with Google (SerpApi/Serper) + Hunter.
-  for (let i = 0; i < people.length; i++) {
-    const p = people[i];
-    const r = byId.get(p.id);
-    if (!r) continue;
+  // Apollo-only reveal: Hunter/Google fallbacks intentionally disabled so reveals
+  // come from your Apollo subscription exclusively.
 
-    // 2a) Find the company website via Google if we still don't have one.
-    if (!r.website && googleKey && p.organizationName) {
-      try {
-        const site = await googleFindWebsite(googleKey, p.organizationName);
-        if (site) r.website = site;
-      } catch {
-        /* skip */
-      }
-    }
-    const domain = cleanDomain(r.website);
-
-    // 2b) Email via Hunter (needs name + domain).
-    if (!r.email && hunterKey && domain) {
-      const first = p.firstName || p.name?.split(" ")[0] || "";
-      const last = p.lastName || p.name?.split(" ").slice(-1)[0] || "";
-      if (first && last) {
-        try {
-          const u = new URL("https://api.hunter.io/v2/email-finder");
-          u.searchParams.set("domain", domain);
-          u.searchParams.set("first_name", first);
-          u.searchParams.set("last_name", last);
-          u.searchParams.set("api_key", hunterKey);
-          const res = await fetch(u.toString());
-          if (res.ok) {
-            const d = (await res.json()) as {
-              data?: { email?: string; phone_number?: string; sources?: { uri?: string }[] };
-            };
-            if (d.data?.email) {
-              r.email = d.data.email;
-              r.source = "Hunter";
-              r.sourceUrl = d.data.sources?.find((s) => s.uri)?.uri ?? "";
-              if (payload.revealPhone && d.data.phone_number) r.phone = d.data.phone_number;
-            }
-          }
-        } catch {
-          /* fall through to Google */
-        }
-      }
-    }
-
-    // 2c) Email via Google search (last resort), tracking the source URL.
-    if (!r.email && googleKey) {
-      const q = [
-        p.name ? `"${p.name}"` : "",
-        p.organizationName ? `"${p.organizationName}"` : "",
-        domain ? `"@${domain}"` : "",
-        payload.revealPhone ? "email OR phone" : "email",
-      ]
-        .filter(Boolean)
-        .join(" ");
-      try {
-        const { blob, firstLink } = await googleSearch(googleKey, q);
-        const found = pickEmail(blob, domain);
-        if (found) {
-          r.email = found;
-          r.source = "Google";
-          r.sourceUrl = firstLink;
-        }
-        if (payload.revealPhone && !r.phone) r.phone = pickPhone(blob);
-      } catch {
-        /* leave locked */
-      }
-    }
-  }
 
   return json({ demo: false, results });
 }
