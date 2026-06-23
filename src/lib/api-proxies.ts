@@ -292,7 +292,7 @@ async function enrich(request: Request, env: Env): Promise<Response> {
   // Google key: accept either name. SerpApi.com or Serper.dev (auto-detected).
   const googleKey = secret(env, "SERPAPI_API_KEY") || secret(env, "SERPER_API_KEY");
 
-  if (!apolloKey && !hunterKey && !googleKey) {
+  if (!apolloKey) {
     return json({
       demo: true,
       reason: "missing_reveal_keys",
