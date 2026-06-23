@@ -288,9 +288,7 @@ async function enrich(request: Request, env: Env): Promise<Response> {
   if (!people.length) return json({ results: [] });
 
   const apolloKey = secret(env, "APOLLO_API_KEY");
-  const hunterKey = secret(env, "HUNTER_API_KEY");
-  // Google key: accept either name. SerpApi.com or Serper.dev (auto-detected).
-  const googleKey = secret(env, "SERPAPI_API_KEY") || secret(env, "SERPER_API_KEY");
+
 
   if (!apolloKey) {
     return json({
