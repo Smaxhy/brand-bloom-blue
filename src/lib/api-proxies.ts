@@ -1267,8 +1267,14 @@ interface AdScanInput {
 
 async function claudeAdScan(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") return json({ ok: false, error: "POST only" }, 405);
-  const key = secret(env, "ANTHROPIC_API_KEY");
-  if (!key) return json({ ok: false, reason: "missing_key", error: "ANTHROPIC_API_KEY not configured on the server." });
+  // Prefer the free Lovable AI Gateway (uses included monthly credits).
+  // Fall back to Anthropic direct only if a project key is set AND the gateway key is missing.
+  const lovableKey = secret(env, "LOVABLE_API_KEY");
+  const anthropicKey = secret(env, "ANTHROPIC_API_KEY");
+  if (!lovableKey && !anthropicKey) {
+    return json({ ok: false, reason: "missing_key", error: "No vision API configured. Lovable AI Gateway is not available and ANTHROPIC_API_KEY is unset." });
+  }
+
   let body: AdScanInput = {};
   try {
     body = (await request.json()) as AdScanInput;
@@ -1278,13 +1284,10 @@ async function claudeAdScan(request: Request, env: Env): Promise<Response> {
   let img = (body.imageBase64 || "").trim();
   if (!img) return json({ ok: false, error: "no image" });
   let mediaType = (body.mediaType || "image/png").toLowerCase();
-  // Accept data URLs and strip the prefix
   const m = img.match(/^data:([^;]+);base64,(.*)$/);
   if (m) { mediaType = m[1]; img = m[2]; }
-  // Anthropic accepts a fixed set of image media types
   if (!/^image\/(png|jpeg|jpg|gif|webp)$/.test(mediaType)) mediaType = "image/png";
   if (mediaType === "image/jpg") mediaType = "image/jpeg";
-  // Trim absurd payloads
   if (img.length > 6_500_000) return json({ ok: false, error: "image too large (max ~5MB)" });
 
   const platform = (body.platform || "other").toLowerCase();
@@ -1334,12 +1337,65 @@ Rules:
 - Percentages must be plain numbers (e.g. 3.2 means 3.2%), not decimals.
 - If several campaigns/rows are shown, prefer the aggregate totals; if only per-row is available, sum them and mention in "notes".`;
 
+  const userText = body.hint ? `Context hint: ${body.hint}` : "Extract the metrics from this screenshot.";
+  const dataUrl = `data:${mediaType};base64,${img}`;
 
+  // --- Path 1: Lovable AI Gateway (free / included credits) ------------------
+  if (lovableKey) {
+    async function callGateway(model: string): Promise<Response> {
+      return fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${lovableKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: system },
+            {
+              role: "user",
+              content: [
+                { type: "text", text: userText },
+                { type: "image_url", image_url: { url: dataUrl } },
+              ],
+            },
+          ],
+          response_format: { type: "json_object" },
+        }),
+      });
+    }
+    try {
+      let res = await callGateway("google/gemini-2.5-flash");
+      if (!res.ok && (res.status === 400 || res.status === 404)) {
+        res = await callGateway("google/gemini-2.5-flash-lite");
+      }
+      if (res.status === 429) {
+        return json({ ok: false, status: 429, error: "AI gateway rate limit hit — please retry in a moment." });
+      }
+      if (res.status === 402) {
+        return json({ ok: false, status: 402, error: "Workspace AI credits exhausted. Add credits in Settings → Plans & credits." });
+      }
+      if (!res.ok) {
+        const detail = (await res.text()).slice(0, 400);
+        return json({ ok: false, status: res.status, error: `AI gateway ${res.status}: ${detail}` });
+      }
+      const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+      const text = data.choices?.[0]?.message?.content || "";
+      const parsed = parseClaudeJson(text) as Record<string, unknown> | null;
+      return json({ ok: true, metrics: parsed ?? {}, raw: data, provider: "lovable-gateway" });
+    } catch (e) {
+      // If gateway path threw, only fall through to Anthropic when that key is present.
+      if (!anthropicKey) return json({ ok: false, error: (e as Error).message });
+    }
+  }
+
+  // --- Path 2: Anthropic direct (legacy fallback) ----------------------------
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
-        "x-api-key": key,
+        "x-api-key": anthropicKey!,
         "anthropic-version": "2023-06-01",
         "Content-Type": "application/json",
       },
@@ -1352,7 +1408,7 @@ Rules:
             role: "user",
             content: [
               { type: "image", source: { type: "base64", media_type: mediaType, data: img } },
-              { type: "text", text: body.hint ? `Context hint: ${body.hint}` : "Extract the metrics from this screenshot." },
+              { type: "text", text: userText },
             ],
           },
         ],
@@ -1360,36 +1416,14 @@ Rules:
     });
     if (!res.ok) {
       const detail = (await res.text()).slice(0, 400);
-      // Retry on model alias miss
-      if (res.status === 404 || res.status === 400) {
-        const retry = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "claude-3-5-haiku-latest",
-            max_tokens: 800,
-            system,
-            messages: [
-              { role: "user", content: [
-                { type: "image", source: { type: "base64", media_type: mediaType, data: img } },
-                { type: "text", text: body.hint ? `Context hint: ${body.hint}` : "Extract the metrics from this screenshot." },
-              ] },
-            ],
-          }),
-        });
-        if (retry.ok) {
-          const data = (await retry.json()) as { content?: { text?: string }[] };
-          const parsed = parseClaudeJson(data.content?.[0]?.text || "") as Record<string, unknown> | null;
-          return json({ ok: true, metrics: parsed ?? {}, raw: data });
-        }
-      }
-      return json({ ok: false, status: res.status, error: `Claude responded ${res.status}: ${detail}` });
+      return json({ ok: false, status: res.status, error: `Anthropic responded ${res.status}: ${detail}` });
     }
     const data = (await res.json()) as { content?: { text?: string }[] };
     const parsed = parseClaudeJson(data.content?.[0]?.text || "") as Record<string, unknown> | null;
-    return json({ ok: true, metrics: parsed ?? {}, raw: data });
+    return json({ ok: true, metrics: parsed ?? {}, raw: data, provider: "anthropic" });
   } catch (e) {
     return json({ ok: false, error: (e as Error).message });
   }
 }
+
 
