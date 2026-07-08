@@ -34,7 +34,29 @@ export function RawData({
   function setStatus(id: string, status: RawBusiness["status"]) {
     update((p) => ({ ...p, raw: p.raw.map((r) => (r.id === id ? { ...r, status } : r)) }));
   }
+  function bulkSetStatus(ids: Set<string>, status: RawBusiness["status"]) {
+    if (!ids.size) return;
+    update((p) => ({
+      ...p,
+      raw: p.raw.map((r) => (ids.has(r.id) ? { ...r, status } : r)),
+    }));
+  }
+  function acceptAllVisible() {
+    const ids = new Set(rows.filter((r) => r.status !== "accepted").map((r) => r.id));
+    bulkSetStatus(ids, "accepted");
+    clearSelection();
+  }
+  function acceptSelected() {
+    bulkSetStatus(selectedIds, "accepted");
+    clearSelection();
+  }
+  function rejectSelected() {
+    bulkSetStatus(selectedIds, "rejected");
+    clearSelection();
+  }
   function remove(id: string) {
+    update((p) => ({ ...p, raw: p.raw.filter((r) => r.id !== id) }));
+  }
     update((p) => ({ ...p, raw: p.raw.filter((r) => r.id !== id) }));
   }
 
