@@ -317,7 +317,16 @@ export function Statistics({
             </div>
           </Field>
 
-          <div className="ml-auto flex flex-wrap gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <span
+              aria-live="polite"
+              className={`text-xs transition-opacity ${savedFlash ? "opacity-100 text-emerald-600" : "opacity-60 text-muted-foreground"}`}
+            >
+              {savedFlash ? "Saved" : `View saved for ${activeClient ? activeClient.company : "All clients"}`}
+            </span>
+            <Btn variant="ghost" onClick={resetPresetForCurrentClient} title="Reset saved view for this client">
+              Reset preset
+            </Btn>
             <Btn variant="ghost" onClick={() => { setChartOverrides({}); }}>
               Reset per-card
             </Btn>
