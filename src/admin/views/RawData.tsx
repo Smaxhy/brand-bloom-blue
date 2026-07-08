@@ -57,8 +57,6 @@ export function RawData({
   function remove(id: string) {
     update((p) => ({ ...p, raw: p.raw.filter((r) => r.id !== id) }));
   }
-    update((p) => ({ ...p, raw: p.raw.filter((r) => r.id !== id) }));
-  }
 
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
