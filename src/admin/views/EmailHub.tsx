@@ -238,15 +238,12 @@ export function EmailHub({
                       Move to sent
                     </button>
                     <button
-                      onClick={() => {
-                        if (!confirm(`Delete ${r.business}?`)) return;
-                        setSelected((s) => s.filter((x) => x !== r.id));
-                        update((p) => ({ ...p, raw: p.raw.filter((x) => x.id !== r.id) }));
-                      }}
-                      className="grid h-7 w-7 place-items-center rounded-lg text-destructive hover:bg-destructive/10"
+                      onClick={() => setConfirmState({ kind: "deleteContact", id: r.id, label: r.business })}
+                      aria-label={`Delete ${r.business}`}
+                      className="grid h-9 w-9 place-items-center rounded-lg text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
                       title="Delete contact"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                     </button>
                   </div>
                 ))}
@@ -310,18 +307,42 @@ export function EmailHub({
               </div>
             )}
 
-            <Btn
-              className="mt-4 w-full disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={send}
-              disabled={sending || !tpl || recipients.length === 0}
-              aria-disabled={sending || !tpl || recipients.length === 0}
-            >
-              {sending
-                ? progress
-                  ? `Sending ${progress.done} / ${progress.total}…`
-                  : "Sending…"
-                : <><Send className="h-4 w-4" /> {liveMode ? "Send via GoHighLevel" : "Simulate send"} ({recipients.length})</>}
-            </Btn>
+            {sending && progress && (
+              <div className="mt-4">
+                <div className="mb-1 flex items-center justify-between text-xs">
+                  <span className="font-semibold text-foreground">Sending campaign…</span>
+                  <span className="tabular-nums text-muted-foreground" aria-live="polite">
+                    {progress.done} / {progress.total} ({Math.round((progress.done / progress.total) * 100)}%)
+                  </span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-secondary" role="progressbar" aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.done}>
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-200"
+                    style={{ width: `${(progress.done / progress.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 flex gap-2">
+              <Btn
+                className="flex-1"
+                onClick={send}
+                disabled={sending || !tpl || recipients.length === 0}
+                aria-disabled={sending || !tpl || recipients.length === 0}
+              >
+                {sending
+                  ? progress
+                    ? `Sending ${progress.done} / ${progress.total}…`
+                    : "Sending…"
+                  : <><Send className="h-4 w-4" aria-hidden="true" /> {liveMode ? "Send via GoHighLevel" : "Simulate send"} ({recipients.length})</>}
+              </Btn>
+              {sending && (
+                <Btn variant="ghost" onClick={cancelSend} aria-label="Cancel campaign">
+                  <X className="h-4 w-4" aria-hidden="true" /> Cancel
+                </Btn>
+              )}
+            </div>
           </Panel>
         </div>
       )}
