@@ -71,14 +71,14 @@ export function Modal({
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={title}>
       <div
         className={`mt-10 w-full ${wide ? "max-w-2xl" : "max-w-md"} rounded-2xl border border-border bg-card p-6 shadow-xl`}
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="font-display text-lg font-bold">{title}</h3>
-          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-secondary">
-            <X className="h-4 w-4" />
+          <button onClick={onClose} aria-label="Close dialog" className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-secondary">
+            <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
         {children}

@@ -12,7 +12,7 @@ import {
   LogOut,
   Lock,
   Menu,
-  X,
+  ListChecks,
 } from "lucide-react";
 import logo from "@/assets/inspirova-logo.png";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,6 +32,7 @@ import { RawData } from "./views/RawData";
 import { Clients } from "./views/Clients";
 import { Finance } from "./views/Finance";
 import { EmailHub } from "./views/EmailHub";
+import { Tasks } from "./views/Tasks";
 import { SettingsView } from "./views/SettingsView";
 import { TeamUsers } from "./views/TeamUsers";
 import { UserPlus } from "lucide-react";
@@ -45,6 +46,7 @@ type ViewId =
   | "clients"
   | "finance"
   | "email"
+  | "tasks"
   | "team"
   | "settings";
 
@@ -53,6 +55,7 @@ type TeamRole = "ceo" | "admin" | "user";
 const BASE_NAV: { id: ViewId; label: string; icon: React.ElementType }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "pipeline", label: "Pipeline", icon: GitBranch },
+  { id: "tasks", label: "Tasks", icon: ListChecks },
   { id: "leads", label: "Lead Generation", icon: Sparkles },
   { id: "scraper", label: "Data Scraper", icon: Radar },
   { id: "raw", label: "Raw Data", icon: Database },
@@ -300,9 +303,10 @@ export function AdminApp() {
           </span>
         </header>
 
-        <main className="flex-1 p-5 lg:p-7">
+        <main id="main-content" className="flex-1 p-5 lg:p-7" role="main">
           {view === "dashboard" && <Dashboard data={data} go={setView} />}
           {view === "pipeline" && <Pipeline data={data} update={update} />}
+          {view === "tasks" && <Tasks data={data} update={update} />}
           {view === "leads" && <Leads data={data} update={update} />}
           {view === "scraper" && <Scraper data={data} update={update} go={setView} />}
           {view === "raw" && <RawData data={data} update={update} go={setView} />}

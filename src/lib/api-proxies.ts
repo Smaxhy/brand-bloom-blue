@@ -45,6 +45,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   if (path === "/api/scrape-site") return scrapeSite(request, env);
   if (path === "/api/claude/extract") return claudeExtract(request, env);
   if (path === "/api/claude/keywords") return claudeKeywords(request, env);
+  if (path === "/api/claude/ad-scan") return claudeAdScan(request, env);
 
   return null;
 }
@@ -1250,3 +1251,132 @@ Suggest the best keywords.`;
     return json({ ok: false, error: (e as Error).message, keywords: [] });
   }
 }
+
+
+
+/* ----------------------------------------------------------------------- */
+/* Claude vision — extract ad-dashboard metrics from a screenshot           */
+/* ----------------------------------------------------------------------- */
+
+interface AdScanInput {
+  imageBase64?: string; // data URL or raw base64
+  mediaType?: string;
+  platform?: string;
+  hint?: string;
+}
+
+async function claudeAdScan(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") return json({ ok: false, error: "POST only" }, 405);
+  const key = secret(env, "ANTHROPIC_API_KEY");
+  if (!key) return json({ ok: false, reason: "missing_key", error: "ANTHROPIC_API_KEY not configured on the server." });
+  let body: AdScanInput = {};
+  try {
+    body = (await request.json()) as AdScanInput;
+  } catch {
+    return json({ ok: false, error: "invalid json" }, 400);
+  }
+  let img = (body.imageBase64 || "").trim();
+  if (!img) return json({ ok: false, error: "no image" });
+  let mediaType = (body.mediaType || "image/png").toLowerCase();
+  // Accept data URLs and strip the prefix
+  const m = img.match(/^data:([^;]+);base64,(.*)$/);
+  if (m) { mediaType = m[1]; img = m[2]; }
+  // Anthropic accepts a fixed set of image media types
+  if (!/^image\/(png|jpeg|jpg|gif|webp)$/.test(mediaType)) mediaType = "image/png";
+  if (mediaType === "image/jpg") mediaType = "image/jpeg";
+  // Trim absurd payloads
+  if (img.length > 6_500_000) return json({ ok: false, error: "image too large (max ~5MB)" });
+
+  const platform = (body.platform || "other").toLowerCase();
+  const platformHint = platform === "meta"
+    ? "Meta / Facebook / Instagram Ads Manager"
+    : platform === "google"
+      ? "Google Ads"
+      : platform === "tiktok"
+        ? "TikTok Ads Manager"
+        : "generic ad platform";
+
+  const system = `You are a marketing-analytics assistant. The user gives you a screenshot of an ad platform dashboard (${platformHint}) and you extract the headline metrics.
+
+Respond with ONLY a JSON object (no markdown, no prose) shaped like:
+{
+  "campaign": string,        // campaign or ad-set name if visible, else ""
+  "dateRange": string,       // e.g. "Jan 1 - Jan 31 2026", else ""
+  "spend": number,           // total spend as a plain number, else 0
+  "currency": string,        // ISO code or symbol, else ""
+  "impressions": number,
+  "reach": number,
+  "clicks": number,
+  "ctr": number,             // as a percentage number, e.g. 3.2  (not 0.032)
+  "cpc": number,
+  "cpm": number,
+  "conversions": number,
+  "cpa": number,
+  "roas": number,
+  "revenue": number,
+  "notes": string            // 1-line summary of the screenshot, else ""
+}
+
+Rules:
+- Return 0 for numeric fields you cannot read; never invent numbers.
+- Strip commas/thousand separators before returning numbers.
+- If several campaigns are shown, aggregate to totals if the dashboard shows totals, otherwise report the top one and note it in "notes".`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5",
+        max_tokens: 800,
+        system,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "image", source: { type: "base64", media_type: mediaType, data: img } },
+              { type: "text", text: body.hint ? `Context hint: ${body.hint}` : "Extract the metrics from this screenshot." },
+            ],
+          },
+        ],
+      }),
+    });
+    if (!res.ok) {
+      const detail = (await res.text()).slice(0, 400);
+      // Retry on model alias miss
+      if (res.status === 404 || res.status === 400) {
+        const retry = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "claude-3-5-haiku-latest",
+            max_tokens: 800,
+            system,
+            messages: [
+              { role: "user", content: [
+                { type: "image", source: { type: "base64", media_type: mediaType, data: img } },
+                { type: "text", text: body.hint ? `Context hint: ${body.hint}` : "Extract the metrics from this screenshot." },
+              ] },
+            ],
+          }),
+        });
+        if (retry.ok) {
+          const data = (await retry.json()) as { content?: { text?: string }[] };
+          const parsed = parseClaudeJson(data.content?.[0]?.text || "") as Record<string, unknown> | null;
+          return json({ ok: true, metrics: parsed ?? {}, raw: data });
+        }
+      }
+      return json({ ok: false, status: res.status, error: `Claude responded ${res.status}: ${detail}` });
+    }
+    const data = (await res.json()) as { content?: { text?: string }[] };
+    const parsed = parseClaudeJson(data.content?.[0]?.text || "") as Record<string, unknown> | null;
+    return json({ ok: true, metrics: parsed ?? {}, raw: data });
+  } catch (e) {
+    return json({ ok: false, error: (e as Error).message });
+  }
+}
+

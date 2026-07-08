@@ -113,6 +113,48 @@ export interface ScraperState {
   updatedAt: number;
 }
 
+export interface Task {
+  id: string;
+  title: string;
+  notes?: string;
+  due?: number; // ms epoch
+  priority: "low" | "med" | "high";
+  clientId?: string;
+  createdAt: number;
+  completedAt?: number;
+}
+
+export type AdPlatform = "meta" | "google" | "tiktok" | "other";
+
+export interface AdScan {
+  id: string;
+  clientId?: string;
+  platform: AdPlatform;
+  capturedAt: number;
+  /** Free-text label the user set for this screenshot. */
+  label?: string;
+  /** Metrics extracted by Claude vision. All fields optional. */
+  metrics: {
+    campaign?: string;
+    dateRange?: string;
+    spend?: number;
+    currency?: string;
+    impressions?: number;
+    reach?: number;
+    clicks?: number;
+    ctr?: number; // 0..1 or %
+    cpc?: number;
+    cpm?: number;
+    conversions?: number;
+    cpa?: number;
+    roas?: number;
+    revenue?: number;
+    notes?: string;
+  };
+  /** Raw JSON returned by Claude, kept for auditing. */
+  raw?: unknown;
+}
+
 export interface AdminData {
   deals: Deal[];
   raw: RawBusiness[];
@@ -121,11 +163,14 @@ export interface AdminData {
   templates: EmailTemplate[];
   campaigns: EmailCampaign[];
   settings: Settings;
+  tasks?: Task[];
+  adScans?: AdScan[];
   /** Per-account persistent denylist — never re-surface these contacts. */
   denylist?: Record<string, DenylistEntry>;
   /** Persisted scraper results so a page refresh keeps them. */
   scraper?: ScraperState;
 }
+
 
 
 /* ----------------------------------------------------------------------- */
@@ -191,6 +236,11 @@ function seed(): AdminData {
     ],
     campaigns: [],
     settings: { ghlApiKey: "", ghlCompanyId: "", ghlLocationId: "", fromName: "Inspirova", fromEmail: "hello@inspirova.com" },
+    tasks: [
+      { id: uid("tk"), title: "Review Atlas Group weekly ad report", priority: "high", due: Date.now() + 86400000, clientId: undefined, createdAt: Date.now() - 3600000 },
+      { id: uid("tk"), title: "Send Lumen Studio the Q3 creative brief", priority: "med", due: Date.now() + 3 * 86400000, createdAt: Date.now() - 7200000 },
+    ],
+    adScans: [],
     denylist: {},
   };
 }
@@ -230,6 +280,8 @@ function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData
     transactions: arrayOr<Transaction>(d.transactions, s.transactions),
     templates: arrayOr<EmailTemplate>(d.templates, s.templates),
     campaigns: arrayOr<EmailCampaign>(d.campaigns, s.campaigns),
+    tasks: arrayOr<Task>(d.tasks, s.tasks ?? []),
+    adScans: arrayOr<AdScan>(d.adScans, s.adScans ?? []),
     settings: { ...s.settings, ...settings },
     denylist: { ...(s.denylist ?? {}), ...(denylist as Record<string, DenylistEntry>) },
     scraper: scraper
@@ -258,6 +310,8 @@ function compactForRemote(data: AdminData): AdminData {
     clients: data.clients.slice(0, 1000),
     transactions: data.transactions.slice(0, 3000),
     campaigns: data.campaigns.slice(0, 1000),
+    tasks: (data.tasks ?? []).slice(-2000),
+    adScans: (data.adScans ?? []).slice(-500),
     denylist: Object.fromEntries(Object.entries(data.denylist ?? {}).slice(-5000)),
     scraper: data.scraper
       ? {
@@ -1173,3 +1227,93 @@ export async function discoverLeads(
     skippedDenied,
   };
 }
+
+/* ----------------------------------------------------------------------- */
+/* Account data export — GDPR-friendly, CRM-portable                        */
+/* ----------------------------------------------------------------------- */
+
+function toCsv(rows: Record<string, unknown>[]): string {
+  if (!rows.length) return "";
+  const cols = Array.from(rows.reduce((s, r) => { Object.keys(r).forEach((k) => s.add(k)); return s; }, new Set<string>()));
+  const esc = (v: unknown) => {
+    if (v === null || v === undefined) return "";
+    const s = typeof v === "object" ? JSON.stringify(v) : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  return [cols.join(","), ...rows.map((r) => cols.map((c) => esc(r[c])).join(","))].join("\n");
+}
+
+function download(name: string, mime: string, content: string) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+/** Download the full account as a single JSON file (portable to any CRM). */
+export function exportAccountJson(data: AdminData, accountName: string) {
+  const stamp = new Date().toISOString().slice(0, 10);
+  const payload = {
+    schema: "inspirova.admin.v1",
+    exportedAt: new Date().toISOString(),
+    account: accountName,
+    counts: {
+      clients: data.clients.length,
+      deals: data.deals.length,
+      leads: data.raw.length,
+      transactions: data.transactions.length,
+      tasks: (data.tasks ?? []).length,
+      campaigns: data.campaigns.length,
+      adScans: (data.adScans ?? []).length,
+    },
+    data,
+  };
+  download(`inspirova-${accountName || "account"}-${stamp}.json`, "application/json", JSON.stringify(payload, null, 2));
+}
+
+/** Download each table as its own CSV. CRM-import friendly. */
+export function exportAccountCsvs(data: AdminData, accountName: string) {
+  const stamp = new Date().toISOString().slice(0, 10);
+  const prefix = `inspirova-${accountName || "account"}-${stamp}`;
+  const tables: Record<string, Record<string, unknown>[]> = {
+    clients: data.clients as unknown as Record<string, unknown>[],
+    deals: data.deals as unknown as Record<string, unknown>[],
+    leads: data.raw as unknown as Record<string, unknown>[],
+    transactions: data.transactions as unknown as Record<string, unknown>[],
+    tasks: (data.tasks ?? []) as unknown as Record<string, unknown>[],
+    campaigns: data.campaigns as unknown as Record<string, unknown>[],
+    templates: data.templates as unknown as Record<string, unknown>[],
+    ad_scans: (data.adScans ?? []).map((a) => ({ id: a.id, clientId: a.clientId, platform: a.platform, capturedAt: a.capturedAt, label: a.label, ...a.metrics })) as unknown as Record<string, unknown>[],
+  };
+  Object.entries(tables).forEach(([name, rows]) => {
+    if (!rows.length) return;
+    download(`${prefix}-${name}.csv`, "text/csv", toCsv(rows));
+  });
+}
+
+/* ----------------------------------------------------------------------- */
+/* Claude vision — extract metrics from an ad-dashboard screenshot          */
+/* ----------------------------------------------------------------------- */
+
+export async function claudeScanAdScreenshot(opts: {
+  imageBase64: string; // data URL or raw base64
+  mediaType: string; // e.g. image/png
+  platform: AdPlatform;
+  hint?: string;
+}): Promise<{ ok: boolean; metrics?: AdScan["metrics"]; raw?: unknown; error?: string }> {
+  try {
+    const res = await fetch("/api/claude/ad-scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(opts),
+    });
+    const j = (await res.json()) as { ok?: boolean; metrics?: AdScan["metrics"]; raw?: unknown; error?: string; reason?: string };
+    if (!j.ok) return { ok: false, error: j.error || j.reason || `Scan failed (HTTP ${res.status})` };
+    return { ok: true, metrics: j.metrics, raw: j.raw };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
