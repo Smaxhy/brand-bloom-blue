@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, Image as ImageIcon, Loader2, Plus, Save, Trash2, TrendingUp, TrendingDown, Camera, SlidersHorizontal, Pencil, Check, X } from "lucide-react";
+import { BarChart3, Image as ImageIcon, Loader2, Plus, Save, Trash2, TrendingUp, TrendingDown, Camera, SlidersHorizontal, Pencil, Check, X, LineChart, AreaChart, Hash } from "lucide-react";
 import { type AdminData, type AdScan, type AdPlatform, uid, claudeScanAdScreenshot } from "../store";
 import { Panel, Modal, Field, inputCls, Btn } from "../ui";
 
@@ -95,6 +95,16 @@ function readAsDataUrl(file: File): Promise<string> {
 }
 
 const VISIBLE_STORAGE_KEY = "insp.stats.visibleMetrics.v1";
+const CHART_STORAGE_KEY = "insp.stats.chartType.v1";
+const CHART_OVERRIDES_KEY = "insp.stats.chartOverrides.v1";
+
+type ChartType = "number" | "line" | "area" | "bar";
+const CHART_TYPES: { key: ChartType; label: string; icon: React.ElementType }[] = [
+  { key: "number", label: "Numbers only", icon: Hash },
+  { key: "line", label: "Line", icon: LineChart },
+  { key: "area", label: "Area", icon: AreaChart },
+  { key: "bar", label: "Bar", icon: BarChart3 },
+];
 
 function loadVisible(): Set<MetricKey> {
   if (typeof window === "undefined") return new Set(METRICS.map((m) => m.key));
@@ -105,6 +115,26 @@ function loadVisible(): Set<MetricKey> {
     return new Set(arr.filter((k): k is MetricKey => METRICS.some((m) => m.key === k)));
   } catch {
     return new Set(METRICS.map((m) => m.key));
+  }
+}
+
+function loadChartType(): ChartType {
+  if (typeof window === "undefined") return "line";
+  try {
+    const raw = window.localStorage.getItem(CHART_STORAGE_KEY);
+    if (raw && CHART_TYPES.some((c) => c.key === raw)) return raw as ChartType;
+  } catch { /* ignore */ }
+  return "line";
+}
+
+function loadChartOverrides(): Record<string, ChartType> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(CHART_OVERRIDES_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as Record<string, ChartType>;
+  } catch {
+    return {};
   }
 }
 
@@ -121,12 +151,31 @@ export function Statistics({
   const [scanOpen, setScanOpen] = useState(false);
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [visible, setVisible] = useState<Set<MetricKey>>(() => loadVisible());
+  const [chartType, setChartType] = useState<ChartType>(() => loadChartType());
+  const [chartOverrides, setChartOverrides] = useState<Record<string, ChartType>>(() => loadChartOverrides());
 
   useEffect(() => {
     try {
       window.localStorage.setItem(VISIBLE_STORAGE_KEY, JSON.stringify([...visible]));
     } catch { /* ignore */ }
   }, [visible]);
+
+  useEffect(() => {
+    try { window.localStorage.setItem(CHART_STORAGE_KEY, chartType); } catch { /* ignore */ }
+  }, [chartType]);
+
+  useEffect(() => {
+    try { window.localStorage.setItem(CHART_OVERRIDES_KEY, JSON.stringify(chartOverrides)); } catch { /* ignore */ }
+  }, [chartOverrides]);
+
+  function cycleOverride(key: MetricKey) {
+    setChartOverrides((prev) => {
+      const current = prev[key] ?? chartType;
+      const idx = CHART_TYPES.findIndex((c) => c.key === current);
+      const next = CHART_TYPES[(idx + 1) % CHART_TYPES.length].key;
+      return { ...prev, [key]: next };
+    });
+  }
 
   const scans = useMemo(() => {
     const list = data.adScans ?? [];
@@ -200,7 +249,34 @@ export function Statistics({
             </select>
           </Field>
 
+          <Field label="Chart style">
+            <div className="inline-flex rounded-xl border border-border bg-secondary/50 p-0.5" role="group" aria-label="Chart style">
+              {CHART_TYPES.map((c) => {
+                const Icon = c.icon;
+                const active = chartType === c.key;
+                return (
+                  <button
+                    key={c.key}
+                    type="button"
+                    onClick={() => setChartType(c.key)}
+                    aria-pressed={active}
+                    title={c.label}
+                    className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${
+                      active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span className="hidden sm:inline">{c.label.replace(" only", "")}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
+
           <div className="ml-auto flex flex-wrap gap-2">
+            <Btn variant="ghost" onClick={() => { setChartOverrides({}); }}>
+              Reset per-card
+            </Btn>
             <Btn variant="ghost" onClick={() => setCustomizeOpen(true)}>
               <SlidersHorizontal className="h-4 w-4" aria-hidden="true" /> Customize
             </Btn>
@@ -245,6 +321,8 @@ export function Statistics({
                 good={good}
                 currency={currency}
                 points={points}
+                chartType={chartOverrides[m.key] ?? chartType}
+                onCycleChart={() => cycleOverride(m.key)}
                 canEdit={!!latest}
                 onSave={(v) => updateLatestMetric(m.key, v)}
               />
@@ -337,7 +415,7 @@ export function Statistics({
 
 /* -------------------------- metric card + chart -------------------------- */
 
-function Sparkline({ points, goodDirection }: { points: number[]; goodDirection: "up" | "down" }) {
+function Sparkline({ points, goodDirection, variant }: { points: number[]; goodDirection: "up" | "down"; variant: "line" | "area" | "bar" }) {
   if (points.length < 2) {
     return (
       <div className="mt-3 h-12 rounded-md bg-secondary/50 grid place-items-center text-[.65rem] text-muted-foreground">
@@ -347,10 +425,31 @@ function Sparkline({ points, goodDirection }: { points: number[]; goodDirection:
   }
   const w = 200;
   const h = 48;
-  const min = Math.min(...points);
+  const min = Math.min(...points, 0);
   const max = Math.max(...points);
   const span = max - min || 1;
-  const step = points.length > 1 ? w / (points.length - 1) : w;
+  const first = points[0];
+  const last = points[points.length - 1];
+  const trendingUp = last >= first;
+  const isGood = goodDirection === "up" ? trendingUp : !trendingUp;
+  const stroke = isGood ? "var(--brand-violet)" : "oklch(.62 .22 25)";
+
+  if (variant === "bar") {
+    const gap = 2;
+    const bw = Math.max(2, (w - gap * (points.length - 1)) / points.length);
+    return (
+      <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="mt-3 h-12 w-full" role="img" aria-label="Trend bars">
+        {points.map((v, i) => {
+          const barH = ((v - min) / span) * (h - 4);
+          const x = i * (bw + gap);
+          const y = h - barH;
+          return <rect key={i} x={x} y={y} width={bw} height={barH} rx="1.5" fill={stroke} fillOpacity={i === points.length - 1 ? 1 : 0.55} />;
+        })}
+      </svg>
+    );
+  }
+
+  const step = w / (points.length - 1);
   const coords = points.map((v, i) => {
     const x = i * step;
     const y = h - ((v - min) / span) * (h - 6) - 3;
@@ -358,14 +457,9 @@ function Sparkline({ points, goodDirection }: { points: number[]; goodDirection:
   });
   const line = coords.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
   const area = `${line} L${w.toFixed(1)},${h} L0,${h} Z`;
-  const first = points[0];
-  const last = points[points.length - 1];
-  const trendingUp = last >= first;
-  const isGood = goodDirection === "up" ? trendingUp : !trendingUp;
-  const stroke = isGood ? "var(--brand-violet)" : "oklch(.62 .22 25)";
   return (
     <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="mt-3 h-12 w-full" role="img" aria-label="Trend sparkline">
-      <path d={area} fill={stroke} fillOpacity="0.12" />
+      {variant === "area" && <path d={area} fill={stroke} fillOpacity="0.18" />}
       <path d={line} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
       {coords.map(([x, y], i) => (
         <circle key={i} cx={x} cy={y} r={i === coords.length - 1 ? 2.5 : 1.5} fill={stroke} />
@@ -375,7 +469,7 @@ function Sparkline({ points, goodDirection }: { points: number[]; goodDirection:
 }
 
 function MetricCard({
-  metric, value, delta, good, currency, points, canEdit, onSave,
+  metric, value, delta, good, currency, points, chartType, onCycleChart, canEdit, onSave,
 }: {
   metric: MetricDef;
   value: number | undefined;
@@ -383,9 +477,12 @@ function MetricCard({
   good: boolean | null;
   currency: string;
   points: number[];
+  chartType: ChartType;
+  onCycleChart: () => void;
   canEdit: boolean;
   onSave: (v: number | undefined) => void;
 }) {
+  const ChartIcon = CHART_TYPES.find((c) => c.key === chartType)?.icon ?? LineChart;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<string>(value === undefined ? "" : String(value));
 
@@ -409,16 +506,25 @@ function MetricCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <div className="text-[.68rem] font-semibold uppercase tracking-[.12em] text-muted-foreground">{metric.label}</div>
-            {canEdit && !editing && (
+            <div className="flex items-center gap-1">
               <button
-                onClick={() => setEditing(true)}
-                aria-label={`Edit ${metric.label}`}
-                className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground opacity-0 transition hover:bg-secondary hover:text-foreground group-hover:opacity-100 focus:opacity-100"
-                style={{ opacity: 1 }}
+                onClick={onCycleChart}
+                aria-label={`Change chart style for ${metric.label}`}
+                title={`Chart: ${CHART_TYPES.find((c) => c.key === chartType)?.label ?? "Line"} (click to change)`}
+                className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-foreground"
               >
-                <Pencil className="h-3 w-3" aria-hidden="true" />
+                <ChartIcon className="h-3 w-3" aria-hidden="true" />
               </button>
-            )}
+              {canEdit && !editing && (
+                <button
+                  onClick={() => setEditing(true)}
+                  aria-label={`Edit ${metric.label}`}
+                  className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                >
+                  <Pencil className="h-3 w-3" aria-hidden="true" />
+                </button>
+              )}
+            </div>
           </div>
           {editing ? (
             <div className="mt-2 flex items-center gap-1">
@@ -466,7 +572,7 @@ function MetricCard({
           </span>
         )}
       </div>
-      <Sparkline points={points} goodDirection={metric.goodDirection} />
+      {chartType !== "number" && <Sparkline points={points} goodDirection={metric.goodDirection} variant={chartType} />}
     </Panel>
   );
 }
