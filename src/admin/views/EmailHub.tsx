@@ -32,6 +32,22 @@ export function EmailHub({
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
   const [result, setResult] = useState<{ ok: boolean; message: string; details: GhlSendDetail[] } | null>(null);
+  const [lastAttempt, setLastAttempt] = useState<{ ids: string[]; templateId: string; templateName: string } | null>(null);
+
+  function markAttemptedAsSent() {
+    if (!lastAttempt || lastAttempt.ids.length === 0) return;
+    const sentAt = Date.now();
+    update((p) => ({
+      ...p,
+      raw: p.raw.map((r) => (lastAttempt.ids.includes(r.id) ? { ...r, lastEmailedAt: sentAt } : r)),
+      campaigns: [
+        { id: uid("cmp"), name: lastAttempt.templateName, templateId: lastAttempt.templateId, recipientIds: lastAttempt.ids, status: "sent", sentAt, createdAt: sentAt },
+        ...p.campaigns,
+      ],
+    }));
+    setSelected((s) => s.filter((id) => !lastAttempt.ids.includes(id)));
+    setLastAttempt(null);
+  }
 
   const tpl = data.templates.find((t) => t.id === tplId);
   const recipients = pending.filter((r) => selected.includes(r.id));
