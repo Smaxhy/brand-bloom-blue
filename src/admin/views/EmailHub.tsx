@@ -32,9 +32,18 @@ export function EmailHub({
   const [tplId, setTplId] = useState(data.templates[0]?.id ?? "");
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const [result, setResult] = useState<{ ok: boolean; message: string; details: GhlSendDetail[] } | null>(null);
   const [lastAttempt, setLastAttempt] = useState<{ ids: string[]; templateId: string; templateName: string } | null>(null);
+
+  // Destructive-action confirmation state — replaces window.confirm()
+  const [confirmState, setConfirmState] = useState<
+    | { kind: "deleteContact"; id: string; label: string }
+    | { kind: "deleteTemplate"; id: string; label: string }
+    | { kind: "markAllSent"; count: number }
+    | null
+  >(null);
 
   function markAttemptedAsSent() {
     if (!lastAttempt || lastAttempt.ids.length === 0) return;
