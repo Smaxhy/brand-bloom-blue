@@ -1,7 +1,8 @@
-import { useMemo, useRef, useState } from "react";
-import { BarChart3, Image as ImageIcon, Loader2, Plus, Save, Trash2, TrendingUp, TrendingDown, Camera } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { BarChart3, Image as ImageIcon, Loader2, Plus, Save, Trash2, TrendingUp, TrendingDown, Camera, SlidersHorizontal, Pencil, Check, X } from "lucide-react";
 import { type AdminData, type AdScan, type AdPlatform, uid, claudeScanAdScreenshot } from "../store";
 import { Panel, Modal, Field, inputCls, Btn } from "../ui";
+
 
 /* ============================================================
    Statistics view — Shopify-style analytics tab
@@ -93,6 +94,20 @@ function readAsDataUrl(file: File): Promise<string> {
   });
 }
 
+const VISIBLE_STORAGE_KEY = "insp.stats.visibleMetrics.v1";
+
+function loadVisible(): Set<MetricKey> {
+  if (typeof window === "undefined") return new Set(METRICS.map((m) => m.key));
+  try {
+    const raw = window.localStorage.getItem(VISIBLE_STORAGE_KEY);
+    if (!raw) return new Set(METRICS.map((m) => m.key));
+    const arr = JSON.parse(raw) as string[];
+    return new Set(arr.filter((k): k is MetricKey => METRICS.some((m) => m.key === k)));
+  } catch {
+    return new Set(METRICS.map((m) => m.key));
+  }
+}
+
 export function Statistics({
   data,
   update,
@@ -104,6 +119,14 @@ export function Statistics({
   const [platform, setPlatform] = useState<AdPlatform | "all">("all");
   const [entryOpen, setEntryOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [visible, setVisible] = useState<Set<MetricKey>>(() => loadVisible());
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(VISIBLE_STORAGE_KEY, JSON.stringify([...visible]));
+    } catch { /* ignore */ }
+  }, [visible]);
 
   const scans = useMemo(() => {
     const list = data.adScans ?? [];
@@ -113,6 +136,8 @@ export function Statistics({
       .sort((a, b) => b.capturedAt - a.capturedAt);
   }, [data.adScans, clientId, platform]);
 
+  // Oldest -> newest for the sparkline
+  const series = useMemo(() => [...scans].reverse(), [scans]);
   const latest = scans[0];
   const previous = scans[1];
 
@@ -124,8 +149,19 @@ export function Statistics({
     update((p) => ({ ...p, adScans: (p.adScans ?? []).filter((s) => s.id !== id) }));
   }
 
+  function updateLatestMetric(key: MetricKey, value: number | undefined) {
+    if (!latest) return;
+    update((p) => ({
+      ...p,
+      adScans: (p.adScans ?? []).map((s) =>
+        s.id === latest.id ? { ...s, metrics: { ...s.metrics, [key]: value } } : s,
+      ),
+    }));
+  }
+
   const currency = latest?.metrics.currency || "€";
   const activeClient = data.clients.find((c) => c.id === clientId);
+  const visibleList = METRICS.filter((m) => visible.has(m.key));
 
   return (
     <div className="space-y-5">
@@ -141,6 +177,7 @@ export function Statistics({
               <div className="text-xs text-muted-foreground">
                 {scans.length} snapshot{scans.length === 1 ? "" : "s"}
                 {activeClient ? ` · ${activeClient.company}` : " · all clients"}
+                {" · "}{visibleList.length}/{METRICS.length} metrics shown
               </div>
             </div>
           </div>
@@ -164,6 +201,9 @@ export function Statistics({
           </Field>
 
           <div className="ml-auto flex flex-wrap gap-2">
+            <Btn variant="ghost" onClick={() => setCustomizeOpen(true)}>
+              <SlidersHorizontal className="h-4 w-4" aria-hidden="true" /> Customize
+            </Btn>
             <Btn variant="ghost" onClick={() => setScanOpen(true)}>
               <Camera className="h-4 w-4" aria-hidden="true" /> Scan screenshot
             </Btn>
@@ -175,47 +215,44 @@ export function Statistics({
       </Panel>
 
       {/* Stat grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {METRICS.map((m) => {
-          const value = latest?.metrics[m.key] as number | undefined;
-          const prev = previous?.metrics[m.key] as number | undefined;
-          const delta = value !== undefined && value !== 0 && prev !== undefined && prev !== 0
-            ? ((value - prev) / prev) * 100
-            : undefined;
-          const good =
-            delta === undefined
-              ? null
-              : m.goodDirection === "up"
-                ? delta >= 0
-                : delta <= 0;
-          return (
-            <Panel key={m.key} className="relative">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="text-[.68rem] font-semibold uppercase tracking-[.12em] text-muted-foreground">{m.label}</div>
-                  <div className="mt-2 font-display text-2xl font-bold tracking-tight">
-                    {fmt(value, m.kind, currency)}
-                  </div>
-                  {m.hint && <div className="mt-1 text-xs text-muted-foreground">{m.hint}</div>}
-                </div>
-                {delta !== undefined && (
-                  <span
-                    className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[.7rem] font-semibold ${
-                      good
-                        ? "bg-[oklch(.95_.05_150)] text-[oklch(.42_.15_150)] dark:bg-[oklch(.25_.08_150)] dark:text-[oklch(.82_.15_150)]"
-                        : "bg-[oklch(.95_.05_25)] text-[oklch(.5_.2_25)] dark:bg-[oklch(.25_.08_25)] dark:text-[oklch(.82_.15_25)]"
-                    }`}
-                    title="Change vs previous snapshot"
-                  >
-                    {good ? <TrendingUp className="h-3 w-3" aria-hidden="true" /> : <TrendingDown className="h-3 w-3" aria-hidden="true" />}
-                    {delta >= 0 ? "+" : ""}{delta.toFixed(1)}%
-                  </span>
-                )}
-              </div>
-            </Panel>
-          );
-        })}
-      </div>
+      {visibleList.length === 0 ? (
+        <Panel className="text-center text-sm text-muted-foreground">
+          No metrics visible. Click <span className="font-semibold text-foreground">Customize</span> to pick which cards to show.
+        </Panel>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {visibleList.map((m) => {
+            const value = latest?.metrics[m.key] as number | undefined;
+            const prev = previous?.metrics[m.key] as number | undefined;
+            const delta = value !== undefined && value !== 0 && prev !== undefined && prev !== 0
+              ? ((value - prev) / prev) * 100
+              : undefined;
+            const good =
+              delta === undefined
+                ? null
+                : m.goodDirection === "up"
+                  ? delta >= 0
+                  : delta <= 0;
+            const points = series
+              .map((s) => s.metrics[m.key] as number | undefined)
+              .filter((v): v is number => typeof v === "number" && !Number.isNaN(v));
+            return (
+              <MetricCard
+                key={m.key}
+                metric={m}
+                value={value}
+                delta={delta}
+                good={good}
+                currency={currency}
+                points={points}
+                canEdit={!!latest}
+                onSave={(v) => updateLatestMetric(m.key, v)}
+              />
+            );
+          })}
+        </div>
+      )}
+
 
       {/* Snapshot history */}
       <Panel>
@@ -287,9 +324,217 @@ export function Statistics({
         defaultPlatform={platform === "all" ? "other" : platform}
         onSave={(s) => { saveScan(s); setScanOpen(false); }}
       />
+
+      <CustomizeModal
+        open={customizeOpen}
+        onClose={() => setCustomizeOpen(false)}
+        visible={visible}
+        onChange={setVisible}
+      />
     </div>
   );
 }
+
+/* -------------------------- metric card + chart -------------------------- */
+
+function Sparkline({ points, goodDirection }: { points: number[]; goodDirection: "up" | "down" }) {
+  if (points.length < 2) {
+    return (
+      <div className="mt-3 h-12 rounded-md bg-secondary/50 grid place-items-center text-[.65rem] text-muted-foreground">
+        Add more snapshots to see a trend
+      </div>
+    );
+  }
+  const w = 200;
+  const h = 48;
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const span = max - min || 1;
+  const step = points.length > 1 ? w / (points.length - 1) : w;
+  const coords = points.map((v, i) => {
+    const x = i * step;
+    const y = h - ((v - min) / span) * (h - 6) - 3;
+    return [x, y] as const;
+  });
+  const line = coords.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const area = `${line} L${w.toFixed(1)},${h} L0,${h} Z`;
+  const first = points[0];
+  const last = points[points.length - 1];
+  const trendingUp = last >= first;
+  const isGood = goodDirection === "up" ? trendingUp : !trendingUp;
+  const stroke = isGood ? "var(--brand-violet)" : "oklch(.62 .22 25)";
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="mt-3 h-12 w-full" role="img" aria-label="Trend sparkline">
+      <path d={area} fill={stroke} fillOpacity="0.12" />
+      <path d={line} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      {coords.map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r={i === coords.length - 1 ? 2.5 : 1.5} fill={stroke} />
+      ))}
+    </svg>
+  );
+}
+
+function MetricCard({
+  metric, value, delta, good, currency, points, canEdit, onSave,
+}: {
+  metric: MetricDef;
+  value: number | undefined;
+  delta: number | undefined;
+  good: boolean | null;
+  currency: string;
+  points: number[];
+  canEdit: boolean;
+  onSave: (v: number | undefined) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<string>(value === undefined ? "" : String(value));
+
+  useEffect(() => {
+    if (!editing) setDraft(value === undefined ? "" : String(value));
+  }, [value, editing]);
+
+  function commit() {
+    if (draft.trim() === "") {
+      onSave(undefined);
+    } else {
+      const num = Number(draft);
+      if (!Number.isNaN(num)) onSave(num);
+    }
+    setEditing(false);
+  }
+
+  return (
+    <Panel className="relative">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[.68rem] font-semibold uppercase tracking-[.12em] text-muted-foreground">{metric.label}</div>
+            {canEdit && !editing && (
+              <button
+                onClick={() => setEditing(true)}
+                aria-label={`Edit ${metric.label}`}
+                className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground opacity-0 transition hover:bg-secondary hover:text-foreground group-hover:opacity-100 focus:opacity-100"
+                style={{ opacity: 1 }}
+              >
+                <Pencil className="h-3 w-3" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+          {editing ? (
+            <div className="mt-2 flex items-center gap-1">
+              <input
+                autoFocus
+                type="number"
+                step="any"
+                className={`${inputCls} py-1.5 text-base font-semibold`}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commit();
+                  if (e.key === "Escape") { setEditing(false); setDraft(value === undefined ? "" : String(value)); }
+                }}
+              />
+              <button onClick={commit} aria-label="Save" className="grid h-8 w-8 place-items-center rounded-md bg-primary text-primary-foreground">
+                <Check className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button
+                onClick={() => { setEditing(false); setDraft(value === undefined ? "" : String(value)); }}
+                aria-label="Cancel"
+                className="grid h-8 w-8 place-items-center rounded-md border border-border"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          ) : (
+            <div className="mt-2 font-display text-2xl font-bold tracking-tight">
+              {fmt(value, metric.kind, currency)}
+            </div>
+          )}
+          {metric.hint && !editing && <div className="mt-1 text-xs text-muted-foreground">{metric.hint}</div>}
+        </div>
+        {delta !== undefined && !editing && (
+          <span
+            className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[.7rem] font-semibold ${
+              good
+                ? "bg-[oklch(.95_.05_150)] text-[oklch(.42_.15_150)] dark:bg-[oklch(.25_.08_150)] dark:text-[oklch(.82_.15_150)]"
+                : "bg-[oklch(.95_.05_25)] text-[oklch(.5_.2_25)] dark:bg-[oklch(.25_.08_25)] dark:text-[oklch(.82_.15_25)]"
+            }`}
+            title="Change vs previous snapshot"
+          >
+            {good ? <TrendingUp className="h-3 w-3" aria-hidden="true" /> : <TrendingDown className="h-3 w-3" aria-hidden="true" />}
+            {delta >= 0 ? "+" : ""}{delta.toFixed(1)}%
+          </span>
+        )}
+      </div>
+      <Sparkline points={points} goodDirection={metric.goodDirection} />
+    </Panel>
+  );
+}
+
+function CustomizeModal({
+  open, onClose, visible, onChange,
+}: {
+  open: boolean;
+  onClose: () => void;
+  visible: Set<MetricKey>;
+  onChange: (next: Set<MetricKey>) => void;
+}) {
+  function toggle(key: MetricKey) {
+    const next = new Set(visible);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    onChange(next);
+  }
+  return (
+    <Modal open={open} onClose={onClose} title="Customize metric cards" wide>
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          Pick which metrics show up on the Statistics dashboard. Your choice is remembered on this device.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Btn variant="ghost" onClick={() => onChange(new Set(METRICS.map((m) => m.key)))}>Show all</Btn>
+          <Btn variant="ghost" onClick={() => onChange(new Set())}>Hide all</Btn>
+          <Btn
+            variant="ghost"
+            onClick={() =>
+              onChange(new Set(["sales", "spend", "roas", "clicks", "ctr", "cpc", "conversions", "cpa"] as MetricKey[]))
+            }
+          >
+            Ads essentials
+          </Btn>
+        </div>
+        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+          {METRICS.map((m) => {
+            const on = visible.has(m.key);
+            return (
+              <label
+                key={m.key}
+                className={`flex cursor-pointer items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm transition ${
+                  on ? "border-primary bg-primary/5" : "border-border bg-background hover:bg-secondary/60"
+                }`}
+              >
+                <div className="min-w-0">
+                  <div className="font-semibold">{m.label}</div>
+                  {m.hint && <div className="text-[.7rem] text-muted-foreground">{m.hint}</div>}
+                </div>
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={() => toggle(m.key)}
+                  className="h-4 w-4 accent-[var(--brand-violet)]"
+                  aria-label={`Toggle ${m.label}`}
+                />
+              </label>
+            );
+          })}
+        </div>
+        <div className="flex justify-end">
+          <Btn onClick={onClose}>Done</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 
 function MiniMetric({ label, value }: { label: string; value: string }) {
   return (
