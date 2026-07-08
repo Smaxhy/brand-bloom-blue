@@ -345,9 +345,18 @@ export async function login(identifier: string, password: string): Promise<strin
   const { supabase } = await import("@/integrations/supabase/client");
   const id = identifier.trim();
   const email = id.includes("@") ? id : `${id.toLowerCase()}@inspirova.local`;
-  await supabase.auth.signOut();
+  // NOTE: do NOT call supabase.auth.signOut() before signInWithPassword. Doing so
+  // doubled the auth requests per attempt and — combined with rapid retries —
+  // tripped Supabase's per-IP rate limit, which surfaced as "login broken".
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error || !data.user) return error?.message ?? "Sign in failed.";
+  if (error || !data.user) {
+    const msg = error?.message ?? "Sign in failed.";
+    if (/rate|too many|429/i.test(msg)) {
+      return "Too many sign-in attempts. Please wait ~30 seconds and try again.";
+    }
+    if (/invalid login/i.test(msg)) return "Wrong username or password.";
+    return msg;
+  }
   const { data: roles, error: roleErr } = await supabase
     .from("user_roles")
     .select("role")

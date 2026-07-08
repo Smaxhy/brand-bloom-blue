@@ -57,30 +57,63 @@ const REVENUE_OPTS: { v: number; label: string }[] = [
   { v: 10000000, label: "$10M+" },
 ];
 
-const KEYWORD_PRESETS = [
-  "Real Estate",
-  "Real Estate Agency",
-  "Property Management",
-  "Realtor",
-  "Store",
-  "Retail Store",
-  "Boutique",
-  "Tree",
-  "Tree Specialists",
-  "Tree Care",
-  "Tree Removal",
-  "Arborist",
-  "Landscaping",
-  "Roofing",
-  "Construction",
-  "Plumbing",
-  "HVAC",
-  "Dental",
-  "Restaurant",
-  "Salon",
-  "Fitness",
-  "Auto Repair",
+// Service-based local businesses that convert well for marketing agency outreach.
+// Grouped for readability, flattened for the UI.
+const KEYWORD_GROUPS: { group: string; keywords: string[] }[] = [
+  {
+    group: "Real Estate & Property",
+    keywords: ["Real Estate", "Real Estate Agency", "Realtor", "Property Management", "Property Developer", "Commercial Real Estate", "Mortgage Broker", "Home Staging", "Property Inspector"],
+  },
+  {
+    group: "Home Services — Exterior",
+    keywords: ["Roofing", "Roof Repair", "Solar Installation", "Gutter Cleaning", "Siding Contractor", "Window Installation", "Garage Door", "Fencing", "Deck Builder", "Concrete Contractor", "Paving", "Driveway Sealing", "Pressure Washing", "Chimney Sweep"],
+  },
+  {
+    group: "Home Services — Interior",
+    keywords: ["Plumbing", "HVAC", "Electrician", "Handyman", "Painter", "Interior Designer", "Flooring", "Kitchen Remodel", "Bathroom Remodel", "Cabinet Maker", "Carpet Cleaning", "Junk Removal", "Moving Company", "Cleaning Service", "House Cleaning"],
+  },
+  {
+    group: "Outdoor & Landscaping",
+    keywords: ["Landscaping", "Lawn Care", "Tree Specialists", "Tree Care", "Tree Removal", "Arborist", "Snow Removal", "Pool Service", "Pool Builder", "Irrigation", "Pest Control", "Fence Builder", "Hardscaping", "Garden Center", "Nursery"],
+  },
+  {
+    group: "Automotive",
+    keywords: ["Auto Repair", "Auto Body Shop", "Car Detailing", "Tire Shop", "Car Dealership", "Used Car Dealer", "Motorcycle Dealer", "RV Dealer", "Boat Dealer", "Car Wash", "Windshield Repair", "Towing Service"],
+  },
+  {
+    group: "Health & Wellness",
+    keywords: ["Dental", "Dental Clinic", "Orthodontist", "Chiropractor", "Physiotherapy", "Med Spa", "Cosmetic Surgery", "Dermatology", "Optometrist", "Veterinarian", "Mental Health Clinic", "Massage Therapy", "Acupuncture", "Nutritionist", "Personal Trainer", "Fitness", "Gym", "CrossFit", "Yoga Studio", "Pilates Studio"],
+  },
+  {
+    group: "Beauty",
+    keywords: ["Salon", "Hair Salon", "Barber Shop", "Nail Salon", "Beauty Spa", "Tattoo Studio", "Lash Extensions", "Waxing Studio", "Tanning Salon"],
+  },
+  {
+    group: "Food & Hospitality",
+    keywords: ["Restaurant", "Cafe", "Coffee Shop", "Bakery", "Catering", "Food Truck", "Bar", "Brewery", "Winery", "Hotel", "Bed and Breakfast", "Event Venue"],
+  },
+  {
+    group: "Professional Services",
+    keywords: ["Law Firm", "Accountant", "CPA", "Bookkeeping", "Tax Preparation", "Financial Advisor", "Insurance Agency", "Notary", "Consulting", "Marketing Agency", "IT Services", "Managed IT", "Web Design Studio", "Security Company", "Printing Company"],
+  },
+  {
+    group: "Events, Photo & Creative",
+    keywords: ["Wedding Photographer", "Photographer", "Videographer", "Wedding Planner", "Event Planner", "DJ Service", "Florist"],
+  },
+  {
+    group: "Trades & B2B",
+    keywords: ["General Contractor", "Construction", "Welding", "Machine Shop", "Metal Fabrication", "Commercial Cleaning", "Janitorial", "Waste Management", "Logistics", "Trucking Company", "Warehousing"],
+  },
+  {
+    group: "Retail",
+    keywords: ["Store", "Retail Store", "Boutique", "Jewelry Store", "Furniture Store", "Mattress Store", "Pet Store", "Bike Shop", "Sporting Goods", "Music Store"],
+  },
+  {
+    group: "Family & Education",
+    keywords: ["Daycare", "Preschool", "Private Tutor", "Music School", "Dance Studio", "Martial Arts", "Driving School"],
+  },
 ];
+
 
 export function Scraper({
   data,
@@ -130,6 +163,36 @@ export function Scraper({
   const [aiProgress, setAiProgress] = useState({ done: 0, total: 0 });
   const [showHistory, setShowHistory] = useState(false);
   const [historyFilter, setHistoryFilter] = useState("");
+  const [aiKeywords, setAiKeywords] = useState<string[]>([]);
+  const [aiKwBusy, setAiKwBusy] = useState(false);
+  const [aiKwError, setAiKwError] = useState<string | null>(null);
+
+  async function suggestKeywordsWithAI() {
+    if (aiKwBusy) return;
+    setAiKwBusy(true);
+    setAiKwError(null);
+    try {
+      const res = await fetch("/api/claude/keywords", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          location: filters.location,
+          seed: filters.industry,
+          note: "Focus on high-ticket, service-based local businesses that pay for marketing.",
+        }),
+      });
+      const j = (await res.json()) as { ok?: boolean; keywords?: string[]; reason?: string };
+      if (!j.ok || !j.keywords?.length) {
+        setAiKwError(j.reason === "missing_key" ? "AI key not configured on the server." : "AI didn't return suggestions. Try again.");
+      } else {
+        setAiKeywords(j.keywords);
+      }
+    } catch (e) {
+      setAiKwError((e as Error).message || "Request failed.");
+    } finally {
+      setAiKwBusy(false);
+    }
+  }
 
   const denylist = data.denylist ?? {};
   const history = denylistEntries(denylist);
@@ -523,29 +586,89 @@ export function Scraper({
               </Field>
             </div>
 
-            <div>
-              <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
-                Quick keywords <span className="font-normal">(tap to add — searched as a union)</span>
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {KEYWORD_PRESETS.map((kw) => {
-                  const on = activeKeywords.includes(kw.toLowerCase());
-                  return (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="block text-xs font-semibold text-muted-foreground">
+                  Quick keywords <span className="font-normal">(tap to add — searched as a union)</span>
+                </span>
+                <button
+                  onClick={suggestKeywordsWithAI}
+                  disabled={aiKwBusy}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[var(--brand-violet)] to-[var(--brand-coral)] px-3 py-1.5 text-xs font-semibold text-white transition-transform hover:-translate-y-0.5 disabled:opacity-60"
+                  title="Ask AI for the best service-based verticals to target for this location"
+                >
+                  {aiKwBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  {aiKwBusy ? "Thinking…" : "AI suggest keywords"}
+                </button>
+              </div>
+
+              {aiKwError && (
+                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">{aiKwError}</div>
+              )}
+
+              {aiKeywords.length > 0 && (
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="text-[.7rem] font-semibold uppercase tracking-wider text-[var(--brand-violet)]">
+                      AI picks ({aiKeywords.length})
+                    </span>
                     <button
-                      key={kw}
-                      onClick={() => toggleKeyword(kw)}
-                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                        on
-                          ? "border-transparent bg-[var(--brand-coral)] text-white"
-                          : "border-border bg-background text-muted-foreground hover:bg-secondary"
-                      }`}
+                      onClick={() => setAiKeywords([])}
+                      className="text-[.7rem] text-muted-foreground hover:text-foreground"
                     >
-                      {kw}
+                      clear
                     </button>
-                  );
-                })}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {aiKeywords.map((kw) => {
+                      const on = activeKeywords.includes(kw.toLowerCase());
+                      return (
+                        <button
+                          key={`ai-${kw}`}
+                          onClick={() => toggleKeyword(kw)}
+                          className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                            on
+                              ? "border-transparent bg-[var(--brand-violet)] text-white"
+                              : "border-[var(--brand-violet)]/40 bg-[var(--brand-violet)]/10 text-[var(--brand-violet)] hover:bg-[var(--brand-violet)]/20"
+                          }`}
+                        >
+                          {kw}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2.5">
+                {KEYWORD_GROUPS.map((g) => (
+                  <div key={g.group}>
+                    <div className="mb-1 text-[.65rem] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                      {g.group}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {g.keywords.map((kw) => {
+                        const on = activeKeywords.includes(kw.toLowerCase());
+                        return (
+                          <button
+                            key={kw}
+                            onClick={() => toggleKeyword(kw)}
+                            className={`rounded-full border px-2.5 py-1 text-[.7rem] font-semibold transition-colors ${
+                              on
+                                ? "border-transparent bg-[var(--brand-coral)] text-white"
+                                : "border-border bg-background text-muted-foreground hover:bg-secondary"
+                            }`}
+                          >
+                            {kw}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
+
 
             <div>
               <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
