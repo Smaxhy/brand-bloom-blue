@@ -177,6 +177,7 @@ export function Statistics({
   const [clientId, setClientId] = useState<string>("all");
   const initial = presetFor(presets, "all");
   const [platform, setPlatform] = useState<AdPlatform | "all">(initial.platform ?? "all");
+  const [period, setPeriod] = useState<PeriodKey>(initial.period ?? "all");
   const [entryOpen, setEntryOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [customizeOpen, setCustomizeOpen] = useState(false);
