@@ -362,8 +362,8 @@ export function EmailHub({
                     </div>
                   </div>
                   <div className="flex gap-1">
-                    <button onClick={() => setEditTpl(t)} className="grid h-8 w-8 place-items-center rounded-lg hover:bg-secondary"><Pencil className="h-4 w-4" /></button>
-                    <button onClick={() => removeTpl(t.id)} className="grid h-8 w-8 place-items-center rounded-lg text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /></button>
+                    <button onClick={() => setEditTpl(t)} aria-label={`Edit template ${t.name}`} className="grid h-9 w-9 place-items-center rounded-lg transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
+                    <button onClick={() => setConfirmState({ kind: "deleteTemplate", id: t.id, label: t.name })} aria-label={`Delete template ${t.name}`} className="grid h-9 w-9 place-items-center rounded-lg text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
                   </div>
                 </div>
                 <pre className="mt-3 max-h-32 overflow-hidden whitespace-pre-wrap font-sans text-xs text-muted-foreground">{t.body}</pre>
@@ -466,14 +466,12 @@ export function EmailHub({
                               Move back
                             </button>
                             <button
-                              onClick={() => {
-                                if (!confirm(`Delete ${r.business}?`)) return;
-                                update((p) => ({ ...p, raw: p.raw.filter((x) => x.id !== r.id) }));
-                              }}
-                              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
+                              onClick={() => setConfirmState({ kind: "deleteContact", id: r.id, label: r.business })}
+                              aria-label={`Delete ${r.business}`}
+                              className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 py-1 text-xs text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
                               title="Delete contact"
                             >
-                              <Trash2 className="h-3.5 w-3.5" /> Delete
+                              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Delete
                             </button>
                           </div>
                         </td>
