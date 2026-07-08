@@ -586,29 +586,89 @@ export function Scraper({
               </Field>
             </div>
 
-            <div>
-              <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
-                Quick keywords <span className="font-normal">(tap to add — searched as a union)</span>
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {KEYWORD_PRESETS.map((kw) => {
-                  const on = activeKeywords.includes(kw.toLowerCase());
-                  return (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="block text-xs font-semibold text-muted-foreground">
+                  Quick keywords <span className="font-normal">(tap to add — searched as a union)</span>
+                </span>
+                <button
+                  onClick={suggestKeywordsWithAI}
+                  disabled={aiKwBusy}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[var(--brand-violet)] to-[var(--brand-coral)] px-3 py-1.5 text-xs font-semibold text-white transition-transform hover:-translate-y-0.5 disabled:opacity-60"
+                  title="Ask AI for the best service-based verticals to target for this location"
+                >
+                  {aiKwBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  {aiKwBusy ? "Thinking…" : "AI suggest keywords"}
+                </button>
+              </div>
+
+              {aiKwError && (
+                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">{aiKwError}</div>
+              )}
+
+              {aiKeywords.length > 0 && (
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="text-[.7rem] font-semibold uppercase tracking-wider text-[var(--brand-violet)]">
+                      AI picks ({aiKeywords.length})
+                    </span>
                     <button
-                      key={kw}
-                      onClick={() => toggleKeyword(kw)}
-                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                        on
-                          ? "border-transparent bg-[var(--brand-coral)] text-white"
-                          : "border-border bg-background text-muted-foreground hover:bg-secondary"
-                      }`}
+                      onClick={() => setAiKeywords([])}
+                      className="text-[.7rem] text-muted-foreground hover:text-foreground"
                     >
-                      {kw}
+                      clear
                     </button>
-                  );
-                })}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {aiKeywords.map((kw) => {
+                      const on = activeKeywords.includes(kw.toLowerCase());
+                      return (
+                        <button
+                          key={`ai-${kw}`}
+                          onClick={() => toggleKeyword(kw)}
+                          className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                            on
+                              ? "border-transparent bg-[var(--brand-violet)] text-white"
+                              : "border-[var(--brand-violet)]/40 bg-[var(--brand-violet)]/10 text-[var(--brand-violet)] hover:bg-[var(--brand-violet)]/20"
+                          }`}
+                        >
+                          {kw}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2.5">
+                {KEYWORD_GROUPS.map((g) => (
+                  <div key={g.group}>
+                    <div className="mb-1 text-[.65rem] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                      {g.group}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {g.keywords.map((kw) => {
+                        const on = activeKeywords.includes(kw.toLowerCase());
+                        return (
+                          <button
+                            key={kw}
+                            onClick={() => toggleKeyword(kw)}
+                            className={`rounded-full border px-2.5 py-1 text-[.7rem] font-semibold transition-colors ${
+                              on
+                                ? "border-transparent bg-[var(--brand-coral)] text-white"
+                                : "border-border bg-background text-muted-foreground hover:bg-secondary"
+                            }`}
+                          >
+                            {kw}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
+
 
             <div>
               <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
