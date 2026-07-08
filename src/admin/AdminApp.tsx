@@ -63,6 +63,7 @@ const BASE_NAV: { id: ViewId; label: string; icon: React.ElementType }[] = [
   { id: "scraper", label: "Data Scraper", icon: Radar },
   { id: "raw", label: "Raw Data", icon: Database },
   { id: "clients", label: "Clients", icon: Users },
+  { id: "statistics", label: "Statistics", icon: BarChart3 },
   { id: "finance", label: "Finance", icon: Wallet },
   { id: "email", label: "Email / GHL", icon: Mail },
   { id: "settings", label: "Settings", icon: SettingsIcon },
