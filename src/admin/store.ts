@@ -342,31 +342,67 @@ export function subscribeRemote(cb: (data: AdminData) => void): () => void {
  * Returns null on success, otherwise a short error message.
  */
 export async function login(identifier: string, password: string): Promise<string | null> {
-  const { supabase } = await import("@/integrations/supabase/client");
-  const id = identifier.trim();
-  const email = id.includes("@") ? id : `${id.toLowerCase()}@inspirova.local`;
-  // NOTE: do NOT call supabase.auth.signOut() before signInWithPassword. Doing so
-  // doubled the auth requests per attempt and — combined with rapid retries —
-  // tripped Supabase's per-IP rate limit, which surfaced as "login broken".
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error || !data.user) {
-    const msg = error?.message ?? "Sign in failed.";
-    if (/rate|too many|429/i.test(msg)) {
-      return "Too many sign-in attempts. Please wait ~30 seconds and try again.";
+  try {
+    const { supabase } = await import("@/integrations/supabase/client");
+    const id = identifier.trim();
+    const email = id.includes("@") ? id : `${id.toLowerCase()}@inspirova.local`;
+
+    // Retry sign-in once on transient network failures ("Failed to fetch"),
+    // which happen when the browser aborts a request (flaky Wi-Fi, VPN switch,
+    // extension interference). We don't retry on auth errors returned by the API.
+    const attemptSignIn = async () => supabase.auth.signInWithPassword({ email, password });
+    let result;
+    try {
+      result = await attemptSignIn();
+    } catch (netErr: any) {
+      const m = String(netErr?.message ?? netErr ?? "");
+      if (/failed to fetch|networkerror|load failed|fetch/i.test(m)) {
+        await new Promise((r) => setTimeout(r, 600));
+        try {
+          result = await attemptSignIn();
+        } catch {
+          return "Can't reach the login server. Check your internet (or disable any ad-blocker/VPN for this site) and try again.";
+        }
+      } else {
+        throw netErr;
+      }
     }
-    if (/invalid login/i.test(msg)) return "Wrong username or password.";
-    return msg;
+    const { data, error } = result;
+    if (error || !data.user) {
+      const msg = error?.message ?? "Sign in failed.";
+      if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+        return "Can't reach the login server. Check your internet (or disable any ad-blocker/VPN for this site) and try again.";
+      }
+      if (/rate|too many|429/i.test(msg)) {
+        return "Too many sign-in attempts. Please wait ~30 seconds and try again.";
+      }
+      if (/invalid login/i.test(msg)) return "Wrong username or password.";
+      return msg;
+    }
+
+    try {
+      const { data: roles, error: roleErr } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", data.user.id);
+      const allowed = (roles ?? []).some((r) => r.role === "admin" || r.role === "ceo" || r.role === "user");
+      if (roleErr || !allowed) {
+        await supabase.auth.signOut();
+        return "This account isn't authorised to use the admin panel.";
+      }
+    } catch (rolesErr: any) {
+      // Network hiccup while checking roles — session is valid, allow the app to
+      // load; role-gated views will re-check when needed.
+      console.warn("[login] role check failed, continuing:", rolesErr);
+    }
+    return null;
+  } catch (err: any) {
+    const msg = String(err?.message ?? err ?? "");
+    if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+      return "Can't reach the login server. Check your internet (or disable any ad-blocker/VPN for this site) and try again.";
+    }
+    return msg || "Sign in failed. Please try again.";
   }
-  const { data: roles, error: roleErr } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", data.user.id);
-  const allowed = (roles ?? []).some((r) => r.role === "admin" || r.role === "ceo" || r.role === "user");
-  if (roleErr || !allowed) {
-    await supabase.auth.signOut();
-    return "This account isn't authorised to use the admin panel.";
-  }
-  return null;
 }
 
 export async function logout(): Promise<void> {
