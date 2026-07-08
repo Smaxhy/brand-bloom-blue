@@ -32,7 +32,7 @@ function HomePage() {
   );
 
   useEffect(() => {
-    const allowedPaths = ["/results", "/admin"];
+    const allowedPaths = ["/results", "/admin", "/privacy"];
     const handleMessage = (event: MessageEvent) => {
       if (
         event.data?.type === "inspirova:navigate" &&
