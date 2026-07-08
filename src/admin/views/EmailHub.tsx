@@ -60,6 +60,8 @@ export function EmailHub({
     if (!tpl || recipients.length === 0) return;
     setSending(true);
     setResult(null);
+    setLastAttempt({ ids: recipients.map((r) => r.id), templateId: tpl.id, templateName: tpl.name });
+    setProgress({ done: 0, total: recipients.length });
     setProgress({ done: 0, total: recipients.length });
 
     // Chunk client-side so we can show live progress and stay well under GHL's
