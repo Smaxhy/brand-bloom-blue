@@ -113,7 +113,7 @@ const KEYWORD_GROUPS: { group: string; keywords: string[] }[] = [
     keywords: ["Daycare", "Preschool", "Private Tutor", "Music School", "Dance Studio", "Martial Arts", "Driving School"],
   },
 ];
-const KEYWORD_PRESETS = KEYWORD_GROUPS.flatMap((g) => g.keywords);
+
 
 export function Scraper({
   data,
