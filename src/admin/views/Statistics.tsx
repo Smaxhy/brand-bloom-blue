@@ -324,7 +324,7 @@ export function Statistics({
             >
               {savedFlash ? "Saved" : `View saved for ${activeClient ? activeClient.company : "All clients"}`}
             </span>
-            <Btn variant="ghost" onClick={resetPresetForCurrentClient} title="Reset saved view for this client">
+            <Btn variant="ghost" onClick={resetPresetForCurrentClient}>
               Reset preset
             </Btn>
             <Btn variant="ghost" onClick={() => { setChartOverrides({}); }}>
