@@ -249,7 +249,34 @@ export function Statistics({
             </select>
           </Field>
 
+          <Field label="Chart style">
+            <div className="inline-flex rounded-xl border border-border bg-secondary/50 p-0.5" role="group" aria-label="Chart style">
+              {CHART_TYPES.map((c) => {
+                const Icon = c.icon;
+                const active = chartType === c.key;
+                return (
+                  <button
+                    key={c.key}
+                    type="button"
+                    onClick={() => setChartType(c.key)}
+                    aria-pressed={active}
+                    title={c.label}
+                    className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${
+                      active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span className="hidden sm:inline">{c.label.replace(" only", "")}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
+
           <div className="ml-auto flex flex-wrap gap-2">
+            <Btn variant="ghost" onClick={() => { setChartOverrides({}); }}>
+              Reset per-card
+            </Btn>
             <Btn variant="ghost" onClick={() => setCustomizeOpen(true)}>
               <SlidersHorizontal className="h-4 w-4" aria-hidden="true" /> Customize
             </Btn>
