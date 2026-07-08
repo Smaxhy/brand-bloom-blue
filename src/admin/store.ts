@@ -113,6 +113,48 @@ export interface ScraperState {
   updatedAt: number;
 }
 
+export interface Task {
+  id: string;
+  title: string;
+  notes?: string;
+  due?: number; // ms epoch
+  priority: "low" | "med" | "high";
+  clientId?: string;
+  createdAt: number;
+  completedAt?: number;
+}
+
+export type AdPlatform = "meta" | "google" | "tiktok" | "other";
+
+export interface AdScan {
+  id: string;
+  clientId?: string;
+  platform: AdPlatform;
+  capturedAt: number;
+  /** Free-text label the user set for this screenshot. */
+  label?: string;
+  /** Metrics extracted by Claude vision. All fields optional. */
+  metrics: {
+    campaign?: string;
+    dateRange?: string;
+    spend?: number;
+    currency?: string;
+    impressions?: number;
+    reach?: number;
+    clicks?: number;
+    ctr?: number; // 0..1 or %
+    cpc?: number;
+    cpm?: number;
+    conversions?: number;
+    cpa?: number;
+    roas?: number;
+    revenue?: number;
+    notes?: string;
+  };
+  /** Raw JSON returned by Claude, kept for auditing. */
+  raw?: unknown;
+}
+
 export interface AdminData {
   deals: Deal[];
   raw: RawBusiness[];
@@ -121,11 +163,14 @@ export interface AdminData {
   templates: EmailTemplate[];
   campaigns: EmailCampaign[];
   settings: Settings;
+  tasks?: Task[];
+  adScans?: AdScan[];
   /** Per-account persistent denylist — never re-surface these contacts. */
   denylist?: Record<string, DenylistEntry>;
   /** Persisted scraper results so a page refresh keeps them. */
   scraper?: ScraperState;
 }
+
 
 
 /* ----------------------------------------------------------------------- */
