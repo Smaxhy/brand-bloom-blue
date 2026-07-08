@@ -45,6 +45,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   if (path === "/api/scrape-site") return scrapeSite(request, env);
   if (path === "/api/claude/extract") return claudeExtract(request, env);
   if (path === "/api/claude/keywords") return claudeKeywords(request, env);
+  if (path === "/api/claude/ad-scan") return claudeAdScan(request, env);
 
   return null;
 }
