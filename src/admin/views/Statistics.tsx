@@ -95,6 +95,16 @@ function readAsDataUrl(file: File): Promise<string> {
 }
 
 const VISIBLE_STORAGE_KEY = "insp.stats.visibleMetrics.v1";
+const CHART_STORAGE_KEY = "insp.stats.chartType.v1";
+const CHART_OVERRIDES_KEY = "insp.stats.chartOverrides.v1";
+
+type ChartType = "number" | "line" | "area" | "bar";
+const CHART_TYPES: { key: ChartType; label: string; icon: React.ElementType }[] = [
+  { key: "number", label: "Numbers only", icon: Hash },
+  { key: "line", label: "Line", icon: LineChart },
+  { key: "area", label: "Area", icon: AreaChart },
+  { key: "bar", label: "Bar", icon: BarChart3 },
+];
 
 function loadVisible(): Set<MetricKey> {
   if (typeof window === "undefined") return new Set(METRICS.map((m) => m.key));
@@ -105,6 +115,26 @@ function loadVisible(): Set<MetricKey> {
     return new Set(arr.filter((k): k is MetricKey => METRICS.some((m) => m.key === k)));
   } catch {
     return new Set(METRICS.map((m) => m.key));
+  }
+}
+
+function loadChartType(): ChartType {
+  if (typeof window === "undefined") return "line";
+  try {
+    const raw = window.localStorage.getItem(CHART_STORAGE_KEY);
+    if (raw && CHART_TYPES.some((c) => c.key === raw)) return raw as ChartType;
+  } catch { /* ignore */ }
+  return "line";
+}
+
+function loadChartOverrides(): Record<string, ChartType> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(CHART_OVERRIDES_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as Record<string, ChartType>;
+  } catch {
+    return {};
   }
 }
 
