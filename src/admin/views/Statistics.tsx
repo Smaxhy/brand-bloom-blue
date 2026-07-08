@@ -324,6 +324,13 @@ export function Statistics({
               <option value="other">Other / Generic</option>
             </select>
           </Field>
+          <Field label="Period">
+            <select className={inputCls} value={period} onChange={(e) => setPeriod(e.target.value as PeriodKey)}>
+              {PERIODS.map((p) => (
+                <option key={p.key} value={p.key}>{p.label}</option>
+              ))}
+            </select>
+          </Field>
 
           <Field label="Chart style">
             <div className="inline-flex rounded-xl border border-border bg-secondary/50 p-0.5" role="group" aria-label="Chart style">
