@@ -13,6 +13,7 @@ import {
   Lock,
   Menu,
   ListChecks,
+  BarChart3,
 } from "lucide-react";
 import logo from "@/assets/inspirova-logo.png";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,6 +35,7 @@ import { Finance } from "./views/Finance";
 import { EmailHub } from "./views/EmailHub";
 import { Tasks } from "./views/Tasks";
 import { SettingsView } from "./views/SettingsView";
+import { Statistics } from "./views/Statistics";
 import { TeamUsers } from "./views/TeamUsers";
 import { UserPlus } from "lucide-react";
 
@@ -44,6 +46,7 @@ type ViewId =
   | "scraper"
   | "raw"
   | "clients"
+  | "statistics"
   | "finance"
   | "email"
   | "tasks"
@@ -60,6 +63,7 @@ const BASE_NAV: { id: ViewId; label: string; icon: React.ElementType }[] = [
   { id: "scraper", label: "Data Scraper", icon: Radar },
   { id: "raw", label: "Raw Data", icon: Database },
   { id: "clients", label: "Clients", icon: Users },
+  { id: "statistics", label: "Statistics", icon: BarChart3 },
   { id: "finance", label: "Finance", icon: Wallet },
   { id: "email", label: "Email / GHL", icon: Mail },
   { id: "settings", label: "Settings", icon: SettingsIcon },
@@ -311,6 +315,7 @@ export function AdminApp() {
           {view === "scraper" && <Scraper data={data} update={update} go={setView} />}
           {view === "raw" && <RawData data={data} update={update} go={setView} />}
           {view === "clients" && <Clients data={data} update={update} />}
+          {view === "statistics" && <Statistics data={data} update={update} />}
           {view === "finance" && <Finance data={data} update={update} />}
           {view === "email" && <EmailHub data={data} update={update} />}
           {view === "team" && role === "ceo" && <TeamUsers />}
