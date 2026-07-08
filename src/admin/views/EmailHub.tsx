@@ -62,7 +62,6 @@ export function EmailHub({
     setResult(null);
     setLastAttempt({ ids: recipients.map((r) => r.id), templateId: tpl.id, templateName: tpl.name });
     setProgress({ done: 0, total: recipients.length });
-    setProgress({ done: 0, total: recipients.length });
 
     // Chunk client-side so we can show live progress and stay well under GHL's
     // per-second cap — the server also retries on 429, so this is belt-and-braces.
