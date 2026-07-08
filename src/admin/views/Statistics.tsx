@@ -109,6 +109,30 @@ interface ClientPreset {
   chartType: ChartType;
   chartOverrides: Record<string, ChartType>;
   platform?: AdPlatform | "all";
+  period?: PeriodKey;
+}
+
+type PeriodKey = "today" | "yesterday" | "7d" | "30d" | "90d" | "all";
+const PERIODS: { key: PeriodKey; label: string }[] = [
+  { key: "today", label: "Today" },
+  { key: "yesterday", label: "Yesterday" },
+  { key: "7d", label: "Last 7 days" },
+  { key: "30d", label: "Last 30 days" },
+  { key: "90d", label: "Last 90 days" },
+  { key: "all", label: "All time" },
+];
+
+function periodRange(key: PeriodKey): { from: number; to: number } | null {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const day = 24 * 60 * 60 * 1000;
+  if (key === "all") return null;
+  if (key === "today") return { from: startOfToday, to: startOfToday + day };
+  if (key === "yesterday") return { from: startOfToday - day, to: startOfToday };
+  if (key === "7d") return { from: startOfToday - 7 * day, to: now.getTime() };
+  if (key === "30d") return { from: startOfToday - 30 * day, to: now.getTime() };
+  if (key === "90d") return { from: startOfToday - 90 * day, to: now.getTime() };
+  return null;
 }
 
 const DEFAULT_PRESET: ClientPreset = {
@@ -116,6 +140,7 @@ const DEFAULT_PRESET: ClientPreset = {
   chartType: "line",
   chartOverrides: {},
   platform: "all",
+  period: "all",
 };
 
 function loadPresets(): Record<string, ClientPreset> {
