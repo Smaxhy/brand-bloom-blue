@@ -33,177 +33,121 @@ const SECTIONS: Section[] = [
   {
     heading: "1. Introduction",
     body: [
-      'Welcome to Inspirova ("Inspirova," "we," "our," or "us"). Your privacy is important to us. This Privacy Policy explains how we collect, use, store, and protect your personal information when you use our website and services.',
-      "By accessing or using our website, you agree to the practices described in this Privacy Policy.",
+      'Welcome to Inspirova ("Inspirova," "we," "our," or "us").',
+      "We are committed to protecting your privacy and handling any information available through our platform responsibly. This Privacy Policy explains how information is handled when you use our website and services.",
+      "By using our website, you agree to this Privacy Policy.",
     ],
   },
   {
     heading: "2. Eligibility",
     body: [
       "Our services are intended only for individuals who are 16 years of age or older.",
-      "By using our website, you represent and warrant that you are at least 16 years old. If we discover that an account belongs to someone under the age of 16, we reserve the right to suspend or permanently delete the account and any associated data.",
+      "By creating an account or using our services, you confirm that you are at least 16 years old. If we become aware that an account belongs to someone under the age of 16, we reserve the right to suspend or permanently remove the account.",
     ],
   },
   {
-    heading: "3. Information We Collect",
-    body: ["We may collect:"],
-    list: [
-      "Your name",
-      "Email address",
-      "Phone number",
-      "Company information",
-      "Billing information (if applicable)",
-      "Account credentials",
-      "Communications with our team",
-      "Website usage information",
-      "Device and browser information",
-      "IP address",
-      "Cookies and similar technologies",
+    heading: "3. Information Available Through the Platform",
+    body: [
+      "When you use Inspirova, certain information may be provided by you as part of creating an account, requesting services, or communicating with us.",
+      "This information remains within the platform and is used solely for providing and maintaining our services.",
+      "Inspirova does not sell your personal information.",
+      "Members of the Inspirova team do not intentionally download, copy, or maintain personal copies of user information outside of our operational systems except where required for legal, security, backup, or technical purposes.",
     ],
-    after: ["We only collect information necessary to provide and improve our services."],
   },
   {
-    heading: "4. How We Use Your Information",
-    body: ["We use your information to:"],
+    heading: "4. How Information Is Used",
+    body: ["Information available through the platform may be used to:"],
     list: [
-      "Create and manage your account.",
-      "Provide our services.",
-      "Process requests and inquiries.",
-      "Improve our website and services.",
-      "Provide customer support.",
-      "Detect fraud, abuse, or security issues.",
+      "Operate and maintain our services.",
+      "Respond to customer support requests.",
+      "Verify accounts.",
+      "Improve the functionality of our website.",
+      "Detect fraud or unauthorized activity.",
+      "Protect the security of our users and platform.",
+      "Comply with applicable laws and legal obligations.",
+    ],
+  },
+  {
+    heading: "5. Administrative Access",
+    body: [
+      "The owners of Inspirova and authorized team members retain full administrative control over the platform.",
+      "This includes the ability to:",
+    ],
+    list: [
+      "Review account information when reasonably necessary.",
+      "Investigate reports of abuse, fraud, or misuse.",
+      "Assist users with technical or account-related issues.",
+      "Monitor platform security.",
+      "Suspend, restrict, or terminate accounts that violate our Terms of Service.",
+      "Remove content that violates our policies.",
+    ],
+    after: [
+      "Administrative access is used only for legitimate operational, security, support, or legal purposes.",
+    ],
+  },
+  {
+    heading: "6. Data Sharing",
+    body: [
+      "Inspirova does not sell, rent, or trade user information.",
+      "Information may only be disclosed when:",
+    ],
+    list: [
+      "Required by law.",
+      "Necessary to protect the rights, safety, or security of Inspirova or its users.",
+      "Required to investigate fraud, abuse, or unlawful activity.",
+      "Necessary for trusted service providers who help us operate our services under appropriate confidentiality obligations.",
+    ],
+  },
+  {
+    heading: "7. Data Security",
+    body: [
+      "We implement reasonable administrative, technical, and organizational measures to protect information available through our platform against unauthorized access, alteration, disclosure, or destruction.",
+      "Although no online service can guarantee absolute security, we continually work to protect user information.",
+    ],
+  },
+  {
+    heading: "8. Account Management",
+    body: [
+      "The owners and authorized administrators of Inspirova reserve the right to access, modify, suspend, restrict, or terminate user accounts whenever reasonably necessary to:",
+    ],
+    list: [
+      "Enforce our Terms of Service.",
+      "Maintain platform integrity.",
+      "Protect users.",
+      "Investigate suspected violations.",
+      "Resolve technical issues.",
       "Comply with legal obligations.",
-      "Communicate important updates regarding your account.",
     ],
   },
   {
-    heading: "5. Access to Your Information",
+    heading: "9. Cookies",
     body: [
-      "Members of the Inspirova team, including the owners and authorized staff, may access user accounts and associated information when necessary for:",
-    ],
-    list: [
-      "Customer support",
-      "Technical troubleshooting",
-      "Security monitoring",
-      "Fraud prevention",
-      "Service maintenance",
-      "Compliance with applicable laws",
-      "Improving our services",
-    ],
-    after: [
-      "Access to user information is limited to authorized personnel and is handled with appropriate confidentiality.",
+      "Our website may use cookies or similar technologies to improve functionality, maintain user sessions, remember preferences, and analyze website performance.",
+      "You may disable cookies through your browser settings, although doing so may affect certain features of the website.",
     ],
   },
   {
-    heading: "6. Ownership and Administrative Rights",
+    heading: "10. Third-Party Services",
     body: [
-      "Inspirova retains full administrative control over its platform.",
-      "We reserve the right to:",
-    ],
-    list: [
-      "Access user accounts when reasonably necessary.",
-      "Suspend, restrict, or terminate accounts.",
-      "Remove or modify content that violates our Terms of Service.",
-      "Investigate suspected misuse or illegal activity.",
-      "Preserve account information where required by law or for legitimate business purposes.",
-    ],
-    after: [
-      "These rights are exercised responsibly and in accordance with applicable privacy laws.",
-    ],
-  },
-  {
-    heading: "7. Data Sharing",
-    body: [
-      "We do not sell your personal information to third parties.",
-      "Your information may only be shared:",
-    ],
-    list: [
-      "With trusted service providers who help operate our business.",
-      "When required by law.",
-      "To protect the rights, property, or safety of Inspirova, our users, or others.",
-      "During a business transfer such as a merger or acquisition.",
-    ],
-  },
-  {
-    heading: "8. Data Security",
-    body: [
-      "We implement reasonable technical and organizational safeguards designed to protect your personal information from:",
-    ],
-    list: [
-      "Unauthorized access",
-      "Unauthorized disclosure",
-      "Alteration",
-      "Loss",
-      "Misuse",
-    ],
-    after: [
-      "While no system can guarantee absolute security, we continuously work to maintain appropriate safeguards.",
-    ],
-  },
-  {
-    heading: "9. Data Retention",
-    body: ["We retain personal information only as long as necessary to:"],
-    list: [
-      "Provide our services.",
-      "Meet legal obligations.",
-      "Resolve disputes.",
-      "Enforce our agreements.",
-    ],
-    after: [
-      "We may retain certain information after account closure where legally required or reasonably necessary.",
-    ],
-  },
-  {
-    heading: "10. Cookies",
-    body: ["Our website may use cookies and similar technologies to:"],
-    list: [
-      "Maintain login sessions.",
-      "Remember user preferences.",
-      "Improve website performance.",
-      "Analyze website traffic.",
-    ],
-    after: [
-      "You may disable cookies through your browser settings, although some features may not function correctly.",
+      "Our website may integrate with trusted third-party services necessary for operating the platform. These providers may process information only as required to deliver their services and are expected to maintain appropriate security measures.",
     ],
   },
   {
     heading: "11. User Rights",
-    body: ["Where required by applicable law, users may have the right to:"],
-    list: [
-      "Request access to their personal data.",
-      "Request correction of inaccurate information.",
-      "Request deletion of personal data.",
-      "Request restriction of processing.",
-      "Request a copy of their data.",
-      "Object to certain processing activities.",
-    ],
-    after: [
-      "Requests may be denied where we are legally permitted or required to retain information.",
+    body: [
+      "Where required by applicable law, users may have rights regarding their personal information, including the right to request access, correction, or deletion of certain information, subject to legal and operational requirements.",
     ],
   },
   {
-    heading: "12. Account Termination",
+    heading: "12. Changes to This Privacy Policy",
     body: [
-      "We reserve the right to suspend or permanently terminate any account for violations of our Terms of Service, fraudulent activity, abuse of the platform, or any conduct that may harm Inspirova or its users.",
+      "We may update this Privacy Policy at any time. Any changes become effective immediately upon publication on this page. Continued use of the website after updates constitutes acceptance of the revised Privacy Policy.",
     ],
   },
   {
-    heading: "13. International Users",
+    heading: "13. Contact",
     body: [
-      "If you access our services from outside our operating jurisdiction, your information may be transferred to and processed in countries where our service providers operate. We take reasonable steps to protect such information in accordance with applicable laws.",
-    ],
-  },
-  {
-    heading: "14. Changes to this Privacy Policy",
-    body: [
-      "We may update this Privacy Policy at any time.",
-      "Changes become effective upon publication on this page. Continued use of our services after updates constitutes acceptance of the revised Privacy Policy.",
-    ],
-  },
-  {
-    heading: "15. Contact",
-    body: [
-      "If you have questions regarding this Privacy Policy or your personal information, please contact us using the contact information provided on our website.",
+      "If you have any questions regarding this Privacy Policy or our privacy practices, please contact Inspirova through the contact information provided on our website.",
     ],
   },
 ];
