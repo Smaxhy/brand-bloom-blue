@@ -273,13 +273,17 @@ export function EmailHub({
               </div>
             )}
 
-            <Btn className="mt-4 w-full" onClick={send} >
+            <Btn
+              className="mt-4 w-full disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={send}
+              disabled={sending || !tpl || recipients.length === 0}
+              aria-disabled={sending || !tpl || recipients.length === 0}
+            >
               {sending
                 ? progress
                   ? `Sending ${progress.done} / ${progress.total}…`
                   : "Sending…"
                 : <><Send className="h-4 w-4" /> {liveMode ? "Send via GoHighLevel" : "Simulate send"} ({recipients.length})</>}
-
             </Btn>
           </Panel>
         </div>
