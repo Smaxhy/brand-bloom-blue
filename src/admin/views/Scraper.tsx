@@ -57,30 +57,63 @@ const REVENUE_OPTS: { v: number; label: string }[] = [
   { v: 10000000, label: "$10M+" },
 ];
 
-const KEYWORD_PRESETS = [
-  "Real Estate",
-  "Real Estate Agency",
-  "Property Management",
-  "Realtor",
-  "Store",
-  "Retail Store",
-  "Boutique",
-  "Tree",
-  "Tree Specialists",
-  "Tree Care",
-  "Tree Removal",
-  "Arborist",
-  "Landscaping",
-  "Roofing",
-  "Construction",
-  "Plumbing",
-  "HVAC",
-  "Dental",
-  "Restaurant",
-  "Salon",
-  "Fitness",
-  "Auto Repair",
+// Service-based local businesses that convert well for marketing agency outreach.
+// Grouped for readability, flattened for the UI.
+const KEYWORD_GROUPS: { group: string; keywords: string[] }[] = [
+  {
+    group: "Real Estate & Property",
+    keywords: ["Real Estate", "Real Estate Agency", "Realtor", "Property Management", "Property Developer", "Commercial Real Estate", "Mortgage Broker", "Home Staging", "Property Inspector"],
+  },
+  {
+    group: "Home Services — Exterior",
+    keywords: ["Roofing", "Roof Repair", "Solar Installation", "Gutter Cleaning", "Siding Contractor", "Window Installation", "Garage Door", "Fencing", "Deck Builder", "Concrete Contractor", "Paving", "Driveway Sealing", "Pressure Washing", "Chimney Sweep"],
+  },
+  {
+    group: "Home Services — Interior",
+    keywords: ["Plumbing", "HVAC", "Electrician", "Handyman", "Painter", "Interior Designer", "Flooring", "Kitchen Remodel", "Bathroom Remodel", "Cabinet Maker", "Carpet Cleaning", "Junk Removal", "Moving Company", "Cleaning Service", "House Cleaning"],
+  },
+  {
+    group: "Outdoor & Landscaping",
+    keywords: ["Landscaping", "Lawn Care", "Tree Specialists", "Tree Care", "Tree Removal", "Arborist", "Snow Removal", "Pool Service", "Pool Builder", "Irrigation", "Pest Control", "Fence Builder", "Hardscaping", "Garden Center", "Nursery"],
+  },
+  {
+    group: "Automotive",
+    keywords: ["Auto Repair", "Auto Body Shop", "Car Detailing", "Tire Shop", "Car Dealership", "Used Car Dealer", "Motorcycle Dealer", "RV Dealer", "Boat Dealer", "Car Wash", "Windshield Repair", "Towing Service"],
+  },
+  {
+    group: "Health & Wellness",
+    keywords: ["Dental", "Dental Clinic", "Orthodontist", "Chiropractor", "Physiotherapy", "Med Spa", "Cosmetic Surgery", "Dermatology", "Optometrist", "Veterinarian", "Mental Health Clinic", "Massage Therapy", "Acupuncture", "Nutritionist", "Personal Trainer", "Fitness", "Gym", "CrossFit", "Yoga Studio", "Pilates Studio"],
+  },
+  {
+    group: "Beauty",
+    keywords: ["Salon", "Hair Salon", "Barber Shop", "Nail Salon", "Beauty Spa", "Tattoo Studio", "Lash Extensions", "Waxing Studio", "Tanning Salon"],
+  },
+  {
+    group: "Food & Hospitality",
+    keywords: ["Restaurant", "Cafe", "Coffee Shop", "Bakery", "Catering", "Food Truck", "Bar", "Brewery", "Winery", "Hotel", "Bed and Breakfast", "Event Venue"],
+  },
+  {
+    group: "Professional Services",
+    keywords: ["Law Firm", "Accountant", "CPA", "Bookkeeping", "Tax Preparation", "Financial Advisor", "Insurance Agency", "Notary", "Consulting", "Marketing Agency", "IT Services", "Managed IT", "Web Design Studio", "Security Company", "Printing Company"],
+  },
+  {
+    group: "Events, Photo & Creative",
+    keywords: ["Wedding Photographer", "Photographer", "Videographer", "Wedding Planner", "Event Planner", "DJ Service", "Florist"],
+  },
+  {
+    group: "Trades & B2B",
+    keywords: ["General Contractor", "Construction", "Welding", "Machine Shop", "Metal Fabrication", "Commercial Cleaning", "Janitorial", "Waste Management", "Logistics", "Trucking Company", "Warehousing"],
+  },
+  {
+    group: "Retail",
+    keywords: ["Store", "Retail Store", "Boutique", "Jewelry Store", "Furniture Store", "Mattress Store", "Pet Store", "Bike Shop", "Sporting Goods", "Music Store"],
+  },
+  {
+    group: "Family & Education",
+    keywords: ["Daycare", "Preschool", "Private Tutor", "Music School", "Dance Studio", "Martial Arts", "Driving School"],
+  },
 ];
+const KEYWORD_PRESETS = KEYWORD_GROUPS.flatMap((g) => g.keywords);
 
 export function Scraper({
   data,
