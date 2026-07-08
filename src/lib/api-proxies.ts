@@ -1296,31 +1296,44 @@ async function claudeAdScan(request: Request, env: Env): Promise<Response> {
         ? "TikTok Ads Manager"
         : "generic ad platform";
 
-  const system = `You are a marketing-analytics assistant. The user gives you a screenshot of an ad platform dashboard (${platformHint}) and you extract the headline metrics.
+  const system = `You are a marketing-analytics assistant. The user gives you a screenshot of an ad platform or e-commerce / service-business analytics dashboard (${platformHint}) and you extract the headline metrics.
 
 Respond with ONLY a JSON object (no markdown, no prose) shaped like:
 {
-  "campaign": string,        // campaign or ad-set name if visible, else ""
-  "dateRange": string,       // e.g. "Jan 1 - Jan 31 2026", else ""
-  "spend": number,           // total spend as a plain number, else 0
+  "campaign": string,        // campaign / ad-set / report name if visible, else ""
+  "dateRange": string,       // e.g. "Nov 1 - Nov 30 2024", else ""
+  "spend": number,           // total ad spend / amount spent
   "currency": string,        // ISO code or symbol, else ""
   "impressions": number,
   "reach": number,
   "clicks": number,
-  "ctr": number,             // as a percentage number, e.g. 3.2  (not 0.032)
+  "ctr": number,             // percentage, e.g. 3.2 (not 0.032)
   "cpc": number,
   "cpm": number,
   "conversions": number,
   "cpa": number,
   "roas": number,
-  "revenue": number,
+  "revenue": number,         // total revenue attributed
+  "sales": number,           // total sales value if shown separately
+  "orders": number,          // total orders
+  "sessions": number,        // online store / site sessions
+  "visitors": number,
+  "aov": number,             // average order value
+  "conversionRate": number,  // percent, e.g. 0.68
+  "returningRate": number,   // returning customer rate, percent
+  "leads": number,
+  "bookings": number,
+  "showRate": number,        // percent
+  "avgTicket": number,       // average ticket / deal size for service businesses
   "notes": string            // 1-line summary of the screenshot, else ""
 }
 
 Rules:
 - Return 0 for numeric fields you cannot read; never invent numbers.
-- Strip commas/thousand separators before returning numbers.
-- If several campaigns are shown, aggregate to totals if the dashboard shows totals, otherwise report the top one and note it in "notes".`;
+- Strip commas / currency symbols / thousand separators before returning numbers.
+- Percentages must be plain numbers (e.g. 3.2 means 3.2%), not decimals.
+- If several campaigns/rows are shown, prefer the aggregate totals; if only per-row is available, sum them and mention in "notes".`;
+
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
