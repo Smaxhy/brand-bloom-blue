@@ -94,6 +94,20 @@ function readAsDataUrl(file: File): Promise<string> {
   });
 }
 
+const VISIBLE_STORAGE_KEY = "insp.stats.visibleMetrics.v1";
+
+function loadVisible(): Set<MetricKey> {
+  if (typeof window === "undefined") return new Set(METRICS.map((m) => m.key));
+  try {
+    const raw = window.localStorage.getItem(VISIBLE_STORAGE_KEY);
+    if (!raw) return new Set(METRICS.map((m) => m.key));
+    const arr = JSON.parse(raw) as string[];
+    return new Set(arr.filter((k): k is MetricKey => METRICS.some((m) => m.key === k)));
+  } catch {
+    return new Set(METRICS.map((m) => m.key));
+  }
+}
+
 export function Statistics({
   data,
   update,
@@ -105,6 +119,14 @@ export function Statistics({
   const [platform, setPlatform] = useState<AdPlatform | "all">("all");
   const [entryOpen, setEntryOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [visible, setVisible] = useState<Set<MetricKey>>(() => loadVisible());
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(VISIBLE_STORAGE_KEY, JSON.stringify([...visible]));
+    } catch { /* ignore */ }
+  }, [visible]);
 
   const scans = useMemo(() => {
     const list = data.adScans ?? [];
@@ -114,6 +136,8 @@ export function Statistics({
       .sort((a, b) => b.capturedAt - a.capturedAt);
   }, [data.adScans, clientId, platform]);
 
+  // Oldest -> newest for the sparkline
+  const series = useMemo(() => [...scans].reverse(), [scans]);
   const latest = scans[0];
   const previous = scans[1];
 
@@ -125,8 +149,19 @@ export function Statistics({
     update((p) => ({ ...p, adScans: (p.adScans ?? []).filter((s) => s.id !== id) }));
   }
 
+  function updateLatestMetric(key: MetricKey, value: number | undefined) {
+    if (!latest) return;
+    update((p) => ({
+      ...p,
+      adScans: (p.adScans ?? []).map((s) =>
+        s.id === latest.id ? { ...s, metrics: { ...s.metrics, [key]: value } } : s,
+      ),
+    }));
+  }
+
   const currency = latest?.metrics.currency || "€";
   const activeClient = data.clients.find((c) => c.id === clientId);
+  const visibleList = METRICS.filter((m) => visible.has(m.key));
 
   return (
     <div className="space-y-5">
@@ -142,6 +177,7 @@ export function Statistics({
               <div className="text-xs text-muted-foreground">
                 {scans.length} snapshot{scans.length === 1 ? "" : "s"}
                 {activeClient ? ` · ${activeClient.company}` : " · all clients"}
+                {" · "}{visibleList.length}/{METRICS.length} metrics shown
               </div>
             </div>
           </div>
@@ -165,6 +201,9 @@ export function Statistics({
           </Field>
 
           <div className="ml-auto flex flex-wrap gap-2">
+            <Btn variant="ghost" onClick={() => setCustomizeOpen(true)}>
+              <SlidersHorizontal className="h-4 w-4" aria-hidden="true" /> Customize
+            </Btn>
             <Btn variant="ghost" onClick={() => setScanOpen(true)}>
               <Camera className="h-4 w-4" aria-hidden="true" /> Scan screenshot
             </Btn>
@@ -176,47 +215,44 @@ export function Statistics({
       </Panel>
 
       {/* Stat grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {METRICS.map((m) => {
-          const value = latest?.metrics[m.key] as number | undefined;
-          const prev = previous?.metrics[m.key] as number | undefined;
-          const delta = value !== undefined && value !== 0 && prev !== undefined && prev !== 0
-            ? ((value - prev) / prev) * 100
-            : undefined;
-          const good =
-            delta === undefined
-              ? null
-              : m.goodDirection === "up"
-                ? delta >= 0
-                : delta <= 0;
-          return (
-            <Panel key={m.key} className="relative">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="text-[.68rem] font-semibold uppercase tracking-[.12em] text-muted-foreground">{m.label}</div>
-                  <div className="mt-2 font-display text-2xl font-bold tracking-tight">
-                    {fmt(value, m.kind, currency)}
-                  </div>
-                  {m.hint && <div className="mt-1 text-xs text-muted-foreground">{m.hint}</div>}
-                </div>
-                {delta !== undefined && (
-                  <span
-                    className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[.7rem] font-semibold ${
-                      good
-                        ? "bg-[oklch(.95_.05_150)] text-[oklch(.42_.15_150)] dark:bg-[oklch(.25_.08_150)] dark:text-[oklch(.82_.15_150)]"
-                        : "bg-[oklch(.95_.05_25)] text-[oklch(.5_.2_25)] dark:bg-[oklch(.25_.08_25)] dark:text-[oklch(.82_.15_25)]"
-                    }`}
-                    title="Change vs previous snapshot"
-                  >
-                    {good ? <TrendingUp className="h-3 w-3" aria-hidden="true" /> : <TrendingDown className="h-3 w-3" aria-hidden="true" />}
-                    {delta >= 0 ? "+" : ""}{delta.toFixed(1)}%
-                  </span>
-                )}
-              </div>
-            </Panel>
-          );
-        })}
-      </div>
+      {visibleList.length === 0 ? (
+        <Panel className="text-center text-sm text-muted-foreground">
+          No metrics visible. Click <span className="font-semibold text-foreground">Customize</span> to pick which cards to show.
+        </Panel>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {visibleList.map((m) => {
+            const value = latest?.metrics[m.key] as number | undefined;
+            const prev = previous?.metrics[m.key] as number | undefined;
+            const delta = value !== undefined && value !== 0 && prev !== undefined && prev !== 0
+              ? ((value - prev) / prev) * 100
+              : undefined;
+            const good =
+              delta === undefined
+                ? null
+                : m.goodDirection === "up"
+                  ? delta >= 0
+                  : delta <= 0;
+            const points = series
+              .map((s) => s.metrics[m.key] as number | undefined)
+              .filter((v): v is number => typeof v === "number" && !Number.isNaN(v));
+            return (
+              <MetricCard
+                key={m.key}
+                metric={m}
+                value={value}
+                delta={delta}
+                good={good}
+                currency={currency}
+                points={points}
+                canEdit={!!latest}
+                onSave={(v) => updateLatestMetric(m.key, v)}
+              />
+            );
+          })}
+        </div>
+      )}
+
 
       {/* Snapshot history */}
       <Panel>
