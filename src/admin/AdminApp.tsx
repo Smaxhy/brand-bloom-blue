@@ -35,6 +35,7 @@ import { Finance } from "./views/Finance";
 import { EmailHub } from "./views/EmailHub";
 import { Tasks } from "./views/Tasks";
 import { SettingsView } from "./views/SettingsView";
+import { Statistics } from "./views/Statistics";
 import { TeamUsers } from "./views/TeamUsers";
 import { UserPlus } from "lucide-react";
 
