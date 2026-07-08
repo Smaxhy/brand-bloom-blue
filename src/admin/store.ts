@@ -275,6 +275,8 @@ function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData
     transactions: arrayOr<Transaction>(d.transactions, s.transactions),
     templates: arrayOr<EmailTemplate>(d.templates, s.templates),
     campaigns: arrayOr<EmailCampaign>(d.campaigns, s.campaigns),
+    tasks: arrayOr<Task>(d.tasks, s.tasks ?? []),
+    adScans: arrayOr<AdScan>(d.adScans, s.adScans ?? []),
     settings: { ...s.settings, ...settings },
     denylist: { ...(s.denylist ?? {}), ...(denylist as Record<string, DenylistEntry>) },
     scraper: scraper
@@ -303,6 +305,8 @@ function compactForRemote(data: AdminData): AdminData {
     clients: data.clients.slice(0, 1000),
     transactions: data.transactions.slice(0, 3000),
     campaigns: data.campaigns.slice(0, 1000),
+    tasks: (data.tasks ?? []).slice(-2000),
+    adScans: (data.adScans ?? []).slice(-500),
     denylist: Object.fromEntries(Object.entries(data.denylist ?? {}).slice(-5000)),
     scraper: data.scraper
       ? {
