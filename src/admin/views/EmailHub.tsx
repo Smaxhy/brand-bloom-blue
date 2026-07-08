@@ -1,5 +1,7 @@
-import { useState } from "react";
-import { Plus, Send, Pencil, Trash2, Mail, Users, FileText, CheckCircle2 } from "lucide-react";
+import { useRef, useState } from "react";
+import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { Plus, Send, Pencil, Trash2, Mail, Users, FileText, CheckCircle2, X } from "lucide-react";
 import {
   type AdminData,
   type EmailTemplate,
