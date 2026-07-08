@@ -768,7 +768,7 @@ async function ghlSend(request: Request, env: Env): Promise<Response> {
     }
 
     // Sequential send — GHL caps at ~10 req/sec/location and each recipient uses 2 calls.
-    const details: GhlSendDetail[] = [];
+    const details: Array<{ email: string; ok: boolean; status?: number; error?: string; simulated?: boolean }> = [];
     for (let i = 0; i < recipients.length; i++) {
       const rcpt = recipients[i];
       try {
