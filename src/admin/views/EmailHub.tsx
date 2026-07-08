@@ -29,6 +29,8 @@ export function EmailHub({
   const [selected, setSelected] = useState<string[]>(pending.map((r) => r.id));
   const [tplId, setTplId] = useState(data.templates[0]?.id ?? "");
   const [sending, setSending] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+
   const [result, setResult] = useState<{ ok: boolean; message: string; details: GhlSendDetail[] } | null>(null);
 
   const tpl = data.templates.find((t) => t.id === tplId);
@@ -42,16 +44,41 @@ export function EmailHub({
     if (!tpl || recipients.length === 0) return;
     setSending(true);
     setResult(null);
-    const res = await ghlSendEmail({
-      apiKey: data.settings.ghlApiKey,
-      companyId: data.settings.ghlCompanyId,
-      locationId: data.settings.ghlLocationId,
-      to: recipients.map((r) => ({ name: r.business, email: r.email })),
-      subject: tpl.subject,
-      body: tpl.body,
-      fromName: data.settings.fromName,
-      fromEmail: data.settings.fromEmail,
-    });
+    setProgress({ done: 0, total: recipients.length });
+
+    // Chunk client-side so we can show live progress and stay well under GHL's
+    // per-second cap — the server also retries on 429, so this is belt-and-braces.
+    const CHUNK = 5;
+    const allDetails: GhlSendDetail[] = [];
+    let anyOk = false;
+    let lastMessage = "";
+    for (let i = 0; i < recipients.length; i += CHUNK) {
+      const slice = recipients.slice(i, i + CHUNK);
+      const res = await ghlSendEmail({
+        apiKey: data.settings.ghlApiKey,
+        companyId: data.settings.ghlCompanyId,
+        locationId: data.settings.ghlLocationId,
+        to: slice.map((r) => ({ name: r.business, email: r.email })),
+        subject: tpl.subject,
+        body: tpl.body,
+        fromName: data.settings.fromName,
+        fromEmail: data.settings.fromEmail,
+      });
+      allDetails.push(...res.details);
+      if (res.ok) anyOk = true;
+      lastMessage = res.message;
+      setProgress({ done: Math.min(i + slice.length, recipients.length), total: recipients.length });
+    }
+
+    const rateLimited = allDetails.filter((d) => !d.ok && d.status === 429).length;
+    const sentCount = allDetails.filter((d) => d.ok).length;
+    const message =
+      rateLimited > 0
+        ? `GoHighLevel rate limit hit — delivered ${sentCount}/${allDetails.length}. Wait a minute and re-send the rest.`
+        : sentCount === allDetails.length && allDetails.length > 0
+          ? `Delivered to all ${sentCount} recipient(s) via GoHighLevel.`
+          : lastMessage || `Delivered ${sentCount}/${allDetails.length} — see details below.`;
+    const res = { ok: anyOk, message, details: allDetails };
     setResult(res);
     const okEmails = new Set(
       res.details.length
@@ -60,6 +87,7 @@ export function EmailHub({
           ? recipients.map((r) => r.email.toLowerCase())
           : [],
     );
+
     const sentIds = recipients.filter((r) => okEmails.has(r.email.toLowerCase())).map((r) => r.id);
     if (sentIds.length > 0) {
       const sentAt = Date.now();
@@ -74,6 +102,8 @@ export function EmailHub({
       setSelected((s) => s.filter((id) => !sentIds.includes(id)));
     }
     setSending(false);
+    setProgress(null);
+
   }
 
 
@@ -213,7 +243,12 @@ export function EmailHub({
             )}
 
             <Btn className="mt-4 w-full" onClick={send} >
-              {sending ? "Sending…" : <><Send className="h-4 w-4" /> {liveMode ? "Send via GoHighLevel" : "Simulate send"} ({recipients.length})</>}
+              {sending
+                ? progress
+                  ? `Sending ${progress.done} / ${progress.total}…`
+                  : "Sending…"
+                : <><Send className="h-4 w-4" /> {liveMode ? "Send via GoHighLevel" : "Simulate send"} ({recipients.length})</>}
+
             </Btn>
           </Panel>
         </div>
