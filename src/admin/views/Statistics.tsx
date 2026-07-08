@@ -506,16 +506,25 @@ function MetricCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <div className="text-[.68rem] font-semibold uppercase tracking-[.12em] text-muted-foreground">{metric.label}</div>
-            {canEdit && !editing && (
+            <div className="flex items-center gap-1">
               <button
-                onClick={() => setEditing(true)}
-                aria-label={`Edit ${metric.label}`}
-                className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground opacity-0 transition hover:bg-secondary hover:text-foreground group-hover:opacity-100 focus:opacity-100"
-                style={{ opacity: 1 }}
+                onClick={onCycleChart}
+                aria-label={`Change chart style for ${metric.label}`}
+                title={`Chart: ${CHART_TYPES.find((c) => c.key === chartType)?.label ?? "Line"} (click to change)`}
+                className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-foreground"
               >
-                <Pencil className="h-3 w-3" aria-hidden="true" />
+                <ChartIcon className="h-3 w-3" aria-hidden="true" />
               </button>
-            )}
+              {canEdit && !editing && (
+                <button
+                  onClick={() => setEditing(true)}
+                  aria-label={`Edit ${metric.label}`}
+                  className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                >
+                  <Pencil className="h-3 w-3" aria-hidden="true" />
+                </button>
+              )}
+            </div>
           </div>
           {editing ? (
             <div className="mt-2 flex items-center gap-1">
