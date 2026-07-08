@@ -46,6 +46,7 @@ type ViewId =
   | "scraper"
   | "raw"
   | "clients"
+  | "statistics"
   | "finance"
   | "email"
   | "tasks"
