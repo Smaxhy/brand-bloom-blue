@@ -572,7 +572,7 @@ function MetricCard({
           </span>
         )}
       </div>
-      <Sparkline points={points} goodDirection={metric.goodDirection} />
+      {chartType !== "number" && <Sparkline points={points} goodDirection={metric.goodDirection} variant={chartType} />}
     </Panel>
   );
 }
