@@ -32,6 +32,22 @@ export function EmailHub({
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
   const [result, setResult] = useState<{ ok: boolean; message: string; details: GhlSendDetail[] } | null>(null);
+  const [lastAttempt, setLastAttempt] = useState<{ ids: string[]; templateId: string; templateName: string } | null>(null);
+
+  function markAttemptedAsSent() {
+    if (!lastAttempt || lastAttempt.ids.length === 0) return;
+    const sentAt = Date.now();
+    update((p) => ({
+      ...p,
+      raw: p.raw.map((r) => (lastAttempt.ids.includes(r.id) ? { ...r, lastEmailedAt: sentAt } : r)),
+      campaigns: [
+        { id: uid("cmp"), name: lastAttempt.templateName, templateId: lastAttempt.templateId, recipientIds: lastAttempt.ids, status: "sent", sentAt, createdAt: sentAt },
+        ...p.campaigns,
+      ],
+    }));
+    setSelected((s) => s.filter((id) => !lastAttempt.ids.includes(id)));
+    setLastAttempt(null);
+  }
 
   const tpl = data.templates.find((t) => t.id === tplId);
   const recipients = pending.filter((r) => selected.includes(r.id));
@@ -44,6 +60,7 @@ export function EmailHub({
     if (!tpl || recipients.length === 0) return;
     setSending(true);
     setResult(null);
+    setLastAttempt({ ids: recipients.map((r) => r.id), templateId: tpl.id, templateName: tpl.name });
     setProgress({ done: 0, total: recipients.length });
 
     // Chunk client-side so we can show live progress and stay well under GHL's
@@ -237,6 +254,20 @@ export function EmailHub({
                         )}
                       </div>
                     ))}
+                  </div>
+                )}
+                {lastAttempt && lastAttempt.ids.length > 0 && (
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed border-border bg-secondary/40 px-3 py-2 text-xs">
+                    <span className="text-muted-foreground">
+                      Email arrived but not marked sent? Move all {lastAttempt.ids.length} attempted recipient(s) into the Sent tab.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={markAttemptedAsSent}
+                      className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90"
+                    >
+                      Move to Sent
+                    </button>
                   </div>
                 )}
               </div>
