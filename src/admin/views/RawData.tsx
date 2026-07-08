@@ -243,6 +243,18 @@ export function RawData({
           {selectedIds.size > 0 && (
             <>
               <button
+                onClick={acceptSelected}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[oklch(.7_.18_150)]/15 px-3 py-1.5 text-xs font-semibold text-[oklch(.45_.15_150)] hover:bg-[oklch(.7_.18_150)]/25"
+              >
+                <Check className="h-3.5 w-3.5" /> Accept selected
+              </button>
+              <button
+                onClick={rejectSelected}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-destructive/10 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/20"
+              >
+                <X className="h-3.5 w-3.5" /> Reject selected
+              </button>
+              <button
                 onClick={revealSelected}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20"
               >
@@ -255,6 +267,15 @@ export function RawData({
                 <EyeOff className="h-3.5 w-3.5" /> Hide emails
               </button>
             </>
+          )}
+          {rows.some((r) => r.status !== "accepted") && (
+            <button
+              onClick={acceptAllVisible}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-[oklch(.7_.18_150)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+              title="Accept every row currently visible in this filter"
+            >
+              <Check className="h-3.5 w-3.5" /> Accept all visible ({rows.filter((r) => r.status !== "accepted").length})
+            </button>
           )}
         </div>
       )}
