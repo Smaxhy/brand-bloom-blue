@@ -163,6 +163,36 @@ export function Scraper({
   const [aiProgress, setAiProgress] = useState({ done: 0, total: 0 });
   const [showHistory, setShowHistory] = useState(false);
   const [historyFilter, setHistoryFilter] = useState("");
+  const [aiKeywords, setAiKeywords] = useState<string[]>([]);
+  const [aiKwBusy, setAiKwBusy] = useState(false);
+  const [aiKwError, setAiKwError] = useState<string | null>(null);
+
+  async function suggestKeywordsWithAI() {
+    if (aiKwBusy) return;
+    setAiKwBusy(true);
+    setAiKwError(null);
+    try {
+      const res = await fetch("/api/claude/keywords", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          location: filters.location,
+          seed: filters.industry,
+          note: "Focus on high-ticket, service-based local businesses that pay for marketing.",
+        }),
+      });
+      const j = (await res.json()) as { ok?: boolean; keywords?: string[]; reason?: string };
+      if (!j.ok || !j.keywords?.length) {
+        setAiKwError(j.reason === "missing_key" ? "AI key not configured on the server." : "AI didn't return suggestions. Try again.");
+      } else {
+        setAiKeywords(j.keywords);
+      }
+    } catch (e) {
+      setAiKwError((e as Error).message || "Request failed.");
+    } finally {
+      setAiKwBusy(false);
+    }
+  }
 
   const denylist = data.denylist ?? {};
   const history = denylistEntries(denylist);
