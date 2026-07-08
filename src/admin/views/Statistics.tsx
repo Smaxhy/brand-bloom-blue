@@ -324,9 +324,217 @@ export function Statistics({
         defaultPlatform={platform === "all" ? "other" : platform}
         onSave={(s) => { saveScan(s); setScanOpen(false); }}
       />
+
+      <CustomizeModal
+        open={customizeOpen}
+        onClose={() => setCustomizeOpen(false)}
+        visible={visible}
+        onChange={setVisible}
+      />
     </div>
   );
 }
+
+/* -------------------------- metric card + chart -------------------------- */
+
+function Sparkline({ points, goodDirection }: { points: number[]; goodDirection: "up" | "down" }) {
+  if (points.length < 2) {
+    return (
+      <div className="mt-3 h-12 rounded-md bg-secondary/50 grid place-items-center text-[.65rem] text-muted-foreground">
+        Add more snapshots to see a trend
+      </div>
+    );
+  }
+  const w = 200;
+  const h = 48;
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const span = max - min || 1;
+  const step = points.length > 1 ? w / (points.length - 1) : w;
+  const coords = points.map((v, i) => {
+    const x = i * step;
+    const y = h - ((v - min) / span) * (h - 6) - 3;
+    return [x, y] as const;
+  });
+  const line = coords.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const area = `${line} L${w.toFixed(1)},${h} L0,${h} Z`;
+  const first = points[0];
+  const last = points[points.length - 1];
+  const trendingUp = last >= first;
+  const isGood = goodDirection === "up" ? trendingUp : !trendingUp;
+  const stroke = isGood ? "var(--brand-violet)" : "oklch(.62 .22 25)";
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="mt-3 h-12 w-full" role="img" aria-label="Trend sparkline">
+      <path d={area} fill={stroke} fillOpacity="0.12" />
+      <path d={line} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      {coords.map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r={i === coords.length - 1 ? 2.5 : 1.5} fill={stroke} />
+      ))}
+    </svg>
+  );
+}
+
+function MetricCard({
+  metric, value, delta, good, currency, points, canEdit, onSave,
+}: {
+  metric: MetricDef;
+  value: number | undefined;
+  delta: number | undefined;
+  good: boolean | null;
+  currency: string;
+  points: number[];
+  canEdit: boolean;
+  onSave: (v: number | undefined) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<string>(value === undefined ? "" : String(value));
+
+  useEffect(() => {
+    if (!editing) setDraft(value === undefined ? "" : String(value));
+  }, [value, editing]);
+
+  function commit() {
+    if (draft.trim() === "") {
+      onSave(undefined);
+    } else {
+      const num = Number(draft);
+      if (!Number.isNaN(num)) onSave(num);
+    }
+    setEditing(false);
+  }
+
+  return (
+    <Panel className="relative">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[.68rem] font-semibold uppercase tracking-[.12em] text-muted-foreground">{metric.label}</div>
+            {canEdit && !editing && (
+              <button
+                onClick={() => setEditing(true)}
+                aria-label={`Edit ${metric.label}`}
+                className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground opacity-0 transition hover:bg-secondary hover:text-foreground group-hover:opacity-100 focus:opacity-100"
+                style={{ opacity: 1 }}
+              >
+                <Pencil className="h-3 w-3" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+          {editing ? (
+            <div className="mt-2 flex items-center gap-1">
+              <input
+                autoFocus
+                type="number"
+                step="any"
+                className={`${inputCls} py-1.5 text-base font-semibold`}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commit();
+                  if (e.key === "Escape") { setEditing(false); setDraft(value === undefined ? "" : String(value)); }
+                }}
+              />
+              <button onClick={commit} aria-label="Save" className="grid h-8 w-8 place-items-center rounded-md bg-primary text-primary-foreground">
+                <Check className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button
+                onClick={() => { setEditing(false); setDraft(value === undefined ? "" : String(value)); }}
+                aria-label="Cancel"
+                className="grid h-8 w-8 place-items-center rounded-md border border-border"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          ) : (
+            <div className="mt-2 font-display text-2xl font-bold tracking-tight">
+              {fmt(value, metric.kind, currency)}
+            </div>
+          )}
+          {metric.hint && !editing && <div className="mt-1 text-xs text-muted-foreground">{metric.hint}</div>}
+        </div>
+        {delta !== undefined && !editing && (
+          <span
+            className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[.7rem] font-semibold ${
+              good
+                ? "bg-[oklch(.95_.05_150)] text-[oklch(.42_.15_150)] dark:bg-[oklch(.25_.08_150)] dark:text-[oklch(.82_.15_150)]"
+                : "bg-[oklch(.95_.05_25)] text-[oklch(.5_.2_25)] dark:bg-[oklch(.25_.08_25)] dark:text-[oklch(.82_.15_25)]"
+            }`}
+            title="Change vs previous snapshot"
+          >
+            {good ? <TrendingUp className="h-3 w-3" aria-hidden="true" /> : <TrendingDown className="h-3 w-3" aria-hidden="true" />}
+            {delta >= 0 ? "+" : ""}{delta.toFixed(1)}%
+          </span>
+        )}
+      </div>
+      <Sparkline points={points} goodDirection={metric.goodDirection} />
+    </Panel>
+  );
+}
+
+function CustomizeModal({
+  open, onClose, visible, onChange,
+}: {
+  open: boolean;
+  onClose: () => void;
+  visible: Set<MetricKey>;
+  onChange: (next: Set<MetricKey>) => void;
+}) {
+  function toggle(key: MetricKey) {
+    const next = new Set(visible);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    onChange(next);
+  }
+  return (
+    <Modal open={open} onClose={onClose} title="Customize metric cards" wide>
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          Pick which metrics show up on the Statistics dashboard. Your choice is remembered on this device.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Btn variant="ghost" onClick={() => onChange(new Set(METRICS.map((m) => m.key)))}>Show all</Btn>
+          <Btn variant="ghost" onClick={() => onChange(new Set())}>Hide all</Btn>
+          <Btn
+            variant="ghost"
+            onClick={() =>
+              onChange(new Set(["sales", "spend", "roas", "clicks", "ctr", "cpc", "conversions", "cpa"] as MetricKey[]))
+            }
+          >
+            Ads essentials
+          </Btn>
+        </div>
+        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+          {METRICS.map((m) => {
+            const on = visible.has(m.key);
+            return (
+              <label
+                key={m.key}
+                className={`flex cursor-pointer items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm transition ${
+                  on ? "border-primary bg-primary/5" : "border-border bg-background hover:bg-secondary/60"
+                }`}
+              >
+                <div className="min-w-0">
+                  <div className="font-semibold">{m.label}</div>
+                  {m.hint && <div className="text-[.7rem] text-muted-foreground">{m.hint}</div>}
+                </div>
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={() => toggle(m.key)}
+                  className="h-4 w-4 accent-[var(--brand-violet)]"
+                  aria-label={`Toggle ${m.label}`}
+                />
+              </label>
+            );
+          })}
+        </div>
+        <div className="flex justify-end">
+          <Btn onClick={onClose}>Done</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 
 function MiniMetric({ label, value }: { label: string; value: string }) {
   return (
