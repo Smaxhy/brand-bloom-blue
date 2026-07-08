@@ -250,6 +250,25 @@ function isEmptyRemote(d: unknown): boolean {
   return Object.keys(d as Record<string, unknown>).length === 0;
 }
 
+function compactForRemote(data: AdminData): AdminData {
+  return {
+    ...data,
+    raw: data.raw.slice(0, 5000),
+    deals: data.deals.slice(0, 2000),
+    clients: data.clients.slice(0, 1000),
+    transactions: data.transactions.slice(0, 3000),
+    campaigns: data.campaigns.slice(0, 1000),
+    denylist: Object.fromEntries(Object.entries(data.denylist ?? {}).slice(-5000)),
+    scraper: data.scraper
+      ? {
+          ...data.scraper,
+          results: data.scraper.results.slice(0, 500),
+          updatedAt: Date.now(),
+        }
+      : undefined,
+  };
+}
+
 /**
  * Fetch this account's admin state from Lovable Cloud.
  */
@@ -287,7 +306,7 @@ async function pushRemote(data: AdminData, opts: { allowScraperClear?: boolean }
   const { supabase } = await import("@/integrations/supabase/client");
   const userId = await currentUserId();
   if (!userId) return;
-  let nextData = data;
+  let nextData = compactForRemote(data);
   if (!opts.allowScraperClear && !data.scraper) {
     const { data: existing } = await supabase
       .from("admin_state")
@@ -295,7 +314,7 @@ async function pushRemote(data: AdminData, opts: { allowScraperClear?: boolean }
       .eq("user_id", userId)
       .maybeSingle();
     const existingData = withSchemaDefaults(existing?.data as Partial<AdminData> | null | undefined);
-    if (existingData.scraper) nextData = { ...data, scraper: existingData.scraper };
+    if (existingData.scraper) nextData = compactForRemote({ ...data, scraper: existingData.scraper });
   }
   const { error } = await supabase
     .from("admin_state")
