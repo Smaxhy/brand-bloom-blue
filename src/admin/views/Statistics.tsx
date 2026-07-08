@@ -469,7 +469,7 @@ function Sparkline({ points, goodDirection, variant }: { points: number[]; goodD
 }
 
 function MetricCard({
-  metric, value, delta, good, currency, points, canEdit, onSave,
+  metric, value, delta, good, currency, points, chartType, onCycleChart, canEdit, onSave,
 }: {
   metric: MetricDef;
   value: number | undefined;
@@ -477,9 +477,12 @@ function MetricCard({
   good: boolean | null;
   currency: string;
   points: number[];
+  chartType: ChartType;
+  onCycleChart: () => void;
   canEdit: boolean;
   onSave: (v: number | undefined) => void;
 }) {
+  const ChartIcon = CHART_TYPES.find((c) => c.key === chartType)?.icon ?? LineChart;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<string>(value === undefined ? "" : String(value));
 
