@@ -404,19 +404,59 @@ export function subscribeRemote(cb: (data: AdminData) => void): () => void {
 /* Session — backed by Lovable Cloud auth + admin role check                */
 /* ----------------------------------------------------------------------- */
 
+export type LoginError = {
+  message: string;
+  /** Short diagnostic code shown to the user and copied to support. */
+  code: string;
+};
+
+function makeErrorCode(kind: string): string {
+  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+  const tail = Date.now().toString().slice(-4);
+  return `${kind}-${rand}-${tail}`;
+}
+
+function classifyLoginError(raw: string): { kind: string; message: string } {
+  const msg = raw || "";
+  if (/failed to fetch|networkerror|load failed|fetch/i.test(msg)) {
+    return {
+      kind: "NET",
+      message:
+        "Can't reach the login server. Check your internet (or disable any ad-blocker/VPN for this site) and try again.",
+    };
+  }
+  if (/rate|too many|429/i.test(msg)) {
+    return { kind: "RATE", message: "Too many sign-in attempts. Please wait ~30 seconds and try again." };
+  }
+  if (/invalid login|invalid.*credential|wrong/i.test(msg)) {
+    return { kind: "AUTH", message: "Wrong username or password." };
+  }
+  if (/not.*authoris|not.*author|forbidden|role/i.test(msg)) {
+    return { kind: "ROLE", message: "This account isn't authorised to use the admin panel." };
+  }
+  if (/timeout|timed out/i.test(msg)) {
+    return { kind: "TIME", message: "The login server took too long to respond. Please try again." };
+  }
+  return { kind: "ERR", message: msg || "Sign in failed. Please try again." };
+}
+
 /**
  * Sign in to Lovable Cloud and verify the user has the `admin` role.
- * Returns null on success, otherwise a short error message.
+ * Returns null on success, otherwise a structured error with a diagnostic code.
  */
-export async function login(identifier: string, password: string): Promise<string | null> {
+export async function login(identifier: string, password: string): Promise<LoginError | null> {
+  const fail = (raw: string): LoginError => {
+    const { kind, message } = classifyLoginError(raw);
+    const code = makeErrorCode(kind);
+    console.warn(`[login] failure ${code}:`, raw);
+    return { message, code };
+  };
+
   try {
     const { supabase } = await import("@/integrations/supabase/client");
     const id = identifier.trim();
     const email = id.includes("@") ? id : `${id.toLowerCase()}@inspirova.local`;
 
-    // Retry sign-in once on transient network failures ("Failed to fetch"),
-    // which happen when the browser aborts a request (flaky Wi-Fi, VPN switch,
-    // extension interference). We don't retry on auth errors returned by the API.
     const attemptSignIn = async () => supabase.auth.signInWithPassword({ email, password });
     let result;
     try {
@@ -427,24 +467,16 @@ export async function login(identifier: string, password: string): Promise<strin
         await new Promise((r) => setTimeout(r, 600));
         try {
           result = await attemptSignIn();
-        } catch {
-          return "Can't reach the login server. Check your internet (or disable any ad-blocker/VPN for this site) and try again.";
+        } catch (retryErr: any) {
+          return fail(String(retryErr?.message ?? retryErr ?? "Failed to fetch"));
         }
       } else {
-        throw netErr;
+        return fail(m);
       }
     }
     const { data, error } = result;
     if (error || !data.user) {
-      const msg = error?.message ?? "Sign in failed.";
-      if (/failed to fetch|networkerror|load failed/i.test(msg)) {
-        return "Can't reach the login server. Check your internet (or disable any ad-blocker/VPN for this site) and try again.";
-      }
-      if (/rate|too many|429/i.test(msg)) {
-        return "Too many sign-in attempts. Please wait ~30 seconds and try again.";
-      }
-      if (/invalid login/i.test(msg)) return "Wrong username or password.";
-      return msg;
+      return fail(error?.message ?? "Sign in failed.");
     }
 
     try {
@@ -459,20 +491,14 @@ export async function login(identifier: string, password: string): Promise<strin
       }
       if (!allowed) {
         await supabase.auth.signOut();
-        return "This account isn't authorised to use the admin panel.";
+        return fail("not authorised");
       }
     } catch (rolesErr: any) {
-      // Network hiccup while checking roles — session is valid, allow the app to
-      // load; role-gated views will re-check when needed.
       console.warn("[login] role check failed, continuing:", rolesErr);
     }
     return null;
   } catch (err: any) {
-    const msg = String(err?.message ?? err ?? "");
-    if (/failed to fetch|networkerror|load failed/i.test(msg)) {
-      return "Can't reach the login server. Check your internet (or disable any ad-blocker/VPN for this site) and try again.";
-    }
-    return msg || "Sign in failed. Please try again.";
+    return fail(String(err?.message ?? err ?? ""));
   }
 }
 

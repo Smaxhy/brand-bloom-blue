@@ -322,17 +322,42 @@ export function AdminApp() {
 function LoginScreen() {
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState<{ message: string; code: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   async function submit() {
     if (busy) return;
     setBusy(true);
-    setError("");
+    setError(null);
+    setCopied(false);
     const err = await doLogin(email, pass);
     setBusy(false);
     if (err) setError(err);
-    // On success the auth listener in AdminApp flips authed=true automatically.
+  }
+
+  async function copyCode() {
+    if (!error) return;
+    const payload = `Inspirova admin login error\nCode: ${error.code}\nMessage: ${error.message}\nTime: ${new Date().toISOString()}`;
+    try {
+      await navigator.clipboard.writeText(payload);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback: select-and-copy via a temp textarea
+      const ta = document.createElement("textarea");
+      ta.value = payload;
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        /* ignore */
+      }
+      document.body.removeChild(ta);
+    }
   }
 
   return (
@@ -367,7 +392,26 @@ function LoginScreen() {
             autoComplete="current-password"
             className="w-full rounded-xl border border-white/15 bg-white/[.06] px-4 py-3 text-sm text-white placeholder-white/40 outline-none focus:border-[var(--brand-light)]"
           />
-          {error && <p className="text-sm text-[oklch(.72_.18_25)]">{error}</p>}
+          {error && (
+            <div className="rounded-xl border border-[oklch(.55_.18_25/.4)] bg-[oklch(.35_.12_25/.15)] p-3">
+              <p className="text-sm text-[oklch(.82_.15_25)]">{error.message}</p>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <code className="rounded-md bg-black/30 px-2 py-1 font-mono text-[.7rem] text-white/70">
+                  {error.code}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => void copyCode()}
+                  className="rounded-md border border-white/15 bg-white/5 px-2 py-1 text-[.7rem] font-medium text-white/80 transition hover:bg-white/10"
+                >
+                  {copied ? "Copied ✓" : "Copy code"}
+                </button>
+              </div>
+              <p className="mt-2 text-[.65rem] leading-snug text-white/40">
+                Send this code to support so they can look up the exact failure.
+              </p>
+            </div>
+          )}
           <button
             onClick={() => void submit()}
             disabled={busy}
