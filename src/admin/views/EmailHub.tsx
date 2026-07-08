@@ -67,12 +67,19 @@ export function EmailHub({
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   }
 
+  function cancelSend() {
+    abortRef.current?.abort();
+  }
+
   async function send() {
-    if (!tpl || recipients.length === 0) return;
+    if (!tpl || recipients.length === 0 || sending) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
     setSending(true);
     setResult(null);
     setLastAttempt({ ids: recipients.map((r) => r.id), templateId: tpl.id, templateName: tpl.name });
     setProgress({ done: 0, total: recipients.length });
+    toast.loading(`Sending 0 / ${recipients.length}…`, { id: "email-send" });
 
     // Chunk client-side so we can show live progress and stay well under GHL's
     // per-second cap — the server also retries on 429, so this is belt-and-braces.
@@ -80,28 +87,40 @@ export function EmailHub({
     const allDetails: GhlSendDetail[] = [];
     let anyOk = false;
     let lastMessage = "";
+    let cancelled = false;
     for (let i = 0; i < recipients.length; i += CHUNK) {
+      if (controller.signal.aborted) {
+        cancelled = true;
+        break;
+      }
       const slice = recipients.slice(i, i + CHUNK);
-      const res = await ghlSendEmail({
-        apiKey: data.settings.ghlApiKey,
-        companyId: data.settings.ghlCompanyId,
-        locationId: data.settings.ghlLocationId,
-        to: slice.map((r) => ({ name: r.business, email: r.email })),
-        subject: tpl.subject,
-        body: tpl.body,
-        fromName: data.settings.fromName,
-        fromEmail: data.settings.fromEmail,
-      });
-      allDetails.push(...res.details);
-      if (res.ok) anyOk = true;
-      lastMessage = res.message;
-      setProgress({ done: Math.min(i + slice.length, recipients.length), total: recipients.length });
+      try {
+        const res = await ghlSendEmail({
+          apiKey: data.settings.ghlApiKey,
+          companyId: data.settings.ghlCompanyId,
+          locationId: data.settings.ghlLocationId,
+          to: slice.map((r) => ({ name: r.business, email: r.email })),
+          subject: tpl.subject,
+          body: tpl.body,
+          fromName: data.settings.fromName,
+          fromEmail: data.settings.fromEmail,
+        });
+        allDetails.push(...res.details);
+        if (res.ok) anyOk = true;
+        lastMessage = res.message;
+      } catch (err) {
+        lastMessage = (err as Error).message || "Send failed.";
+      }
+      const done = Math.min(i + slice.length, recipients.length);
+      setProgress({ done, total: recipients.length });
+      toast.loading(`Sending ${done} / ${recipients.length}…`, { id: "email-send" });
     }
 
     const rateLimited = allDetails.filter((d) => !d.ok && d.status === 429).length;
     const sentCount = allDetails.filter((d) => d.ok).length;
-    const message =
-      rateLimited > 0
+    const message = cancelled
+      ? `Cancelled — delivered ${sentCount}/${recipients.length} before you stopped.`
+      : rateLimited > 0
         ? `GoHighLevel rate limit hit — delivered ${sentCount}/${allDetails.length}. Wait a minute and re-send the rest.`
         : sentCount === allDetails.length && allDetails.length > 0
           ? `Delivered to all ${sentCount} recipient(s) via GoHighLevel.`
@@ -111,7 +130,7 @@ export function EmailHub({
     const okEmails = new Set(
       res.details.length
         ? res.details.filter((d) => d.ok).map((d) => d.email.toLowerCase())
-        : res.ok
+        : res.ok && !cancelled
           ? recipients.map((r) => r.email.toLowerCase())
           : [],
     );
@@ -131,8 +150,15 @@ export function EmailHub({
     }
     setSending(false);
     setProgress(null);
+    abortRef.current = null;
 
+    toast.dismiss("email-send");
+    if (cancelled) toast.warning(message);
+    else if (sentCount === 0) toast.error(message);
+    else if (sentCount < allDetails.length || rateLimited) toast.warning(message);
+    else toast.success(message);
   }
+
 
 
   function saveTpl(t: EmailTemplate) {
