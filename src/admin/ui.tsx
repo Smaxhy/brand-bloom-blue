@@ -9,7 +9,9 @@ export function Panel({
   className?: string;
 }) {
   return (
-    <div className={`rounded-2xl border border-border bg-card p-5 shadow-[0_18px_60px_-46px_var(--brand-ink)] ${className}`}>
+    <div
+      className={`rounded-2xl border border-border bg-card p-5 shadow-[0_18px_60px_-46px_var(--brand-ink)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_24px_60px_-38px_var(--brand-ink)] ${className}`}
+    >
       {children}
     </div>
   );
@@ -29,7 +31,7 @@ export function StatCard({
   icon?: React.ElementType;
 }) {
   return (
-    <Panel className="relative overflow-hidden">
+    <Panel className="group relative overflow-hidden">
       <div className="flex items-start justify-between">
         <div>
           <div className="text-[.68rem] font-semibold uppercase tracking-[.12em] text-muted-foreground">{label}</div>
@@ -38,10 +40,10 @@ export function StatCard({
         </div>
         {Icon && (
           <div
-            className="grid h-10 w-10 place-items-center rounded-xl text-white"
+            className="grid h-10 w-10 place-items-center rounded-xl text-white transition-transform duration-200 group-hover:scale-110"
             style={{ background: accent ?? "var(--brand-violet)" }}
           >
-            <Icon className="h-5 w-5" />
+            <Icon className="h-5 w-5" aria-hidden="true" />
           </div>
         )}
       </div>
@@ -132,7 +134,7 @@ export function Btn({
       onClick={onClick}
       disabled={disabled}
       aria-disabled={disabled}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${styles} ${className}`}
+      className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none ${styles} ${className}`}
     >
       {children}
     </button>

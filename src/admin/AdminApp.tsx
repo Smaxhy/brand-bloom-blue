@@ -334,15 +334,55 @@ function LoginScreen() {
   const [error, setError] = useState<{ message: string; code: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetBusy, setResetBusy] = useState(false);
 
   async function submit() {
     if (busy) return;
+    // Client-side throttle — defence in depth against brute-force attempts
+    // from this device. Server auth throttles independently.
+    const { loginLockRemainingMs, recordLoginFailure, recordLoginSuccess } = await import("@/lib/login-throttle");
+    const locked = loginLockRemainingMs();
+    if (locked > 0) {
+      const mins = Math.ceil(locked / 60000);
+      setError({ message: `Too many failed attempts. Try again in ${mins} minute(s).`, code: "LOCK-LOCAL" });
+      return;
+    }
     setBusy(true);
     setError(null);
     setCopied(false);
     const err = await doLogin(email, pass);
     setBusy(false);
-    if (err) setError(err);
+    if (err) {
+      recordLoginFailure();
+      setError(err);
+    } else {
+      recordLoginSuccess();
+    }
+  }
+
+  async function sendReset() {
+    if (resetBusy) return;
+    const target = resetEmail.trim();
+    if (!target) return;
+    setResetBusy(true);
+    try {
+      const address = target.includes("@") ? target : `${target.toLowerCase()}@inspirova.local`;
+      const { toast } = await import("sonner");
+      const { error: resetErr } = await supabase.auth.resetPasswordForEmail(address, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (resetErr) {
+        toast.error(resetErr.message || "Couldn't send reset link.");
+      } else {
+        toast.success("If that account exists, a reset link is on its way.");
+        setResetOpen(false);
+        setResetEmail("");
+      }
+    } finally {
+      setResetBusy(false);
+    }
   }
 
   async function copyCode() {
@@ -424,9 +464,19 @@ function LoginScreen() {
           <button
             onClick={() => void submit()}
             disabled={busy}
-            className="w-full rounded-xl bg-gradient-to-r from-[var(--brand-violet)] to-[var(--brand-coral)] px-4 py-3 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5 disabled:opacity-60"
+            className="w-full rounded-xl bg-gradient-to-r from-[var(--brand-violet)] to-[var(--brand-coral)] px-4 py-3 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-60"
           >
             {busy ? "Signing in…" : "Sign in"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setResetEmail(email);
+              setResetOpen(true);
+            }}
+            className="w-full text-center text-xs text-white/50 transition-colors hover:text-white/80 focus-visible:outline-none focus-visible:text-white"
+          >
+            Forgot password?
           </button>
         </div>
 
@@ -434,6 +484,50 @@ function LoginScreen() {
           Accounts are managed by Inspirova. Contact the team if you need access.
         </p>
       </div>
+
+      {resetOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Reset password"
+          onClick={(e) => e.target === e.currentTarget && setResetOpen(false)}
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[oklch(.22_.04_295)] p-6 text-white shadow-2xl">
+            <h2 className="font-display text-lg font-bold">Reset your password</h2>
+            <p className="mt-1 text-xs text-white/60">
+              Enter the email or username on your account. We'll send a reset link.
+            </p>
+            <input
+              value={resetEmail}
+              onChange={(e) => setResetEmail(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && void sendReset()}
+              type="text"
+              autoComplete="username"
+              placeholder="you@example.com"
+              className="mt-4 w-full rounded-xl border border-white/15 bg-white/[.06] px-4 py-3 text-sm text-white placeholder-white/40 outline-none focus:border-[var(--brand-light)]"
+              aria-label="Account email"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setResetOpen(false)}
+                className="rounded-lg border border-white/15 bg-transparent px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void sendReset()}
+                disabled={resetBusy || !resetEmail.trim()}
+                className="rounded-lg bg-gradient-to-r from-[var(--brand-violet)] to-[var(--brand-coral)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+              >
+                {resetBusy ? "Sending…" : "Send reset link"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

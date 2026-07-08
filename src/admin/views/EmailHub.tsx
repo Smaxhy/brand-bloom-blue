@@ -1,5 +1,7 @@
-import { useState } from "react";
-import { Plus, Send, Pencil, Trash2, Mail, Users, FileText, CheckCircle2 } from "lucide-react";
+import { useRef, useState } from "react";
+import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { Plus, Send, Pencil, Trash2, Mail, Users, FileText, CheckCircle2, X } from "lucide-react";
 import {
   type AdminData,
   type EmailTemplate,
@@ -30,9 +32,18 @@ export function EmailHub({
   const [tplId, setTplId] = useState(data.templates[0]?.id ?? "");
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const [result, setResult] = useState<{ ok: boolean; message: string; details: GhlSendDetail[] } | null>(null);
   const [lastAttempt, setLastAttempt] = useState<{ ids: string[]; templateId: string; templateName: string } | null>(null);
+
+  // Destructive-action confirmation state — replaces window.confirm()
+  const [confirmState, setConfirmState] = useState<
+    | { kind: "deleteContact"; id: string; label: string }
+    | { kind: "deleteTemplate"; id: string; label: string }
+    | { kind: "markAllSent"; count: number }
+    | null
+  >(null);
 
   function markAttemptedAsSent() {
     if (!lastAttempt || lastAttempt.ids.length === 0) return;
@@ -56,12 +67,19 @@ export function EmailHub({
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   }
 
+  function cancelSend() {
+    abortRef.current?.abort();
+  }
+
   async function send() {
-    if (!tpl || recipients.length === 0) return;
+    if (!tpl || recipients.length === 0 || sending) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
     setSending(true);
     setResult(null);
     setLastAttempt({ ids: recipients.map((r) => r.id), templateId: tpl.id, templateName: tpl.name });
     setProgress({ done: 0, total: recipients.length });
+    toast.loading(`Sending 0 / ${recipients.length}…`, { id: "email-send" });
 
     // Chunk client-side so we can show live progress and stay well under GHL's
     // per-second cap — the server also retries on 429, so this is belt-and-braces.
@@ -69,28 +87,40 @@ export function EmailHub({
     const allDetails: GhlSendDetail[] = [];
     let anyOk = false;
     let lastMessage = "";
+    let cancelled = false;
     for (let i = 0; i < recipients.length; i += CHUNK) {
+      if (controller.signal.aborted) {
+        cancelled = true;
+        break;
+      }
       const slice = recipients.slice(i, i + CHUNK);
-      const res = await ghlSendEmail({
-        apiKey: data.settings.ghlApiKey,
-        companyId: data.settings.ghlCompanyId,
-        locationId: data.settings.ghlLocationId,
-        to: slice.map((r) => ({ name: r.business, email: r.email })),
-        subject: tpl.subject,
-        body: tpl.body,
-        fromName: data.settings.fromName,
-        fromEmail: data.settings.fromEmail,
-      });
-      allDetails.push(...res.details);
-      if (res.ok) anyOk = true;
-      lastMessage = res.message;
-      setProgress({ done: Math.min(i + slice.length, recipients.length), total: recipients.length });
+      try {
+        const res = await ghlSendEmail({
+          apiKey: data.settings.ghlApiKey,
+          companyId: data.settings.ghlCompanyId,
+          locationId: data.settings.ghlLocationId,
+          to: slice.map((r) => ({ name: r.business, email: r.email })),
+          subject: tpl.subject,
+          body: tpl.body,
+          fromName: data.settings.fromName,
+          fromEmail: data.settings.fromEmail,
+        });
+        allDetails.push(...res.details);
+        if (res.ok) anyOk = true;
+        lastMessage = res.message;
+      } catch (err) {
+        lastMessage = (err as Error).message || "Send failed.";
+      }
+      const done = Math.min(i + slice.length, recipients.length);
+      setProgress({ done, total: recipients.length });
+      toast.loading(`Sending ${done} / ${recipients.length}…`, { id: "email-send" });
     }
 
     const rateLimited = allDetails.filter((d) => !d.ok && d.status === 429).length;
     const sentCount = allDetails.filter((d) => d.ok).length;
-    const message =
-      rateLimited > 0
+    const message = cancelled
+      ? `Cancelled — delivered ${sentCount}/${recipients.length} before you stopped.`
+      : rateLimited > 0
         ? `GoHighLevel rate limit hit — delivered ${sentCount}/${allDetails.length}. Wait a minute and re-send the rest.`
         : sentCount === allDetails.length && allDetails.length > 0
           ? `Delivered to all ${sentCount} recipient(s) via GoHighLevel.`
@@ -100,7 +130,7 @@ export function EmailHub({
     const okEmails = new Set(
       res.details.length
         ? res.details.filter((d) => d.ok).map((d) => d.email.toLowerCase())
-        : res.ok
+        : res.ok && !cancelled
           ? recipients.map((r) => r.email.toLowerCase())
           : [],
     );
@@ -120,8 +150,15 @@ export function EmailHub({
     }
     setSending(false);
     setProgress(null);
+    abortRef.current = null;
 
+    toast.dismiss("email-send");
+    if (cancelled) toast.warning(message);
+    else if (sentCount === 0) toast.error(message);
+    else if (sentCount < allDetails.length || rateLimited) toast.warning(message);
+    else toast.success(message);
   }
+
 
 
   function saveTpl(t: EmailTemplate) {
@@ -201,15 +238,12 @@ export function EmailHub({
                       Move to sent
                     </button>
                     <button
-                      onClick={() => {
-                        if (!confirm(`Delete ${r.business}?`)) return;
-                        setSelected((s) => s.filter((x) => x !== r.id));
-                        update((p) => ({ ...p, raw: p.raw.filter((x) => x.id !== r.id) }));
-                      }}
-                      className="grid h-7 w-7 place-items-center rounded-lg text-destructive hover:bg-destructive/10"
+                      onClick={() => setConfirmState({ kind: "deleteContact", id: r.id, label: r.business })}
+                      aria-label={`Delete ${r.business}`}
+                      className="grid h-9 w-9 place-items-center rounded-lg text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
                       title="Delete contact"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                     </button>
                   </div>
                 ))}
@@ -273,18 +307,42 @@ export function EmailHub({
               </div>
             )}
 
-            <Btn
-              className="mt-4 w-full disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={send}
-              disabled={sending || !tpl || recipients.length === 0}
-              aria-disabled={sending || !tpl || recipients.length === 0}
-            >
-              {sending
-                ? progress
-                  ? `Sending ${progress.done} / ${progress.total}…`
-                  : "Sending…"
-                : <><Send className="h-4 w-4" /> {liveMode ? "Send via GoHighLevel" : "Simulate send"} ({recipients.length})</>}
-            </Btn>
+            {sending && progress && (
+              <div className="mt-4">
+                <div className="mb-1 flex items-center justify-between text-xs">
+                  <span className="font-semibold text-foreground">Sending campaign…</span>
+                  <span className="tabular-nums text-muted-foreground" aria-live="polite">
+                    {progress.done} / {progress.total} ({Math.round((progress.done / progress.total) * 100)}%)
+                  </span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-secondary" role="progressbar" aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.done}>
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-200"
+                    style={{ width: `${(progress.done / progress.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 flex gap-2">
+              <Btn
+                className="flex-1"
+                onClick={send}
+                disabled={sending || !tpl || recipients.length === 0}
+                aria-disabled={sending || !tpl || recipients.length === 0}
+              >
+                {sending
+                  ? progress
+                    ? `Sending ${progress.done} / ${progress.total}…`
+                    : "Sending…"
+                  : <><Send className="h-4 w-4" aria-hidden="true" /> {liveMode ? "Send via GoHighLevel" : "Simulate send"} ({recipients.length})</>}
+              </Btn>
+              {sending && (
+                <Btn variant="ghost" onClick={cancelSend} aria-label="Cancel campaign">
+                  <X className="h-4 w-4" aria-hidden="true" /> Cancel
+                </Btn>
+              )}
+            </div>
           </Panel>
         </div>
       )}
@@ -304,8 +362,8 @@ export function EmailHub({
                     </div>
                   </div>
                   <div className="flex gap-1">
-                    <button onClick={() => setEditTpl(t)} className="grid h-8 w-8 place-items-center rounded-lg hover:bg-secondary"><Pencil className="h-4 w-4" /></button>
-                    <button onClick={() => removeTpl(t.id)} className="grid h-8 w-8 place-items-center rounded-lg text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /></button>
+                    <button onClick={() => setEditTpl(t)} aria-label={`Edit template ${t.name}`} className="grid h-9 w-9 place-items-center rounded-lg transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><Pencil className="h-4 w-4" aria-hidden="true" /></button>
+                    <button onClick={() => setConfirmState({ kind: "deleteTemplate", id: t.id, label: t.name })} aria-label={`Delete template ${t.name}`} className="grid h-9 w-9 place-items-center rounded-lg text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
                   </div>
                 </div>
                 <pre className="mt-3 max-h-32 overflow-hidden whitespace-pre-wrap font-sans text-xs text-muted-foreground">{t.body}</pre>
@@ -329,14 +387,7 @@ export function EmailHub({
               {pending.length > 0 && (
                 <Btn
                   variant="ghost"
-                  onClick={() => {
-                    const sentAt = Date.now();
-                    const ids = pending.map((r) => r.id);
-                    update((p) => ({
-                      ...p,
-                      raw: p.raw.map((r) => (ids.includes(r.id) ? { ...r, lastEmailedAt: sentAt } : r)),
-                    }));
-                  }}
+                  onClick={() => setConfirmState({ kind: "markAllSent", count: pending.length })}
                 >
                   Mark all ({pending.length})
                 </Btn>
@@ -408,14 +459,12 @@ export function EmailHub({
                               Move back
                             </button>
                             <button
-                              onClick={() => {
-                                if (!confirm(`Delete ${r.business}?`)) return;
-                                update((p) => ({ ...p, raw: p.raw.filter((x) => x.id !== r.id) }));
-                              }}
-                              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
+                              onClick={() => setConfirmState({ kind: "deleteContact", id: r.id, label: r.business })}
+                              aria-label={`Delete ${r.business}`}
+                              className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 py-1 text-xs text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
                               title="Delete contact"
                             >
-                              <Trash2 className="h-3.5 w-3.5" /> Delete
+                              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Delete
                             </button>
                           </div>
                         </td>
@@ -442,6 +491,52 @@ export function EmailHub({
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        open={!!confirmState}
+        onOpenChange={(o) => !o && setConfirmState(null)}
+        title={
+          confirmState?.kind === "deleteContact"
+            ? `Delete ${confirmState.label}?`
+            : confirmState?.kind === "deleteTemplate"
+              ? `Delete template "${confirmState.label}"?`
+              : confirmState?.kind === "markAllSent"
+                ? `Mark all ${confirmState.count} recipients as sent?`
+                : ""
+        }
+        description={
+          confirmState?.kind === "deleteContact"
+            ? "This removes the contact from your database. This can't be undone."
+            : confirmState?.kind === "deleteTemplate"
+              ? "The template will be permanently removed. Any drafts using it will need a new template."
+              : confirmState?.kind === "markAllSent"
+                ? "They'll move to the Sent tab and disappear from the recipient list."
+                : ""
+        }
+        destructive={confirmState?.kind !== "markAllSent"}
+        confirmLabel={confirmState?.kind === "markAllSent" ? "Mark all" : "Delete"}
+        onConfirm={() => {
+          if (!confirmState) return;
+          if (confirmState.kind === "deleteContact") {
+            const id = confirmState.id;
+            setSelected((s) => s.filter((x) => x !== id));
+            update((p) => ({ ...p, raw: p.raw.filter((x) => x.id !== id) }));
+            toast.success("Contact deleted.");
+          } else if (confirmState.kind === "deleteTemplate") {
+            removeTpl(confirmState.id);
+            toast.success("Template deleted.");
+          } else if (confirmState.kind === "markAllSent") {
+            const sentAt = Date.now();
+            const ids = pending.map((r) => r.id);
+            update((p) => ({
+              ...p,
+              raw: p.raw.map((r) => (ids.includes(r.id) ? { ...r, lastEmailedAt: sentAt } : r)),
+            }));
+            toast.success(`Marked ${ids.length} as sent.`);
+          }
+          setConfirmState(null);
+        }}
+      />
     </div>
   );
 }
