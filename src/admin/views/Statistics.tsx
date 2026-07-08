@@ -94,9 +94,7 @@ function readAsDataUrl(file: File): Promise<string> {
   });
 }
 
-const VISIBLE_STORAGE_KEY = "insp.stats.visibleMetrics.v1";
-const CHART_STORAGE_KEY = "insp.stats.chartType.v1";
-const CHART_OVERRIDES_KEY = "insp.stats.chartOverrides.v1";
+const PRESETS_STORAGE_KEY = "insp.stats.presets.v2";
 
 type ChartType = "number" | "line" | "area" | "bar";
 const CHART_TYPES: { key: ChartType; label: string; icon: React.ElementType }[] = [
@@ -106,36 +104,40 @@ const CHART_TYPES: { key: ChartType; label: string; icon: React.ElementType }[] 
   { key: "bar", label: "Bar", icon: BarChart3 },
 ];
 
-function loadVisible(): Set<MetricKey> {
-  if (typeof window === "undefined") return new Set(METRICS.map((m) => m.key));
-  try {
-    const raw = window.localStorage.getItem(VISIBLE_STORAGE_KEY);
-    if (!raw) return new Set(METRICS.map((m) => m.key));
-    const arr = JSON.parse(raw) as string[];
-    return new Set(arr.filter((k): k is MetricKey => METRICS.some((m) => m.key === k)));
-  } catch {
-    return new Set(METRICS.map((m) => m.key));
-  }
+interface ClientPreset {
+  visible: MetricKey[];
+  chartType: ChartType;
+  chartOverrides: Record<string, ChartType>;
+  platform?: AdPlatform | "all";
 }
 
-function loadChartType(): ChartType {
-  if (typeof window === "undefined") return "line";
-  try {
-    const raw = window.localStorage.getItem(CHART_STORAGE_KEY);
-    if (raw && CHART_TYPES.some((c) => c.key === raw)) return raw as ChartType;
-  } catch { /* ignore */ }
-  return "line";
-}
+const DEFAULT_PRESET: ClientPreset = {
+  visible: METRICS.map((m) => m.key),
+  chartType: "line",
+  chartOverrides: {},
+  platform: "all",
+};
 
-function loadChartOverrides(): Record<string, ChartType> {
+function loadPresets(): Record<string, ClientPreset> {
   if (typeof window === "undefined") return {};
   try {
-    const raw = window.localStorage.getItem(CHART_OVERRIDES_KEY);
+    const raw = window.localStorage.getItem(PRESETS_STORAGE_KEY);
     if (!raw) return {};
-    return JSON.parse(raw) as Record<string, ChartType>;
+    return JSON.parse(raw) as Record<string, ClientPreset>;
   } catch {
     return {};
   }
+}
+
+function presetFor(all: Record<string, ClientPreset>, id: string): ClientPreset {
+  const p = all[id];
+  if (!p) return { ...DEFAULT_PRESET };
+  return {
+    visible: (p.visible ?? DEFAULT_PRESET.visible).filter((k): k is MetricKey => METRICS.some((m) => m.key === k)),
+    chartType: CHART_TYPES.some((c) => c.key === p.chartType) ? p.chartType : DEFAULT_PRESET.chartType,
+    chartOverrides: p.chartOverrides ?? {},
+    platform: p.platform ?? "all",
+  };
 }
 
 export function Statistics({
@@ -145,28 +147,50 @@ export function Statistics({
   data: AdminData;
   update: (fn: (p: AdminData) => AdminData) => void;
 }) {
+  const [presets, setPresets] = useState<Record<string, ClientPreset>>(() => loadPresets());
   const [clientId, setClientId] = useState<string>("all");
-  const [platform, setPlatform] = useState<AdPlatform | "all">("all");
+  const initial = presetFor(presets, "all");
+  const [platform, setPlatform] = useState<AdPlatform | "all">(initial.platform ?? "all");
   const [entryOpen, setEntryOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [customizeOpen, setCustomizeOpen] = useState(false);
-  const [visible, setVisible] = useState<Set<MetricKey>>(() => loadVisible());
-  const [chartType, setChartType] = useState<ChartType>(() => loadChartType());
-  const [chartOverrides, setChartOverrides] = useState<Record<string, ChartType>>(() => loadChartOverrides());
+  const [visible, setVisible] = useState<Set<MetricKey>>(() => new Set(initial.visible));
+  const [chartType, setChartType] = useState<ChartType>(initial.chartType);
+  const [chartOverrides, setChartOverrides] = useState<Record<string, ChartType>>(initial.chartOverrides);
+  const [savedFlash, setSavedFlash] = useState(false);
+  const skipSaveRef = useRef(false);
 
+  // Load preset when client changes
   useEffect(() => {
-    try {
-      window.localStorage.setItem(VISIBLE_STORAGE_KEY, JSON.stringify([...visible]));
-    } catch { /* ignore */ }
-  }, [visible]);
+    const p = presetFor(presets, clientId);
+    skipSaveRef.current = true;
+    setVisible(new Set(p.visible));
+    setChartType(p.chartType);
+    setChartOverrides(p.chartOverrides);
+    setPlatform(p.platform ?? "all");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId]);
 
+  // Auto-save preset for current client whenever config changes
   useEffect(() => {
-    try { window.localStorage.setItem(CHART_STORAGE_KEY, chartType); } catch { /* ignore */ }
-  }, [chartType]);
-
-  useEffect(() => {
-    try { window.localStorage.setItem(CHART_OVERRIDES_KEY, JSON.stringify(chartOverrides)); } catch { /* ignore */ }
-  }, [chartOverrides]);
+    if (skipSaveRef.current) { skipSaveRef.current = false; return; }
+    setPresets((prev) => {
+      const next = {
+        ...prev,
+        [clientId]: {
+          visible: [...visible],
+          chartType,
+          chartOverrides,
+          platform,
+        },
+      };
+      try { window.localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+    setSavedFlash(true);
+    const t = setTimeout(() => setSavedFlash(false), 1200);
+    return () => clearTimeout(t);
+  }, [visible, chartType, chartOverrides, platform, clientId]);
 
   function cycleOverride(key: MetricKey) {
     setChartOverrides((prev) => {
@@ -180,6 +204,21 @@ export function Statistics({
   function applyGlobalChartType(next: ChartType) {
     setChartType(next);
     setChartOverrides({});
+  }
+
+  function resetPresetForCurrentClient() {
+    if (!confirm("Reset saved view for this client to defaults?")) return;
+    skipSaveRef.current = true;
+    setVisible(new Set(DEFAULT_PRESET.visible));
+    setChartType(DEFAULT_PRESET.chartType);
+    setChartOverrides({});
+    setPlatform("all");
+    setPresets((prev) => {
+      const next = { ...prev };
+      delete next[clientId];
+      try { window.localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
   }
 
   const scans = useMemo(() => {
@@ -278,7 +317,16 @@ export function Statistics({
             </div>
           </Field>
 
-          <div className="ml-auto flex flex-wrap gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <span
+              aria-live="polite"
+              className={`text-xs transition-opacity ${savedFlash ? "opacity-100 text-emerald-600" : "opacity-60 text-muted-foreground"}`}
+            >
+              {savedFlash ? "Saved" : `View saved for ${activeClient ? activeClient.company : "All clients"}`}
+            </span>
+            <Btn variant="ghost" onClick={resetPresetForCurrentClient}>
+              Reset preset
+            </Btn>
             <Btn variant="ghost" onClick={() => { setChartOverrides({}); }}>
               Reset per-card
             </Btn>
