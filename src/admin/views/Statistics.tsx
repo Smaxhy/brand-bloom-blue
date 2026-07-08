@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, Image as ImageIcon, Loader2, Plus, Save, Trash2, TrendingUp, TrendingDown, Camera, SlidersHorizontal, Pencil, Check, X } from "lucide-react";
+import { BarChart3, Image as ImageIcon, Loader2, Plus, Save, Trash2, TrendingUp, TrendingDown, Camera, SlidersHorizontal, Pencil, Check, X, LineChart, AreaChart, Hash } from "lucide-react";
 import { type AdminData, type AdScan, type AdPlatform, uid, claudeScanAdScreenshot } from "../store";
 import { Panel, Modal, Field, inputCls, Btn } from "../ui";
 
