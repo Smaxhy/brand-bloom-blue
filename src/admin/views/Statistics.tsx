@@ -177,6 +177,11 @@ export function Statistics({
     });
   }
 
+  function applyGlobalChartType(next: ChartType) {
+    setChartType(next);
+    setChartOverrides({});
+  }
+
   const scans = useMemo(() => {
     const list = data.adScans ?? [];
     return list
@@ -258,7 +263,7 @@ export function Statistics({
                   <button
                     key={c.key}
                     type="button"
-                    onClick={() => setChartType(c.key)}
+                    onClick={() => applyGlobalChartType(c.key)}
                     aria-pressed={active}
                     title={c.label}
                     className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${
@@ -416,41 +421,42 @@ export function Statistics({
 /* -------------------------- metric card + chart -------------------------- */
 
 function Sparkline({ points, goodDirection, variant }: { points: number[]; goodDirection: "up" | "down"; variant: "line" | "area" | "bar" }) {
-  if (points.length < 2) {
+  if (points.length === 0) {
     return (
       <div className="mt-3 h-12 rounded-md bg-secondary/50 grid place-items-center text-[.65rem] text-muted-foreground">
-        Add more snapshots to see a trend
+        Add a snapshot to see a chart
       </div>
     );
   }
+  const chartPoints = points.length === 1 ? [points[0], points[0]] : points;
   const w = 200;
   const h = 48;
-  const min = Math.min(...points, 0);
-  const max = Math.max(...points);
+  const min = Math.min(...chartPoints, 0);
+  const max = Math.max(...chartPoints);
   const span = max - min || 1;
-  const first = points[0];
-  const last = points[points.length - 1];
+  const first = chartPoints[0];
+  const last = chartPoints[chartPoints.length - 1];
   const trendingUp = last >= first;
   const isGood = goodDirection === "up" ? trendingUp : !trendingUp;
   const stroke = isGood ? "var(--brand-violet)" : "oklch(.62 .22 25)";
 
   if (variant === "bar") {
     const gap = 2;
-    const bw = Math.max(2, (w - gap * (points.length - 1)) / points.length);
+    const bw = Math.max(2, (w - gap * (chartPoints.length - 1)) / chartPoints.length);
     return (
       <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="mt-3 h-12 w-full" role="img" aria-label="Trend bars">
-        {points.map((v, i) => {
-          const barH = ((v - min) / span) * (h - 4);
+        {chartPoints.map((v, i) => {
+          const barH = Math.max(6, ((v - min) / span) * (h - 4));
           const x = i * (bw + gap);
           const y = h - barH;
-          return <rect key={i} x={x} y={y} width={bw} height={barH} rx="1.5" fill={stroke} fillOpacity={i === points.length - 1 ? 1 : 0.55} />;
+          return <rect key={i} x={x} y={y} width={bw} height={barH} rx="1.5" fill={stroke} fillOpacity={i === chartPoints.length - 1 ? 1 : 0.55} />;
         })}
       </svg>
     );
   }
 
-  const step = w / (points.length - 1);
-  const coords = points.map((v, i) => {
+  const step = w / (chartPoints.length - 1);
+  const coords = chartPoints.map((v, i) => {
     const x = i * step;
     const y = h - ((v - min) / span) * (h - 6) - 3;
     return [x, y] as const;
