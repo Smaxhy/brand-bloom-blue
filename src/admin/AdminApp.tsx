@@ -303,9 +303,10 @@ export function AdminApp() {
           </span>
         </header>
 
-        <main className="flex-1 p-5 lg:p-7">
+        <main id="main-content" className="flex-1 p-5 lg:p-7" role="main">
           {view === "dashboard" && <Dashboard data={data} go={setView} />}
           {view === "pipeline" && <Pipeline data={data} update={update} />}
+          {view === "tasks" && <Tasks data={data} update={update} />}
           {view === "leads" && <Leads data={data} update={update} />}
           {view === "scraper" && <Scraper data={data} update={update} go={setView} />}
           {view === "raw" && <RawData data={data} update={update} go={setView} />}
