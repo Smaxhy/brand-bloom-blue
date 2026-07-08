@@ -1227,3 +1227,93 @@ export async function discoverLeads(
     skippedDenied,
   };
 }
+
+/* ----------------------------------------------------------------------- */
+/* Account data export — GDPR-friendly, CRM-portable                        */
+/* ----------------------------------------------------------------------- */
+
+function toCsv(rows: Record<string, unknown>[]): string {
+  if (!rows.length) return "";
+  const cols = Array.from(rows.reduce((s, r) => { Object.keys(r).forEach((k) => s.add(k)); return s; }, new Set<string>()));
+  const esc = (v: unknown) => {
+    if (v === null || v === undefined) return "";
+    const s = typeof v === "object" ? JSON.stringify(v) : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  return [cols.join(","), ...rows.map((r) => cols.map((c) => esc(r[c])).join(","))].join("\n");
+}
+
+function download(name: string, mime: string, content: string) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+/** Download the full account as a single JSON file (portable to any CRM). */
+export function exportAccountJson(data: AdminData, accountName: string) {
+  const stamp = new Date().toISOString().slice(0, 10);
+  const payload = {
+    schema: "inspirova.admin.v1",
+    exportedAt: new Date().toISOString(),
+    account: accountName,
+    counts: {
+      clients: data.clients.length,
+      deals: data.deals.length,
+      leads: data.raw.length,
+      transactions: data.transactions.length,
+      tasks: (data.tasks ?? []).length,
+      campaigns: data.campaigns.length,
+      adScans: (data.adScans ?? []).length,
+    },
+    data,
+  };
+  download(`inspirova-${accountName || "account"}-${stamp}.json`, "application/json", JSON.stringify(payload, null, 2));
+}
+
+/** Download each table as its own CSV. CRM-import friendly. */
+export function exportAccountCsvs(data: AdminData, accountName: string) {
+  const stamp = new Date().toISOString().slice(0, 10);
+  const prefix = `inspirova-${accountName || "account"}-${stamp}`;
+  const tables: Record<string, Record<string, unknown>[]> = {
+    clients: data.clients as unknown as Record<string, unknown>[],
+    deals: data.deals as unknown as Record<string, unknown>[],
+    leads: data.raw as unknown as Record<string, unknown>[],
+    transactions: data.transactions as unknown as Record<string, unknown>[],
+    tasks: (data.tasks ?? []) as unknown as Record<string, unknown>[],
+    campaigns: data.campaigns as unknown as Record<string, unknown>[],
+    templates: data.templates as unknown as Record<string, unknown>[],
+    ad_scans: (data.adScans ?? []).map((a) => ({ id: a.id, clientId: a.clientId, platform: a.platform, capturedAt: a.capturedAt, label: a.label, ...a.metrics })) as unknown as Record<string, unknown>[],
+  };
+  Object.entries(tables).forEach(([name, rows]) => {
+    if (!rows.length) return;
+    download(`${prefix}-${name}.csv`, "text/csv", toCsv(rows));
+  });
+}
+
+/* ----------------------------------------------------------------------- */
+/* Claude vision — extract metrics from an ad-dashboard screenshot          */
+/* ----------------------------------------------------------------------- */
+
+export async function claudeScanAdScreenshot(opts: {
+  imageBase64: string; // data URL or raw base64
+  mediaType: string; // e.g. image/png
+  platform: AdPlatform;
+  hint?: string;
+}): Promise<{ ok: boolean; metrics?: AdScan["metrics"]; raw?: unknown; error?: string }> {
+  try {
+    const res = await fetch("/api/claude/ad-scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(opts),
+    });
+    const j = (await res.json()) as { ok?: boolean; metrics?: AdScan["metrics"]; raw?: unknown; error?: string; reason?: string };
+    if (!j.ok) return { ok: false, error: j.error || j.reason || `Scan failed (HTTP ${res.status})` };
+    return { ok: true, metrics: j.metrics, raw: j.raw };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
