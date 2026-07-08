@@ -488,16 +488,53 @@ function Sparkline({ points, goodDirection, variant }: { points: number[]; goodD
   const isGood = goodDirection === "up" ? trendingUp : !trendingUp;
   const stroke = isGood ? "var(--brand-violet)" : "oklch(.62 .22 25)";
 
+  // Scoped keyframes for chart animations (draw, grow, bob)
+  const anim = (
+    <style>{`
+      @keyframes insp-draw { from { stroke-dashoffset: var(--len); } to { stroke-dashoffset: 0; } }
+      @keyframes insp-fade { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes insp-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+      @keyframes insp-bob-up   { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+      @keyframes insp-bob-down { 0%,100% { transform: translateY(0); } 50% { transform: translateY( 2px); } }
+      @keyframes insp-pulse { 0%,100% { r: var(--r); opacity: 1; } 50% { r: calc(var(--r) * 1.6); opacity: .6; } }
+      .insp-line { stroke-dasharray: var(--len); animation: insp-draw 900ms ease-out both; }
+      .insp-area { animation: insp-fade 700ms ease-out 200ms both; }
+      .insp-dot  { animation: insp-fade 400ms ease-out both; }
+      .insp-last { transform-box: fill-box; transform-origin: center; animation: insp-pulse 1.8s ease-in-out infinite; }
+      .insp-bar  { transform-box: fill-box; transform-origin: bottom; animation: insp-grow 600ms cubic-bezier(.2,.7,.2,1) both; }
+      .insp-bob-up   { transform-box: fill-box; transform-origin: center; animation: insp-bob-up   2.4s ease-in-out infinite; }
+      .insp-bob-down { transform-box: fill-box; transform-origin: center; animation: insp-bob-down 2.4s ease-in-out infinite; }
+      @media (prefers-reduced-motion: reduce) {
+        .insp-line, .insp-area, .insp-dot, .insp-last, .insp-bar, .insp-bob-up, .insp-bob-down { animation: none !important; }
+      }
+    `}</style>
+  );
+
   if (variant === "bar") {
     const gap = 2;
     const bw = Math.max(2, (w - gap * (chartPoints.length - 1)) / chartPoints.length);
     return (
       <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="mt-3 h-12 w-full" role="img" aria-label="Trend bars">
+        {anim}
         {chartPoints.map((v, i) => {
           const barH = Math.max(6, ((v - min) / span) * (h - 4));
           const x = i * (bw + gap);
           const y = h - barH;
-          return <rect key={i} x={x} y={y} width={bw} height={barH} rx="1.5" fill={stroke} fillOpacity={i === chartPoints.length - 1 ? 1 : 0.55} />;
+          const isLast = i === chartPoints.length - 1;
+          return (
+            <rect
+              key={i}
+              x={x}
+              y={y}
+              width={bw}
+              height={barH}
+              rx="1.5"
+              fill={stroke}
+              fillOpacity={isLast ? 1 : 0.55}
+              className={`insp-bar ${isLast ? (trendingUp ? "insp-bob-up" : "insp-bob-down") : ""}`}
+              style={{ animationDelay: `${i * 40}ms` }}
+            />
+          );
         })}
       </svg>
     );
@@ -511,13 +548,43 @@ function Sparkline({ points, goodDirection, variant }: { points: number[]; goodD
   });
   const line = coords.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
   const area = `${line} L${w.toFixed(1)},${h} L0,${h} Z`;
+  // Rough path length for draw animation
+  let pathLen = 0;
+  for (let i = 1; i < coords.length; i++) {
+    const dx = coords[i][0] - coords[i - 1][0];
+    const dy = coords[i][1] - coords[i - 1][1];
+    pathLen += Math.hypot(dx, dy);
+  }
+  const lenStr = String(Math.max(1, Math.round(pathLen)));
   return (
     <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="mt-3 h-12 w-full" role="img" aria-label="Trend sparkline">
-      {variant === "area" && <path d={area} fill={stroke} fillOpacity="0.18" />}
-      <path d={line} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-      {coords.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r={i === coords.length - 1 ? 2.5 : 1.5} fill={stroke} />
-      ))}
+      {anim}
+      {variant === "area" && <path className="insp-area" d={area} fill={stroke} fillOpacity="0.18" />}
+      <path
+        className="insp-line"
+        d={line}
+        fill="none"
+        stroke={stroke}
+        strokeWidth="2"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        style={{ ["--len" as string]: lenStr }}
+      />
+      {coords.map(([x, y], i) => {
+        const isLast = i === coords.length - 1;
+        const r = isLast ? 2.5 : 1.5;
+        return (
+          <circle
+            key={i}
+            cx={x}
+            cy={y}
+            r={r}
+            fill={stroke}
+            className={`insp-dot ${isLast ? "insp-last " + (trendingUp ? "insp-bob-up" : "insp-bob-down") : ""}`}
+            style={{ animationDelay: `${600 + i * 20}ms`, ["--r" as string]: String(r) }}
+          />
+        );
+      })}
     </svg>
   );
 }
