@@ -104,10 +104,16 @@ export function AdminApp() {
       // fires when the tab regains focus; we don't want to clear state.
       if (userId === currentUserId) return;
       currentUserId = userId;
-      const { data: roles } = await supabase
+      const { data: roles, error: roleError } = await supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", userId);
+      if (roleError) {
+        setAuthed(true);
+        setLoadError("Your login worked, but the role check is temporarily unavailable. Your data was not changed.");
+        setData(null);
+        return;
+      }
       const list = (roles ?? []).map((r) => r.role);
       const resolved: TeamRole | null = list.includes("ceo")
         ? "ceo"
