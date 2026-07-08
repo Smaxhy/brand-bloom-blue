@@ -242,6 +242,7 @@ export function Statistics({
     setChartType(DEFAULT_PRESET.chartType);
     setChartOverrides({});
     setPlatform("all");
+    setPeriod("all");
     setPresets((prev) => {
       const next = { ...prev };
       delete next[clientId];
