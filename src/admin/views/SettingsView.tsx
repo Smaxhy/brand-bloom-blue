@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Save, RotateCcw, KeyRound, Radar, Globe, Send, CheckCircle2, XCircle, Moon, Sun } from "lucide-react";
-import { type AdminData, type GhlSendDetail, resetData, ghlSendEmail } from "../store";
+import { Save, RotateCcw, KeyRound, Radar, Globe, Send, CheckCircle2, XCircle, Moon, Sun, Download, FileJson, FileSpreadsheet } from "lucide-react";
+import { type AdminData, type GhlSendDetail, resetData, ghlSendEmail, exportAccountJson, exportAccountCsvs } from "../store";
 import { Panel, Field, inputCls, Btn } from "../ui";
 
 export function SettingsView({
@@ -232,9 +232,33 @@ export function SettingsView({
       </Panel>
 
       <Panel>
+        <div className="mb-4 flex items-center gap-2">
+          <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-[var(--brand-violet)] to-[var(--brand-coral)] text-white"><Download className="h-4 w-4" aria-hidden="true" /></div>
+          <div>
+            <h3 className="font-display text-lg font-bold">Export your account data</h3>
+            <p className="text-xs text-muted-foreground">Download everything in your account, ready to import into any future CRM.</p>
+          </div>
+        </div>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          You own your data. Grab a full JSON snapshot for a perfect archive, or per-table CSVs that most CRMs (HubSpot, Pipedrive, Salesforce, GHL, Zoho…) can import directly. Includes clients, deals, leads, tasks, transactions, campaigns, templates and ad scans.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Btn onClick={() => exportAccountJson(data, "account")}>
+            <FileJson className="h-4 w-4" aria-hidden="true" /> Download full JSON
+          </Btn>
+          <Btn variant="ghost" onClick={() => exportAccountCsvs(data, "account")}>
+            <FileSpreadsheet className="h-4 w-4" aria-hidden="true" /> Download CSVs
+          </Btn>
+        </div>
+        <p className="mt-3 rounded-lg bg-secondary px-3 py-2.5 text-[.7rem] leading-relaxed text-muted-foreground">
+          The JSON file is a full, machine-readable copy of your account. The CSV bundle exports one file per table so you can drop each one into your next CRM's import flow.
+        </p>
+      </Panel>
+
+      <Panel>
         <h3 className="font-display text-lg font-bold">Data</h3>
         <p className="mt-1 mb-3 text-sm text-muted-foreground">All admin data is stored per account in the backend. Reset only affects the signed-in account.</p>
-        <Btn variant="danger" onClick={reset}><RotateCcw className="h-4 w-4" /> Reset all data</Btn>
+        <Btn variant="danger" onClick={reset}><RotateCcw className="h-4 w-4" aria-hidden="true" /> Reset all data</Btn>
       </Panel>
     </div>
   );
