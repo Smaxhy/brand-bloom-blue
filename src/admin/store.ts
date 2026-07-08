@@ -207,19 +207,40 @@ function isoDaysAgo(n: number): string {
 
 async function currentUserId(): Promise<string | null> {
   const { supabase } = await import("@/integrations/supabase/client");
-  const { data } = await supabase.auth.getUser();
-  return data.user?.id ?? null;
+  // For normal admin-state reads/writes the database policies validate the
+  // session token. Avoid calling the auth server on every save; overloaded
+  // accounts can otherwise turn one UI action into multiple backend requests.
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user?.id ?? null;
 }
 
 function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData {
   const s = seed();
   if (!d || typeof d !== "object") return s;
+  const arrayOr = <T,>(value: unknown, fallback: T[]): T[] => (Array.isArray(value) ? (value as T[]) : fallback);
+  const settings = d.settings && typeof d.settings === "object" ? d.settings : {};
+  const denylist = d.denylist && typeof d.denylist === "object" ? d.denylist : {};
+  const scraper = d.scraper && typeof d.scraper === "object" ? d.scraper : undefined;
   return {
     ...s,
     ...d,
-    settings: { ...s.settings, ...(d.settings ?? {}) },
-    denylist: { ...(s.denylist ?? {}), ...((d.denylist ?? {}) as Record<string, DenylistEntry>) },
-    scraper: (d.scraper as ScraperState | undefined) ?? s.scraper,
+    deals: arrayOr<Deal>(d.deals, s.deals),
+    raw: arrayOr<RawBusiness>(d.raw, s.raw),
+    clients: arrayOr<Client>(d.clients, s.clients),
+    transactions: arrayOr<Transaction>(d.transactions, s.transactions),
+    templates: arrayOr<EmailTemplate>(d.templates, s.templates),
+    campaigns: arrayOr<EmailCampaign>(d.campaigns, s.campaigns),
+    settings: { ...s.settings, ...settings },
+    denylist: { ...(s.denylist ?? {}), ...(denylist as Record<string, DenylistEntry>) },
+    scraper: scraper
+      ? {
+          results: arrayOr<ScrapedPerson>((scraper as Partial<ScraperState>).results, []),
+          emailSource: ((scraper as Partial<ScraperState>).emailSource ?? {}) as Record<string, string>,
+          emailSourceUrl: ((scraper as Partial<ScraperState>).emailSourceUrl ?? {}) as Record<string, string>,
+          discoverSources: ((scraper as Partial<ScraperState>).discoverSources ?? {}) as Record<string, ScrapeSource[]>,
+          updatedAt: Number((scraper as Partial<ScraperState>).updatedAt ?? Date.now()),
+        }
+      : s.scraper,
   };
 }
 
@@ -256,7 +277,9 @@ export async function loadDataRemote(): Promise<AdminData> {
     return merged;
   } catch (e) {
     console.warn("[admin] cloud load failed", e);
-    return seed();
+    throw new Error(
+      "Admin data could not be loaded. Your saved data was not changed. The backend may still be recovering from too many requests.",
+    );
   }
 }
 
@@ -288,8 +311,33 @@ async function pushRemote(data: AdminData, opts: { allowScraperClear?: boolean }
 /**
  * Save this account's data to Lovable Cloud.
  */
+let queuedRemoteSave: AdminData | null = null;
+let remoteSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let remoteSaveInFlight = false;
+
+async function flushQueuedRemoteSave(): Promise<void> {
+  if (remoteSaveInFlight) return;
+  const next = queuedRemoteSave;
+  if (!next) return;
+  queuedRemoteSave = null;
+  remoteSaveInFlight = true;
+  try {
+    await pushRemote(next);
+  } catch (error) {
+    console.warn("[admin] queued cloud save failed", error);
+  } finally {
+    remoteSaveInFlight = false;
+  }
+  if (queuedRemoteSave) void flushQueuedRemoteSave();
+}
+
 export function saveData(data: AdminData) {
-  void pushRemote(data);
+  queuedRemoteSave = data;
+  if (remoteSaveTimer) clearTimeout(remoteSaveTimer);
+  remoteSaveTimer = setTimeout(() => {
+    remoteSaveTimer = null;
+    void flushQueuedRemoteSave();
+  }, 1200);
 }
 
 /** Reset this account's data back to the seed. */
@@ -386,7 +434,11 @@ export async function login(identifier: string, password: string): Promise<strin
         .select("role")
         .eq("user_id", data.user.id);
       const allowed = (roles ?? []).some((r) => r.role === "admin" || r.role === "ceo" || r.role === "user");
-      if (roleErr || !allowed) {
+      if (roleErr) {
+        console.warn("[login] role check failed after sign-in", roleErr);
+        return null;
+      }
+      if (!allowed) {
         await supabase.auth.signOut();
         return "This account isn't authorised to use the admin panel.";
       }
