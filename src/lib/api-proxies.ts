@@ -742,12 +742,40 @@ async function ghlSend(request: Request, env: Env): Promise<Response> {
       if (tokenJson.accessToken) activeKey = tokenJson.accessToken;
     }
     const ghlHeaders = jsonHeaders(activeKey);
-    const details = await Promise.all(
-      recipients.map(async (rcpt) => {
-        try {
-          // Step 1: upsert contact to get a contactId (GHL requires it for email sends).
-          const [firstName, ...rest] = (rcpt.name || rcpt.email).split(" ");
-          const upsertRes = await fetch("https://services.leadconnectorhq.com/contacts/upsert", {
+
+    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+    const jitter = () => Math.floor(Math.random() * 250);
+
+    // Fetch with automatic retry on 429 / 5xx. Honors Retry-After when present.
+    async function fetchWithRetry(
+      url: string,
+      init: RequestInit,
+      maxRetries: number,
+    ): Promise<Response> {
+      let attempt = 0;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const res = await fetch(url, init);
+        if (res.status !== 429 && res.status < 500) return res;
+        if (attempt >= maxRetries) return res;
+        const retryAfter = Number(res.headers.get("retry-after"));
+        const backoff = Number.isFinite(retryAfter) && retryAfter > 0
+          ? Math.min(retryAfter * 1000, 10000)
+          : Math.min(1000 * 2 ** attempt, 8000) + jitter();
+        await sleep(backoff);
+        attempt++;
+      }
+    }
+
+    // Sequential send — GHL caps at ~10 req/sec/location and each recipient uses 2 calls.
+    const details: GhlSendDetail[] = [];
+    for (let i = 0; i < recipients.length; i++) {
+      const rcpt = recipients[i];
+      try {
+        const [firstName, ...rest] = (rcpt.name || rcpt.email).split(" ");
+        const upsertRes = await fetchWithRetry(
+          "https://services.leadconnectorhq.com/contacts/upsert",
+          {
             method: "POST",
             headers: ghlHeaders,
             body: JSON.stringify({
@@ -756,38 +784,51 @@ async function ghlSend(request: Request, env: Env): Promise<Response> {
               firstName: firstName || rcpt.email,
               lastName: rest.join(" ") || undefined,
             }),
-          });
-          if (!upsertRes.ok) {
-            const detail = (await upsertRes.text()).slice(0, 300);
-            return { email: rcpt.email, ok: false, status: upsertRes.status, error: `upsert: ${detail}` };
-          }
+          },
+          4,
+        );
+        if (!upsertRes.ok) {
+          const detail = (await upsertRes.text()).slice(0, 300);
+          details.push({ email: rcpt.email, ok: false, status: upsertRes.status, error: `upsert: ${detail}` });
+        } else {
           const upsertJson = (await upsertRes.json()) as { contact?: { id?: string }; id?: string };
           const contactId = upsertJson.contact?.id ?? upsertJson.id;
           if (!contactId) {
-            return { email: rcpt.email, ok: false, error: "upsert returned no contactId" };
+            details.push({ email: rcpt.email, ok: false, error: "upsert returned no contactId" });
+          } else {
+            await sleep(150);
+            const res = await fetchWithRetry(
+              "https://services.leadconnectorhq.com/conversations/messages",
+              {
+                method: "POST",
+                headers: ghlHeaders,
+                body: JSON.stringify({
+                  type: "Email",
+                  contactId,
+                  subject: payload.subject,
+                  html: (payload.body ?? "").replace(/\n/g, "<br>"),
+                  emailFrom: payload.fromName
+                    ? `${payload.fromName} <${payload.fromEmail}>`
+                    : payload.fromEmail,
+                }),
+              },
+              4,
+            );
+            if (res.ok) {
+              details.push({ email: rcpt.email, ok: true, status: res.status });
+            } else {
+              const detail = (await res.text()).slice(0, 300);
+              details.push({ email: rcpt.email, ok: false, status: res.status, error: detail });
+            }
           }
-          // Step 2: send email through Conversations API.
-          const res = await fetch("https://services.leadconnectorhq.com/conversations/messages", {
-            method: "POST",
-            headers: ghlHeaders,
-            body: JSON.stringify({
-              type: "Email",
-              contactId,
-              subject: payload.subject,
-              html: (payload.body ?? "").replace(/\n/g, "<br>"),
-              emailFrom: payload.fromName
-                ? `${payload.fromName} <${payload.fromEmail}>`
-                : payload.fromEmail,
-            }),
-          });
-          if (res.ok) return { email: rcpt.email, ok: true, status: res.status };
-          const detail = (await res.text()).slice(0, 300);
-          return { email: rcpt.email, ok: false, status: res.status, error: detail };
-        } catch (e) {
-          return { email: rcpt.email, ok: false, error: (e as Error).message };
         }
-      }),
-    );
+      } catch (e) {
+        details.push({ email: rcpt.email, ok: false, error: (e as Error).message });
+      }
+      // Small pace between recipients to stay under GHL's per-second cap.
+      if (i < recipients.length - 1) await sleep(200);
+    }
+
     const sent = details.filter((d) => d.ok).length;
     return json({
       ok: sent > 0,
