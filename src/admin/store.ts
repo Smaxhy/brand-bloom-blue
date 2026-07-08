@@ -216,43 +216,17 @@ export function uid(prefix = "id"): string {
 }
 
 function seed(): AdminData {
-  const now = Date.now();
-  const day = 86400000;
+  // Every new account starts with a completely empty dataset.
+  // Only the empty settings shell is provided so the UI has something to render.
   return {
-    deals: [
-      { id: uid("d"), name: "Northwind Realty", contact: "Anna De Vos", email: "anna@northwind.be", phone: "+32 470 11 22 33", value: 2500, stage: "new", source: "Meta Ads", template: "Paid Ads Retainer", notes: "Interested in lead-gen for new development.", createdAt: now - day * 2, updatedAt: now - day * 2 },
-      { id: uid("d"), name: "Lumen Studio", contact: "Tom Pauwels", email: "tom@lumen.studio", phone: "+32 478 44 55 66", value: 4500, stage: "contacted", source: "Referral", template: "Website Build", notes: "Needs new site before Q3 launch.", createdAt: now - day * 5, updatedAt: now - day * 1 },
-      { id: uid("d"), name: "Bricks & Co", contact: "Sara Janssen", email: "sara@bricksco.be", phone: "+32 471 77 88 99", value: 6000, stage: "qualified", source: "Inbound", template: "Full Growth System", notes: "Budget approved, waiting on proposal.", createdAt: now - day * 8, updatedAt: now - day * 2 },
-      { id: uid("d"), name: "Verde Living", contact: "Joris Maes", email: "joris@verde.be", phone: "+32 479 12 34 56", value: 1800, stage: "proposal", source: "Cold Outreach", template: "Lead-Gen Sprint", notes: "Proposal sent, follow up Friday.", createdAt: now - day * 11, updatedAt: now - day * 1 },
-      { id: uid("d"), name: "Atlas Group", contact: "Eva Smeets", email: "eva@atlasgroup.be", phone: "+32 472 99 00 11", value: 5200, stage: "won", source: "Referral", template: "Full Growth System", notes: "Closed! Onboarding next week.", createdAt: now - day * 20, updatedAt: now - day * 3 },
-    ],
-    raw: [
-      { id: uid("r"), business: "Vastgoed Vlaams", email: "info@vastgoedvlaams.be", phone: "+32 9 222 33 44", website: "vastgoedvlaams.be", city: "Gent", industry: "Real Estate", status: "raw", scrapedAt: now - day },
-      { id: uid("r"), business: "Coastal Homes", email: "contact@coastalhomes.be", phone: "+32 59 11 22 33", website: "coastalhomes.be", city: "Oostende", industry: "Real Estate", status: "raw", scrapedAt: now - day },
-      { id: uid("r"), business: "Urban Nest", email: "hello@urbannest.be", phone: "+32 3 444 55 66", website: "urbannest.be", city: "Antwerpen", industry: "Property Dev", status: "accepted", scrapedAt: now - day * 2 },
-      { id: uid("r"), business: "Domus Plus", email: "info@domusplus.be", phone: "+32 2 555 66 77", website: "domusplus.be", city: "Brussel", industry: "Real Estate", status: "raw", scrapedAt: now - day * 3 },
-    ],
-    clients: [
-      { id: uid("c"), company: "Atlas Group", contact: "Eva Smeets", email: "eva@atlasgroup.be", phone: "+32 472 99 00 11", address: "Kortrijksesteenweg 12, Gent", plan: "Full Growth System", monthly: 5200, status: "active", notes: "Flagship client. Monthly strategy call on Mondays.", since: now - day * 60 },
-      { id: uid("c"), company: "Lumen Studio", contact: "Tom Pauwels", email: "tom@lumen.studio", phone: "+32 478 44 55 66", address: "Meir 88, Antwerpen", plan: "Website + Ads", monthly: 3100, status: "active", notes: "", since: now - day * 30 },
-    ],
-    transactions: [
-      { id: uid("t"), label: "Atlas Group — retainer", type: "income", amount: 5200, category: "Retainer", date: isoDaysAgo(5) },
-      { id: uid("t"), label: "Lumen Studio — retainer", type: "income", amount: 3100, category: "Retainer", date: isoDaysAgo(7) },
-      { id: uid("t"), label: "Meta ad spend (clients)", type: "expense", amount: 1400, category: "Ad Spend", date: isoDaysAgo(6) },
-      { id: uid("t"), label: "GoHighLevel subscription", type: "expense", amount: 297, category: "Software", date: isoDaysAgo(10) },
-      { id: uid("t"), label: "Bricks & Co — deposit", type: "income", amount: 3000, category: "Project", date: isoDaysAgo(12) },
-    ],
-    templates: [
-      { id: uid("tpl"), name: "Cold Intro — Real Estate", subject: "{{business}}, more qualified buyers this month?", body: "Hi {{contact}},\n\nI noticed {{business}} is active in {{city}}. We help real-estate teams get qualified buyer & seller leads on a money-back basis — you only pay for leads that fit.\n\nWorth a 15-min call this week?\n\n— The Inspirova team" },
-      { id: uid("tpl"), name: "Follow-up", subject: "Quick follow-up, {{contact}}", body: "Hi {{contact}},\n\nJust circling back on my last note. Open to a short call to see if we're a fit for {{business}}?\n\n— Inspirova" },
-    ],
+    deals: [],
+    raw: [],
+    clients: [],
+    transactions: [],
+    templates: [],
     campaigns: [],
-    settings: { ghlApiKey: "", ghlCompanyId: "", ghlLocationId: "", fromName: "Inspirova", fromEmail: "hello@inspirova.com" },
-    tasks: [
-      { id: uid("tk"), title: "Review Atlas Group weekly ad report", priority: "high", due: Date.now() + 86400000, clientId: undefined, createdAt: Date.now() - 3600000 },
-      { id: uid("tk"), title: "Send Lumen Studio the Q3 creative brief", priority: "med", due: Date.now() + 3 * 86400000, createdAt: Date.now() - 7200000 },
-    ],
+    settings: { ghlApiKey: "", ghlCompanyId: "", ghlLocationId: "", fromName: "", fromEmail: "" },
+    tasks: [],
     adScans: [],
     denylist: {},
   };
