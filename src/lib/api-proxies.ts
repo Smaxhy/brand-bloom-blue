@@ -1249,7 +1249,10 @@ Suggest the best keywords.`;
     return json({ ok: true, keywords });
   } catch (e) {
     return json({ ok: false, error: (e as Error).message, keywords: [] });
+  }
 }
+
+
 
 /* ----------------------------------------------------------------------- */
 /* Claude vision — extract ad-dashboard metrics from a screenshot           */
