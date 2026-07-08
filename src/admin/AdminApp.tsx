@@ -334,15 +334,55 @@ function LoginScreen() {
   const [error, setError] = useState<{ message: string; code: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetBusy, setResetBusy] = useState(false);
 
   async function submit() {
     if (busy) return;
+    // Client-side throttle — defence in depth against brute-force attempts
+    // from this device. Server auth throttles independently.
+    const { loginLockRemainingMs, recordLoginFailure, recordLoginSuccess } = await import("@/lib/login-throttle");
+    const locked = loginLockRemainingMs();
+    if (locked > 0) {
+      const mins = Math.ceil(locked / 60000);
+      setError({ message: `Too many failed attempts. Try again in ${mins} minute(s).`, code: "LOCK-LOCAL" });
+      return;
+    }
     setBusy(true);
     setError(null);
     setCopied(false);
     const err = await doLogin(email, pass);
     setBusy(false);
-    if (err) setError(err);
+    if (err) {
+      recordLoginFailure();
+      setError(err);
+    } else {
+      recordLoginSuccess();
+    }
+  }
+
+  async function sendReset() {
+    if (resetBusy) return;
+    const target = resetEmail.trim();
+    if (!target) return;
+    setResetBusy(true);
+    try {
+      const address = target.includes("@") ? target : `${target.toLowerCase()}@inspirova.local`;
+      const { toast } = await import("sonner");
+      const { error: resetErr } = await supabase.auth.resetPasswordForEmail(address, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (resetErr) {
+        toast.error(resetErr.message || "Couldn't send reset link.");
+      } else {
+        toast.success("If that account exists, a reset link is on its way.");
+        setResetOpen(false);
+        setResetEmail("");
+      }
+    } finally {
+      setResetBusy(false);
+    }
   }
 
   async function copyCode() {
