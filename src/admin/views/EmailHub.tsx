@@ -387,14 +387,7 @@ export function EmailHub({
               {pending.length > 0 && (
                 <Btn
                   variant="ghost"
-                  onClick={() => {
-                    const sentAt = Date.now();
-                    const ids = pending.map((r) => r.id);
-                    update((p) => ({
-                      ...p,
-                      raw: p.raw.map((r) => (ids.includes(r.id) ? { ...r, lastEmailedAt: sentAt } : r)),
-                    }));
-                  }}
+                  onClick={() => setConfirmState({ kind: "markAllSent", count: pending.length })}
                 >
                   Mark all ({pending.length})
                 </Btn>
