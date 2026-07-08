@@ -253,11 +253,13 @@ export function Statistics({
 
   const scans = useMemo(() => {
     const list = data.adScans ?? [];
+    const range = periodRange(period);
     return list
       .filter((s) => (clientId === "all" ? true : s.clientId === clientId))
       .filter((s) => (platform === "all" ? true : s.platform === platform))
+      .filter((s) => (range ? s.capturedAt >= range.from && s.capturedAt < range.to : true))
       .sort((a, b) => b.capturedAt - a.capturedAt);
-  }, [data.adScans, clientId, platform]);
+  }, [data.adScans, clientId, platform, period]);
 
   // Oldest -> newest for the sparkline
   const series = useMemo(() => [...scans].reverse(), [scans]);
