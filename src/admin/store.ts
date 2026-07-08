@@ -142,18 +142,31 @@ export interface AdScan {
     impressions?: number;
     reach?: number;
     clicks?: number;
-    ctr?: number; // 0..1 or %
+    ctr?: number; // percent
     cpc?: number;
     cpm?: number;
     conversions?: number;
     cpa?: number;
     roas?: number;
     revenue?: number;
+    // Service / e-com friendly extras
+    sales?: number;
+    orders?: number;
+    sessions?: number;
+    visitors?: number;
+    aov?: number;
+    conversionRate?: number; // percent
+    returningRate?: number; // percent
+    leads?: number;
+    bookings?: number;
+    showRate?: number; // percent
+    avgTicket?: number;
     notes?: string;
   };
   /** Raw JSON returned by Claude, kept for auditing. */
   raw?: unknown;
 }
+
 
 export interface AdminData {
   deals: Deal[];
