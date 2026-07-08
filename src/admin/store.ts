@@ -236,6 +236,11 @@ function seed(): AdminData {
     ],
     campaigns: [],
     settings: { ghlApiKey: "", ghlCompanyId: "", ghlLocationId: "", fromName: "Inspirova", fromEmail: "hello@inspirova.com" },
+    tasks: [
+      { id: uid("tk"), title: "Review Atlas Group weekly ad report", priority: "high", due: Date.now() + 86400000, clientId: undefined, createdAt: Date.now() - 3600000 },
+      { id: uid("tk"), title: "Send Lumen Studio the Q3 creative brief", priority: "med", due: Date.now() + 3 * 86400000, createdAt: Date.now() - 7200000 },
+    ],
+    adScans: [],
     denylist: {},
   };
 }
