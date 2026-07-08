@@ -162,6 +162,7 @@ function presetFor(all: Record<string, ClientPreset>, id: string): ClientPreset 
     chartType: CHART_TYPES.some((c) => c.key === p.chartType) ? p.chartType : DEFAULT_PRESET.chartType,
     chartOverrides: p.chartOverrides ?? {},
     platform: p.platform ?? "all",
+    period: PERIODS.some((x) => x.key === p.period) ? (p.period as PeriodKey) : "all",
   };
 }
 
