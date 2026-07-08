@@ -243,7 +243,12 @@ export function EmailHub({
             )}
 
             <Btn className="mt-4 w-full" onClick={send} >
-              {sending ? "Sending…" : <><Send className="h-4 w-4" /> {liveMode ? "Send via GoHighLevel" : "Simulate send"} ({recipients.length})</>}
+              {sending
+                ? progress
+                  ? `Sending ${progress.done} / ${progress.total}…`
+                  : "Sending…"
+                : <><Send className="h-4 w-4" /> {liveMode ? "Send via GoHighLevel" : "Simulate send"} ({recipients.length})</>}
+
             </Btn>
           </Panel>
         </div>
