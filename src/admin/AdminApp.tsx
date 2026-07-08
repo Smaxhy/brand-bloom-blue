@@ -13,6 +13,7 @@ import {
   Lock,
   Menu,
   ListChecks,
+  BarChart3,
 } from "lucide-react";
 import logo from "@/assets/inspirova-logo.png";
 import { supabase } from "@/integrations/supabase/client";
