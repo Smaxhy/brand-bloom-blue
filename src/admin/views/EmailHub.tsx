@@ -491,6 +491,52 @@ export function EmailHub({
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        open={!!confirmState}
+        onOpenChange={(o) => !o && setConfirmState(null)}
+        title={
+          confirmState?.kind === "deleteContact"
+            ? `Delete ${confirmState.label}?`
+            : confirmState?.kind === "deleteTemplate"
+              ? `Delete template "${confirmState.label}"?`
+              : confirmState?.kind === "markAllSent"
+                ? `Mark all ${confirmState.count} recipients as sent?`
+                : ""
+        }
+        description={
+          confirmState?.kind === "deleteContact"
+            ? "This removes the contact from your database. This can't be undone."
+            : confirmState?.kind === "deleteTemplate"
+              ? "The template will be permanently removed. Any drafts using it will need a new template."
+              : confirmState?.kind === "markAllSent"
+                ? "They'll move to the Sent tab and disappear from the recipient list."
+                : ""
+        }
+        destructive={confirmState?.kind !== "markAllSent"}
+        confirmLabel={confirmState?.kind === "markAllSent" ? "Mark all" : "Delete"}
+        onConfirm={() => {
+          if (!confirmState) return;
+          if (confirmState.kind === "deleteContact") {
+            const id = confirmState.id;
+            setSelected((s) => s.filter((x) => x !== id));
+            update((p) => ({ ...p, raw: p.raw.filter((x) => x.id !== id) }));
+            toast.success("Contact deleted.");
+          } else if (confirmState.kind === "deleteTemplate") {
+            removeTpl(confirmState.id);
+            toast.success("Template deleted.");
+          } else if (confirmState.kind === "markAllSent") {
+            const sentAt = Date.now();
+            const ids = pending.map((r) => r.id);
+            update((p) => ({
+              ...p,
+              raw: p.raw.map((r) => (ids.includes(r.id) ? { ...r, lastEmailedAt: sentAt } : r)),
+            }));
+            toast.success(`Marked ${ids.length} as sent.`);
+          }
+          setConfirmState(null);
+        }}
+      />
     </div>
   );
 }
