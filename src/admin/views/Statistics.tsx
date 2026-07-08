@@ -109,6 +109,30 @@ interface ClientPreset {
   chartType: ChartType;
   chartOverrides: Record<string, ChartType>;
   platform?: AdPlatform | "all";
+  period?: PeriodKey;
+}
+
+type PeriodKey = "today" | "yesterday" | "7d" | "30d" | "90d" | "all";
+const PERIODS: { key: PeriodKey; label: string }[] = [
+  { key: "today", label: "Today" },
+  { key: "yesterday", label: "Yesterday" },
+  { key: "7d", label: "Last 7 days" },
+  { key: "30d", label: "Last 30 days" },
+  { key: "90d", label: "Last 90 days" },
+  { key: "all", label: "All time" },
+];
+
+function periodRange(key: PeriodKey): { from: number; to: number } | null {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const day = 24 * 60 * 60 * 1000;
+  if (key === "all") return null;
+  if (key === "today") return { from: startOfToday, to: startOfToday + day };
+  if (key === "yesterday") return { from: startOfToday - day, to: startOfToday };
+  if (key === "7d") return { from: startOfToday - 7 * day, to: now.getTime() };
+  if (key === "30d") return { from: startOfToday - 30 * day, to: now.getTime() };
+  if (key === "90d") return { from: startOfToday - 90 * day, to: now.getTime() };
+  return null;
 }
 
 const DEFAULT_PRESET: ClientPreset = {
@@ -116,6 +140,7 @@ const DEFAULT_PRESET: ClientPreset = {
   chartType: "line",
   chartOverrides: {},
   platform: "all",
+  period: "all",
 };
 
 function loadPresets(): Record<string, ClientPreset> {
@@ -137,6 +162,7 @@ function presetFor(all: Record<string, ClientPreset>, id: string): ClientPreset 
     chartType: CHART_TYPES.some((c) => c.key === p.chartType) ? p.chartType : DEFAULT_PRESET.chartType,
     chartOverrides: p.chartOverrides ?? {},
     platform: p.platform ?? "all",
+    period: PERIODS.some((x) => x.key === p.period) ? (p.period as PeriodKey) : "all",
   };
 }
 
@@ -151,6 +177,7 @@ export function Statistics({
   const [clientId, setClientId] = useState<string>("all");
   const initial = presetFor(presets, "all");
   const [platform, setPlatform] = useState<AdPlatform | "all">(initial.platform ?? "all");
+  const [period, setPeriod] = useState<PeriodKey>(initial.period ?? "all");
   const [entryOpen, setEntryOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [customizeOpen, setCustomizeOpen] = useState(false);
@@ -168,6 +195,7 @@ export function Statistics({
     setChartType(p.chartType);
     setChartOverrides(p.chartOverrides);
     setPlatform(p.platform ?? "all");
+    setPeriod(p.period ?? "all");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
@@ -182,6 +210,7 @@ export function Statistics({
           chartType,
           chartOverrides,
           platform,
+          period,
         },
       };
       try { window.localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
@@ -190,7 +219,7 @@ export function Statistics({
     setSavedFlash(true);
     const t = setTimeout(() => setSavedFlash(false), 1200);
     return () => clearTimeout(t);
-  }, [visible, chartType, chartOverrides, platform, clientId]);
+  }, [visible, chartType, chartOverrides, platform, period, clientId]);
 
   function cycleOverride(key: MetricKey) {
     setChartOverrides((prev) => {
@@ -213,6 +242,7 @@ export function Statistics({
     setChartType(DEFAULT_PRESET.chartType);
     setChartOverrides({});
     setPlatform("all");
+    setPeriod("all");
     setPresets((prev) => {
       const next = { ...prev };
       delete next[clientId];
@@ -223,11 +253,13 @@ export function Statistics({
 
   const scans = useMemo(() => {
     const list = data.adScans ?? [];
+    const range = periodRange(period);
     return list
       .filter((s) => (clientId === "all" ? true : s.clientId === clientId))
       .filter((s) => (platform === "all" ? true : s.platform === platform))
+      .filter((s) => (range ? s.capturedAt >= range.from && s.capturedAt < range.to : true))
       .sort((a, b) => b.capturedAt - a.capturedAt);
-  }, [data.adScans, clientId, platform]);
+  }, [data.adScans, clientId, platform, period]);
 
   // Oldest -> newest for the sparkline
   const series = useMemo(() => [...scans].reverse(), [scans]);
@@ -290,6 +322,13 @@ export function Statistics({
               <option value="google">Google Ads</option>
               <option value="tiktok">TikTok Ads</option>
               <option value="other">Other / Generic</option>
+            </select>
+          </Field>
+          <Field label="Period">
+            <select className={inputCls} value={period} onChange={(e) => setPeriod(e.target.value as PeriodKey)}>
+              {PERIODS.map((p) => (
+                <option key={p.key} value={p.key}>{p.label}</option>
+              ))}
             </select>
           </Field>
 
