@@ -315,6 +315,7 @@ export function AdminApp() {
           {view === "scraper" && <Scraper data={data} update={update} go={setView} />}
           {view === "raw" && <RawData data={data} update={update} go={setView} />}
           {view === "clients" && <Clients data={data} update={update} />}
+          {view === "statistics" && <Statistics data={data} update={update} />}
           {view === "finance" && <Finance data={data} update={update} />}
           {view === "email" && <EmailHub data={data} update={update} />}
           {view === "team" && role === "ceo" && <TeamUsers />}
