@@ -196,6 +196,7 @@ export function Statistics({
     setChartOverrides(p.chartOverrides);
     setPlatform(p.platform ?? "all");
     setPeriod(p.period ?? "all");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
   // Auto-save preset for current client whenever config changes
