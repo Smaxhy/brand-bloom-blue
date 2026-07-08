@@ -29,6 +29,8 @@ export function EmailHub({
   const [selected, setSelected] = useState<string[]>(pending.map((r) => r.id));
   const [tplId, setTplId] = useState(data.templates[0]?.id ?? "");
   const [sending, setSending] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+
   const [result, setResult] = useState<{ ok: boolean; message: string; details: GhlSendDetail[] } | null>(null);
 
   const tpl = data.templates.find((t) => t.id === tplId);
