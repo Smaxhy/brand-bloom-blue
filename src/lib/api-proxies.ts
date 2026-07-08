@@ -1133,3 +1133,79 @@ function parseClaudeJson(raw: string): unknown {
     return null;
   }
 }
+
+async function claudeKeywords(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") return json({ error: "POST only" }, 405);
+  const key = secret(env, "ANTHROPIC_API_KEY");
+  if (!key) return json({ ok: false, reason: "missing_key", keywords: [] });
+  let body: { location?: string; seed?: string; note?: string } = {};
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    return json({ error: "invalid json" }, 400);
+  }
+  const location = (body.location || "").slice(0, 200);
+  const seed = (body.seed || "").slice(0, 200);
+  const note = (body.note || "").slice(0, 400);
+
+  const system = `You are a B2B lead-gen strategist for a marketing agency that sells websites, paid ads, and lead automation to local service-based small businesses (owner-operators, 1-50 employees). Your job: propose the BEST industry keywords to search on Apollo + Google Maps to find high-intent, high-ticket local service businesses that need marketing help.
+
+Rules:
+- Focus on SERVICE-BASED businesses (contractors, home services, health, wellness, beauty, professional services, trades). Skip pure e-commerce, franchises of huge chains, and public institutions.
+- Prefer verticals with high customer LTV and existing paid-ad spend patterns (roofing, HVAC, dental, med spa, real estate, law firms, remodelers, tree care, landscaping, auto body, etc.).
+- Return short, Google-Maps-friendly keywords ("Roofing", "Tree Removal", "Med Spa") — NOT long phrases.
+- If a location is given, tilt toward verticals that are strong in that region (e.g. pool service in Florida, snow removal in Canada).
+- Return ONLY a JSON object of the form: { "keywords": string[] } with 25-40 items, no duplicates, no prose, no markdown fences.`;
+
+  const user = `Location: ${location || "any"}
+Seed / current keywords: ${seed || "(none)"}
+Extra note: ${note || "(none)"}
+
+Suggest the best keywords.`;
+
+  async function callClaude(model: string) {
+    return fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": key!,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 800,
+        system,
+        messages: [{ role: "user", content: user }],
+      }),
+    });
+  }
+
+  try {
+    let res = await callClaude("claude-haiku-4-5");
+    if (!res.ok && (res.status === 404 || res.status === 400)) {
+      res = await callClaude("claude-3-5-haiku-latest");
+    }
+    if (!res.ok) {
+      return json({ ok: false, status: res.status, detail: (await res.text()).slice(0, 300), keywords: [] });
+    }
+    const data = (await res.json()) as { content?: { text?: string }[] };
+    const raw = data.content?.[0]?.text || "";
+    const parsed = parseClaudeJson(raw) as { keywords?: unknown } | null;
+    const list = Array.isArray(parsed?.keywords)
+      ? (parsed!.keywords as unknown[])
+          .map((k) => (typeof k === "string" ? k.trim() : ""))
+          .filter((k) => k && k.length <= 60)
+      : [];
+    // De-dupe case-insensitively
+    const seen = new Set<string>();
+    const keywords = list.filter((k) => {
+      const key = k.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return json({ ok: true, keywords });
+  } catch (e) {
+    return json({ ok: false, error: (e as Error).message, keywords: [] });
+  }
+}
