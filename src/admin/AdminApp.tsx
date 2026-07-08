@@ -69,6 +69,7 @@ export function AdminApp() {
   const [accountName, setAccountName] = useState("");
   const [view, setView] = useState<ViewId>("dashboard");
   const [data, setData] = useState<AdminData | null>(null);
+  const [loadError, setLoadError] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -94,6 +95,7 @@ export function AdminApp() {
         setRole(null);
         setAccountName("");
         setData(null);
+        setLoadError("");
         unsubData?.();
         unsubData = null;
         return;
@@ -102,10 +104,16 @@ export function AdminApp() {
       // fires when the tab regains focus; we don't want to clear state.
       if (userId === currentUserId) return;
       currentUserId = userId;
-      const { data: roles } = await supabase
+      const { data: roles, error: roleError } = await supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", userId);
+      if (roleError) {
+        setAuthed(true);
+        setLoadError("Your login worked, but the role check is temporarily unavailable. Your data was not changed.");
+        setData(null);
+        return;
+      }
       const list = (roles ?? []).map((r) => r.role);
       const resolved: TeamRole | null = list.includes("ceo")
         ? "ceo"
@@ -128,8 +136,14 @@ export function AdminApp() {
       setAccountName(email.endsWith("@inspirova.local") ? email.split("@")[0] : email || "Account");
       setAuthed(true);
       setData(null);
-      const remote = await loadDataRemote();
-      setData(remote);
+      setLoadError("");
+      try {
+        const remote = await loadDataRemote();
+        setData(remote);
+      } catch (error) {
+        setLoadError((error as Error).message || "Admin data could not be loaded.");
+        return;
+      }
       unsubData?.();
       unsubData = subscribeRemote(setData);
     }
@@ -190,7 +204,18 @@ export function AdminApp() {
   if (!data) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="text-muted-foreground text-sm">Loading data…</div>
+        <div className="max-w-sm rounded-xl border border-border bg-card p-5 text-center shadow-sm">
+          <div className="text-sm font-semibold text-foreground">{loadError ? "Data load paused" : "Loading data…"}</div>
+          {loadError && <p className="mt-2 text-sm text-muted-foreground">{loadError}</p>}
+          {loadError && (
+            <button
+              onClick={() => void supabase.auth.getSession().then(({ data: { session } }) => session?.user?.id && location.reload())}
+              className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+            >
+              Retry safely
+            </button>
+          )}
+        </div>
       </div>
     );
   }
