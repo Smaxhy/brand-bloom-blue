@@ -321,6 +321,8 @@ export function Statistics({
                 good={good}
                 currency={currency}
                 points={points}
+                chartType={chartOverrides[m.key] ?? chartType}
+                onCycleChart={() => cycleOverride(m.key)}
                 canEdit={!!latest}
                 onSave={(v) => updateLatestMetric(m.key, v)}
               />
