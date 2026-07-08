@@ -210,6 +210,7 @@ export function Statistics({
           chartType,
           chartOverrides,
           platform,
+          period,
         },
       };
       try { window.localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
@@ -218,7 +219,7 @@ export function Statistics({
     setSavedFlash(true);
     const t = setTimeout(() => setSavedFlash(false), 1200);
     return () => clearTimeout(t);
-  }, [visible, chartType, chartOverrides, platform, clientId]);
+  }, [visible, chartType, chartOverrides, platform, period, clientId]);
 
   function cycleOverride(key: MetricKey) {
     setChartOverrides((prev) => {
