@@ -256,6 +256,20 @@ export function EmailHub({
                     ))}
                   </div>
                 )}
+                {lastAttempt && lastAttempt.ids.length > 0 && (
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed border-border bg-secondary/40 px-3 py-2 text-xs">
+                    <span className="text-muted-foreground">
+                      Email arrived but not marked sent? Move all {lastAttempt.ids.length} attempted recipient(s) into the Sent tab.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={markAttemptedAsSent}
+                      className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90"
+                    >
+                      Move to Sent
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
