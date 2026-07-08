@@ -151,12 +151,31 @@ export function Statistics({
   const [scanOpen, setScanOpen] = useState(false);
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [visible, setVisible] = useState<Set<MetricKey>>(() => loadVisible());
+  const [chartType, setChartType] = useState<ChartType>(() => loadChartType());
+  const [chartOverrides, setChartOverrides] = useState<Record<string, ChartType>>(() => loadChartOverrides());
 
   useEffect(() => {
     try {
       window.localStorage.setItem(VISIBLE_STORAGE_KEY, JSON.stringify([...visible]));
     } catch { /* ignore */ }
   }, [visible]);
+
+  useEffect(() => {
+    try { window.localStorage.setItem(CHART_STORAGE_KEY, chartType); } catch { /* ignore */ }
+  }, [chartType]);
+
+  useEffect(() => {
+    try { window.localStorage.setItem(CHART_OVERRIDES_KEY, JSON.stringify(chartOverrides)); } catch { /* ignore */ }
+  }, [chartOverrides]);
+
+  function cycleOverride(key: MetricKey) {
+    setChartOverrides((prev) => {
+      const current = prev[key] ?? chartType;
+      const idx = CHART_TYPES.findIndex((c) => c.key === current);
+      const next = CHART_TYPES[(idx + 1) % CHART_TYPES.length].key;
+      return { ...prev, [key]: next };
+    });
+  }
 
   const scans = useMemo(() => {
     const list = data.adScans ?? [];
