@@ -102,6 +102,8 @@ export function EmailHub({
       setSelected((s) => s.filter((id) => !sentIds.includes(id)));
     }
     setSending(false);
+    setProgress(null);
+
   }
 
 
