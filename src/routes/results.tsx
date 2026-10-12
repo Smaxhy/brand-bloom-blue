@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import logo from "@/assets/inspirova-logo.png";
 import proof1 from "@/assets/proof-1.png";
 import proof2 from "@/assets/proof-2.png";
@@ -25,10 +25,7 @@ const REVENUE_TOTAL = 1037785;
 
 function useCountUp(target: number, duration = 1800) {
   const [value, setValue] = useState(0);
-  const started = useRef(false);
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
     if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
       setValue(target);
       return;
