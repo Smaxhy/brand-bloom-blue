@@ -8,6 +8,7 @@ import proof4 from "@/assets/proof-4.png";
 import proof5 from "@/assets/proof-5.png";
 import proof6 from "@/assets/proof-6.png";
 import proof7 from "@/assets/proof-7.png";
+import { Button } from "@/components/ui/button";
 import { ArrowLeft, TrendingUp, Target, Megaphone, Sparkles, Mail, ShoppingBag, Camera, BadgeCheck } from "lucide-react";
 
 const proofs = [
@@ -50,6 +51,8 @@ export const Route = createFileRoute("/results")({
   head: () => ({
     meta: [
       { title: "$1M+ in tracked client revenue — Inspirova Marketing" },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
       {
         name: "description",
         content:
@@ -144,104 +147,54 @@ const caseStudies = [
 function ResultsPage() {
   const animated = useCountUp(REVENUE_TOTAL);
   return (
-    <main className="dark min-h-screen bg-background text-foreground">
-      <header className="fixed top-0 z-50 w-full border-b border-border/50 bg-background/70 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-          <Link to="/" className="flex items-center gap-2">
-            <img src={logo} alt="Inspirova" className="h-9 w-9 rounded-md object-cover" />
-            <span className="text-lg font-semibold tracking-tight">Inspirova</span>
+    <main id="main-content" className="public-site min-h-screen">
+      <header className="sticky top-0 z-50 border-b border-border bg-background">
+        <div className="mx-auto flex min-h-20 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
+          <Link to="/" className="flex items-center gap-2 text-lg font-medium">
+            <img src={logo} alt="" className="h-7 w-7 object-contain" /> Inspirova®
           </Link>
-          <Link
-            to="/"
-            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> Back home
-          </Link>
+          <Button asChild variant="outline" className="min-h-11 rounded-none shadow-none">
+            <Link to="/"><ArrowLeft /> Back home</Link>
+          </Button>
         </div>
       </header>
-
-      <section className="relative overflow-hidden pt-32 pb-12 md:pt-44 md:pb-16">
-        <div
-          aria-hidden
-          className="absolute inset-0 -z-10 opacity-70"
-          style={{
-            background:
-              "radial-gradient(60% 50% at 50% 0%, color-mix(in oklab, var(--brand-purple) 28%, transparent) 0%, transparent 70%), radial-gradient(40% 40% at 80% 20%, color-mix(in oklab, var(--brand-blue) 28%, transparent) 0%, transparent 70%)",
-          }}
-        />
-        <div className="mx-auto max-w-6xl px-6 text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-primary backdrop-blur">
-            <BadgeCheck className="h-3.5 w-3.5" /> Verified client revenue
-          </div>
-
-          <div className="mt-8 font-semibold tracking-tight tabular-nums text-gradient-brand text-6xl sm:text-7xl md:text-8xl lg:text-[9rem] leading-[0.95]">
-            ${animated.toLocaleString("en-US")}
-          </div>
-
-          <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground md:text-xl">
-            Tracked across client dashboards — Shopify, Meta Ads and GHL.
-            Every dollar below is screenshotted from a real account.
-          </p>
-
-          <div className="mx-auto mt-8 flex max-w-2xl flex-wrap items-center justify-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
-            <span className="rounded-full border border-border bg-card px-3 py-1">7-figure milestone</span>
-            <span className="rounded-full border border-border bg-card px-3 py-1">8 client dashboards</span>
-            <span className="rounded-full border border-border bg-card px-3 py-1">Updated Jun 2026</span>
-          </div>
+      <section className="mx-auto max-w-6xl px-5 pt-12 pb-12 sm:px-8 sm:pt-16">
+        <div className="flex justify-between border-b border-border pb-4 text-xs text-muted-foreground">
+          <span>THE WORK, IN NUMBERS</span><span>CLIENT RESULTS</span>
+        </div>
+        <h1 className="mt-8 text-3xl font-medium sm:text-4xl">Inspirova. The results.</h1>
+        <div className="mt-5 text-4xl font-medium tabular-nums text-primary sm:text-6xl">
+          ${animated.toLocaleString("en-US")}
+        </div>
+        <p className="mt-5 max-w-xl text-base text-muted-foreground">
+          In tracked client revenue. Shopify, Meta Ads and GHL — the numbers, straight from client dashboards.
+        </p>
+        <div className="mt-8 grid grid-cols-2 border-y border-border md:grid-cols-4">
+          {headlineStats.map((stat) => (
+            <div key={stat.v} className="py-6 pr-4">
+              <div className="text-2xl font-medium">{stat.k}</div>
+              <div className="mt-2 text-xs text-muted-foreground">{stat.v}</div>
+            </div>
+          ))}
         </div>
       </section>
-
-
-      <section className="pb-20 md:pb-24">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="mb-10 max-w-2xl">
-            <div className="text-xs font-semibold uppercase tracking-widest text-primary">Snapshot</div>
-            <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">
-              The numbers <span className="text-gradient-brand">at a glance.</span>
-            </h2>
-          </div>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            {headlineStats.map((s) => (
-              <div key={s.v} className="rounded-2xl border border-border bg-card p-6 shadow-card">
-                <s.icon className="h-5 w-5 text-primary" />
-                <div className="mt-4 text-2xl font-semibold tracking-tight md:text-3xl">{s.k}</div>
-                <div className="mt-1 text-xs uppercase tracking-wider text-muted-foreground">{s.v}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-
-      <section className="bg-gradient-soft py-20 md:py-28">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="max-w-2xl">
-            <div className="text-xs font-semibold uppercase tracking-widest text-primary">Case studies</div>
-            <h2 className="mt-3 text-4xl font-semibold tracking-tight md:text-5xl">
-              Selected <span className="text-gradient-brand">client work.</span>
-            </h2>
-          </div>
-
-          <div className="mt-14 grid gap-6 md:grid-cols-2">
-            {caseStudies.map((c) => (
-              <article
-                key={c.title}
-                className="group relative overflow-hidden rounded-2xl border border-border bg-card p-8 shadow-card transition-all hover:-translate-y-1 hover:shadow-glow"
-              >
-                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  <c.icon className="h-3.5 w-3.5" />
-                  {c.tag}
+      <section className="bg-editorial-paper py-12 text-editorial-ink sm:py-16">
+        <div className="mx-auto max-w-6xl px-5 sm:px-8">
+          <p className="text-xs text-editorial-subtle">SELECTED CLIENT WORK</p>
+          <h2 className="mt-4 text-3xl font-medium">Behind the numbers.</h2>
+          <div className="mt-8">
+            {caseStudies.map((study, index) => (
+              <article key={study.title} className="grid gap-5 border-t border-editorial-rule py-7 md:grid-cols-[180px_1fr_1fr] md:gap-8">
+                <div className="text-xs text-editorial-subtle">0{index + 1} / {study.tag}</div>
+                <div>
+                  <h3 className="text-xl font-medium">{study.title}</h3>
+                  <p className="mt-3 text-sm leading-relaxed text-editorial-subtle">{study.body}</p>
                 </div>
-                <h3 className="mt-3 text-2xl font-semibold tracking-tight">{c.title}</h3>
-                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{c.body}</p>
-
-                <div className="mt-5 grid grid-cols-3 gap-3 border-t border-border pt-5">
-                  {c.metrics.map((m) => (
-                    <div key={m.v}>
-                      <div className="text-lg font-semibold tracking-tight text-gradient-brand md:text-xl">
-                        {m.k}
-                      </div>
-                      <div className="mt-0.5 text-xs text-muted-foreground">{m.v}</div>
+                <div className="grid grid-cols-3 gap-3">
+                  {study.metrics.map((metric) => (
+                    <div key={metric.v}>
+                      <div className="text-lg font-medium">{metric.k}</div>
+                      <div className="mt-2 text-xs text-editorial-subtle">{metric.v}</div>
                     </div>
                   ))}
                 </div>
@@ -250,65 +203,33 @@ function ResultsPage() {
           </div>
         </div>
       </section>
-
-      <section className="py-20 md:py-28">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-              <Camera className="h-3.5 w-3.5" /> Picture proof
-            </div>
-            <h2 className="mt-3 text-4xl font-semibold tracking-tight md:text-5xl">
-              Receipts from real <span className="text-gradient-brand">client dashboards.</span>
-            </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
-              Screenshots straight from Meta Ads Manager, Shopify and our analytics — no edits, no fluff.
-            </p>
-          </div>
-
-          <div className="mt-12 columns-1 gap-6 sm:columns-2 lg:columns-3 [&>*]:mb-6 [&>*]:break-inside-avoid">
-            {proofs.map((p, i) => (
-              <figure
-                key={i}
-                className="overflow-hidden rounded-2xl border border-border bg-card shadow-card transition-all hover:-translate-y-1 hover:shadow-glow"
-              >
-                <img src={p.src} alt={p.caption} loading="lazy" className="block w-full" />
-                <figcaption className="border-t border-border p-4 text-sm text-muted-foreground">
-                  {p.caption}
-                </figcaption>
-              </figure>
-            ))}
-          </div>
+      <section className="mx-auto max-w-6xl px-5 py-12 sm:px-8 sm:py-16">
+        <p className="text-xs text-primary">THE RECEIPTS</p>
+        <h2 className="mt-4 text-3xl font-medium">From real client dashboards.</h2>
+        <p className="mt-4 max-w-xl text-sm text-muted-foreground">Campaign performance and store results, shown in the platforms where the work happens.</p>
+        <div className="mt-8 grid items-start gap-8 md:grid-cols-2">
+          {proofs.map((proof, index) => (
+            <figure key={proof.src} className={index === 0 ? "md:col-span-2" : ""}>
+              <img src={proof.src} alt={proof.caption} loading="lazy" className="block w-full" />
+              <figcaption className="border-b border-border py-4 text-sm text-muted-foreground"><span className="mr-3 text-primary">0{index + 1}</span>{proof.caption}</figcaption>
+            </figure>
+          ))}
         </div>
       </section>
-
-      <section className="py-24 md:py-32">
-        <div className="mx-auto max-w-3xl px-6 text-center">
-          <h2 className="text-4xl font-semibold tracking-tight md:text-6xl">
-            Want to be the <span className="text-gradient-brand">next case study?</span>
-          </h2>
-          <p className="mx-auto mt-6 max-w-xl text-lg text-muted-foreground">
-            Tell us about your brand and we'll build a tailored growth plan.
-          </p>
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-            <a
-              href="/#pricing"
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-brand px-6 py-3 text-sm font-medium text-white shadow-glow transition-transform hover:scale-[1.03]"
-            >
-              Request your quote
-            </a>
-            <Link
-              to="/"
-              className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
-            >
-              <ArrowLeft className="h-4 w-4" /> Back home
-            </Link>
+      <section className="bg-editorial-secondary py-12 text-editorial-ink sm:py-16">
+        <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-8 px-5 sm:px-8 md:flex-row md:items-center">
+          <div>
+            <h2 className="text-3xl font-medium">Let's get to work.</h2>
+            <p className="mt-4 max-w-lg text-sm text-editorial-subtle">Tell us about your brand. We'll build a growth plan around your business.</p>
           </div>
+          <Button asChild className="min-h-12 rounded-none bg-editorial-ink px-6 text-editorial-paper shadow-none hover:bg-editorial-subtle">
+            <a href="/#pricing">Request your quote <span aria-hidden="true">↗</span></a>
+          </Button>
         </div>
       </section>
-
-      <footer className="border-t border-border py-10">
-        <div className="mx-auto flex max-w-6xl items-center justify-center px-6 text-sm text-muted-foreground">
-          <div>Built to market.</div>
+      <footer className="border-t border-border py-8">
+        <div className="mx-auto flex max-w-6xl justify-between gap-4 px-5 text-sm text-muted-foreground sm:px-8">
+          <span>Inspirova. Built to market.</span><Link to="/privacy" className="hover:text-primary">Privacy Policy</Link>
         </div>
       </footer>
     </main>
