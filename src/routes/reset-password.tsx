@@ -8,6 +8,10 @@ export const Route = createFileRoute("/reset-password")({
   head: () => ({
     meta: [
       { title: "Reset password — Inspirova" },
+      { property: "og:title", content: "Reset password — Inspirova" },
+      { property: "og:description", content: "Securely set a new password for your Inspirova account." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { name: "robots", content: "noindex, nofollow" },
       { name: "description", content: "Set a new password for your Inspirova admin account." },
     ],

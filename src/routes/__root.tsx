@@ -6,6 +6,7 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -33,7 +34,7 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function ErrorComponent({ error, reset }: ErrorComponentProps) {
   console.error(error);
   const router = useRouter();
 
@@ -50,7 +51,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
           <button
             onClick={() => {
               router.invalidate();
-              reset();
+              reset?.();
             }}
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
@@ -83,15 +84,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:site", content: "@Lovable" },
       { name: "twitter:title", content: "Inspirova Marketing" },
       { name: "twitter:description", content: "Growth-focused marketing agency specializing in AI automation, digital marketing, lead generation, and scalable customer acquisition systems for businesses." },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/EowwlJgqTygrBHWS6kpI8iSyWw02/social-images/social-1781955259883-image_2026-06-20_061902515-removebg-preview.webp" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/EowwlJgqTygrBHWS6kpI8iSyWw02/social-images/social-1781955259883-image_2026-06-20_061902515-removebg-preview.webp" },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600;700&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Work+Sans:wght@400;500;600&family=Poppins:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600;700&display=swap",
       },
       {
         rel: "stylesheet",

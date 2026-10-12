@@ -154,11 +154,12 @@ const SECTIONS: Section[] = [
 
 function PrivacyPage() {
   return (
-    <main className="mx-auto min-h-dvh max-w-2xl px-5 py-12 text-foreground">
+    <main id="main-content" className="public-site min-h-dvh px-5 py-12">
+      <div className="mx-auto max-w-2xl">
       <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         Inspirova Marketing
       </p>
-      <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
+      <h1 className="text-3xl font-medium sm:text-4xl">
         Privacy Policy
       </h1>
       <p className="mt-3 text-sm text-muted-foreground">
@@ -174,7 +175,7 @@ function PrivacyPage() {
       <div className="mt-8 space-y-8">
         {SECTIONS.map((s) => (
           <section key={s.heading} className="space-y-3">
-            <h2 className="font-display text-xl font-bold">{s.heading}</h2>
+            <h2 className="text-xl font-medium">{s.heading}</h2>
             {s.body?.map((p, i) => (
               <p key={`b-${i}`} className="text-sm text-muted-foreground">
                 {p}
@@ -203,6 +204,7 @@ function PrivacyPage() {
         >
           ← Back to Inspirova
         </Link>
+      </div>
       </div>
     </main>
   );
