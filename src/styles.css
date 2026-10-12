@@ -5,6 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --color-editorial-paper: var(--editorial-paper); --color-editorial-ink: var(--editorial-ink); --color-editorial-secondary: var(--editorial-secondary); --color-editorial-subtle: var(--editorial-subtle); --color-editorial-rule: var(--editorial-rule);
   --radius-sm: calc(var(--radius) - 4px); --radius-md: calc(var(--radius) - 2px); --radius-lg: var(--radius); --radius-xl: calc(var(--radius) + 4px);
   --font-display: "Poppins", "Inter", sans-serif; --font-mono: "JetBrains Mono", monospace;
   --color-background: var(--background); --color-foreground: var(--foreground); --color-card: var(--card); --color-card-foreground: var(--card-foreground);
@@ -15,6 +16,7 @@
 }
 
 :root {
+  --editorial-paper: oklch(.96 .003 90); --editorial-ink: oklch(.21 .005 90); --editorial-secondary: oklch(.89 .032 138); --editorial-subtle: oklch(.43 .008 90); --editorial-rule: oklch(.76 .005 90); --proof-paper: oklch(1 0 0);
   --radius: .9rem; --brand-violet: oklch(.57 .24 294); --brand-coral: oklch(.66 .21 35); --brand-ink: oklch(.18 .04 295); --brand-light: oklch(.81 .12 292);
   --background: oklch(.995 .003 295); --foreground: oklch(.18 .04 295); --card: oklch(1 0 0); --card-foreground: var(--foreground);
   --popover: var(--card); --popover-foreground: var(--foreground); --primary: oklch(.52 .25 294); --primary-foreground: oklch(1 0 0);
@@ -51,6 +53,21 @@
   body { background: var(--background); color: var(--foreground); font-family: "Inter", system-ui, sans-serif; font-feature-settings: "ss01", "cv11"; }
   ::selection { background: var(--primary); color: var(--primary-foreground); }
 }
+
+.public-site {
+  --background: oklch(.19 .004 90); --foreground: oklch(.96 .003 90);
+  --card: oklch(.23 .005 90); --card-foreground: var(--foreground);
+  --primary: oklch(.84 .16 126); --primary-foreground: oklch(.19 .004 90);
+  --secondary: oklch(.25 .005 90); --muted: var(--secondary); --muted-foreground: oklch(.76 .005 90);
+  --border: oklch(.37 .005 90); --input: var(--border); --ring: var(--primary);
+  --accent: var(--secondary); --accent-foreground: var(--foreground);
+  --font-display: "Space Grotesk", sans-serif;
+  background: var(--background); color: var(--foreground); font-family: "Work Sans", sans-serif;
+  letter-spacing: 0;
+}
+.public-site h1,.public-site h2,.public-site h3 { font-family: "Space Grotesk", sans-serif; letter-spacing: 0; }
+.public-site a { transition: color .2s, background-color .2s; }
+.public-site a:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; }
 
 @utility shadow-brand { box-shadow: var(--shadow-brand); }
 @utility shadow-soft { box-shadow: var(--shadow-soft); }
