@@ -1,6 +1,21 @@
-import { useState, useMemo } from "react";
-import { Plus, Check, X, Upload, Trash2, ArrowRightCircle, Search, Mail, AlertTriangle, Eye, EyeOff } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { toast } from "sonner";
+import {
+  Plus,
+  Check,
+  X,
+  Upload,
+  Trash2,
+  ArrowRightCircle,
+  Search,
+  Mail,
+  AlertTriangle,
+  Eye,
+  EyeOff,
+  Send,
+} from "lucide-react";
 import { type AdminData, type RawBusiness, uid } from "../store";
+import { type Sequence, listSequences, enrollLeads } from "../outreach";
 import { Panel, StatCard, Modal, Field, inputCls, Btn } from "../ui";
 
 function maskEmail(email: string): string {
@@ -8,12 +23,10 @@ function maskEmail(email: string): string {
   const [local, domain] = email.split("@");
   const maskedLocal = local.length > 2 ? local[0] + "***" : "***";
   const domainParts = domain.split(".");
-  const maskedDomain = domainParts.length > 1
-    ? domainParts[0][0] + "***." + domainParts.slice(1).join(".")
-    : "***";
+  const maskedDomain =
+    domainParts.length > 1 ? domainParts[0][0] + "***." + domainParts.slice(1).join(".") : "***";
   return `${maskedLocal}@${maskedDomain}`;
 }
-
 
 export function RawData({
   data,
@@ -28,6 +41,65 @@ export function RawData({
   const [paste, setPaste] = useState("");
   const [filter, setFilter] = useState<"all" | "raw" | "accepted" | "rejected" | "sent">("all");
   const [q, setQ] = useState("");
+  // Outreach: add selected rows to a sequence
+  const [seqOpen, setSeqOpen] = useState(false);
+  const [sequences, setSequences] = useState<Sequence[]>([]);
+  const [seqId, setSeqId] = useState("");
+  const [enrolling, setEnrolling] = useState(false);
+  const [enrollResult, setEnrollResult] = useState<{
+    enrolled: number;
+    skipped: { email: string; reason: string }[];
+  } | null>(null);
+  useEffect(() => {
+    if (!seqOpen) return;
+    void listSequences()
+      .then((s) => {
+        setSequences(s);
+        if (!seqId && s[0]) setSeqId(s[0].id);
+      })
+      .catch((e) => toast.error((e as Error).message));
+  }, [seqOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function addSelectedToSequence() {
+    const picked = data.raw.filter((r) => selectedIds.has(r.id) && r.email);
+    if (!seqId) return toast.error("Pick a sequence.");
+    if (!picked.length) return toast.error("Select rows that have an email address.");
+    setEnrolling(true);
+    const res = await enrollLeads(
+      seqId,
+      picked.map((r) => ({
+        company: r.business,
+        website: r.website,
+        contactName: r.contactName,
+        contactTitle: r.contactTitle,
+        email: r.email,
+        emailSource: r.emailSource || r.source,
+        emailGuessed: r.emailSource ? r.emailSource === "Guess" : /guess/i.test(r.source || ""),
+        score: r.score,
+        scoreReasons: r.scoreWhy,
+        phone: r.phone,
+        linkedin: r.linkedin,
+        city: r.city,
+        industry: r.industry,
+        source: r.source,
+        rawId: r.id,
+      })),
+    );
+    setEnrolling(false);
+    if (!res.ok) return toast.error(res.error || "Could not add to sequence");
+    setEnrollResult({ enrolled: res.enrolled, skipped: res.skipped });
+    if (res.enrolled) {
+      update((p) => ({
+        ...p,
+        raw: p.raw.map((r) =>
+          selectedIds.has(r.id) && r.email
+            ? { ...r, status: "accepted" as const, lastEmailedAt: r.lastEmailedAt ?? Date.now() }
+            : r,
+        ),
+      }));
+      toast.success(`${res.enrolled} lead${res.enrolled === 1 ? "" : "s"} added to the sequence`);
+    }
+  }
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
 
@@ -160,7 +232,13 @@ export function RawData({
       if (filter === "all") return r.status !== "accepted";
       return r.status === filter;
     })
-    .filter((r) => !q || (r.business + r.email + r.city + r.industry).toLowerCase().includes(q.toLowerCase()));
+    .filter(
+      (r) =>
+        !q || (r.business + r.email + r.city + r.industry).toLowerCase().includes(q.toLowerCase()),
+    );
+
+  const anyScored = rows.some((r) => typeof r.score === "number");
+  if (anyScored) rows.sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
 
   const sentCount = data.raw.filter((r) => r.lastEmailedAt).length;
   const lastSentAt = data.raw.reduce((m, r) => Math.max(m, r.lastEmailedAt ?? 0), 0);
@@ -173,19 +251,38 @@ export function RawData({
     sent: sentCount,
   };
 
-
   return (
     <div className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Emails Sent" value={String(sentCount)} hint={lastSentAt ? `Last: ${new Date(lastSentAt).toLocaleString()}` : "No sends yet"} icon={Mail} accent="oklch(.7 .18 150)" />
-        <StatCard label="Accepted" value={String(counts.accepted)} hint="Ready to email" icon={Check} accent="var(--brand-violet)" />
-        <StatCard label="Duplicate emails" value={String(Object.values(emailCounts).filter((n) => n > 1).length)} hint="Same address appears more than once" icon={AlertTriangle} accent="var(--brand-coral)" />
+        <StatCard
+          label="Emails Sent"
+          value={String(sentCount)}
+          hint={lastSentAt ? `Last: ${new Date(lastSentAt).toLocaleString()}` : "No sends yet"}
+          icon={Mail}
+          accent="oklch(.7 .18 150)"
+        />
+        <StatCard
+          label="Accepted"
+          value={String(counts.accepted)}
+          hint="Ready to email"
+          icon={Check}
+          accent="var(--brand-violet)"
+        />
+        <StatCard
+          label="Duplicate emails"
+          value={String(Object.values(emailCounts).filter((n) => n > 1).length)}
+          hint="Same address appears more than once"
+          icon={AlertTriangle}
+          accent="var(--brand-coral)"
+        />
       </div>
 
       {sentCount > 0 && (
         <Panel>
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-display text-base font-bold">Businesses we've emailed ({sentCount})</h3>
+            <h3 className="font-display text-base font-bold">
+              Businesses we've emailed ({sentCount})
+            </h3>
           </div>
           <div className="max-h-56 space-y-1 overflow-y-auto pr-1 text-sm">
             {data.raw
@@ -193,12 +290,17 @@ export function RawData({
               .slice()
               .sort((a, b) => (b.lastEmailedAt ?? 0) - (a.lastEmailedAt ?? 0))
               .map((r) => (
-                <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+                <div
+                  key={r.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
+                >
                   <div className="min-w-0">
                     <div className="truncate font-semibold">{r.business}</div>
                     <div className="truncate text-xs text-muted-foreground">{r.email}</div>
                   </div>
-                  <div className="shrink-0 text-xs text-muted-foreground">{new Date(r.lastEmailedAt!).toLocaleDateString()}</div>
+                  <div className="shrink-0 text-xs text-muted-foreground">
+                    {new Date(r.lastEmailedAt!).toLocaleDateString()}
+                  </div>
                 </div>
               ))}
           </div>
@@ -210,9 +312,14 @@ export function RawData({
           {(["all", "raw", "accepted", "rejected", "sent"] as const).map((f) => (
             <button
               key={f}
-              onClick={() => { setFilter(f); clearSelection(); }}
+              onClick={() => {
+                setFilter(f);
+                clearSelection();
+              }}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition-colors ${
-                filter === f ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary"
+                filter === f
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-secondary"
               }`}
             >
               {f} ({counts[f]})
@@ -222,7 +329,15 @@ export function RawData({
 
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input value={q} onChange={(e) => { setQ(e.target.value); clearSelection(); }} placeholder="Search…" className={`${inputCls} pl-8`} />
+          <input
+            value={q}
+            onChange={(e) => {
+              setQ(e.target.value);
+              clearSelection();
+            }}
+            placeholder="Search…"
+            className={`${inputCls} pl-8`}
+          />
         </div>
         <Btn className="ml-auto" onClick={() => setImportOpen(true)}>
           <Upload className="h-4 w-4" /> Import scraped data
@@ -235,7 +350,10 @@ export function RawData({
             <input
               type="checkbox"
               checked={rows.length > 0 && rows.every((r) => selectedIds.has(r.id))}
-              onChange={(e) => { if (e.target.checked) selectAllVisible(); else clearSelection(); }}
+              onChange={(e) => {
+                if (e.target.checked) selectAllVisible();
+                else clearSelection();
+              }}
               className="h-4 w-4 rounded border-border"
             />
             <span className="text-muted-foreground">{selectedIds.size} selected</span>
@@ -253,6 +371,15 @@ export function RawData({
                 className="inline-flex items-center gap-1.5 rounded-lg bg-destructive/10 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/20"
               >
                 <X className="h-3.5 w-3.5" /> Reject selected
+              </button>
+              <button
+                onClick={() => {
+                  setEnrollResult(null);
+                  setSeqOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-violet)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+              >
+                <Send className="h-3.5 w-3.5" /> Add to sequence
               </button>
               <button
                 onClick={revealSelected}
@@ -274,15 +401,17 @@ export function RawData({
               className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-[oklch(.7_.18_150)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
               title="Accept every row currently visible in this filter"
             >
-              <Check className="h-3.5 w-3.5" /> Accept all visible ({rows.filter((r) => r.status !== "accepted").length})
+              <Check className="h-3.5 w-3.5" /> Accept all visible (
+              {rows.filter((r) => r.status !== "accepted").length})
             </button>
           )}
         </div>
       )}
 
       <p className="text-sm text-muted-foreground">
-        Your scraping dump lives here. <strong className="text-foreground">Accept</strong> the businesses worth contacting — accepted
-        rows become available in the Email / GHL tab for outreach.
+        Your scraping dump lives here. <strong className="text-foreground">Accept</strong> the
+        businesses worth contacting — accepted rows can be added to an outreach sequence (select →{" "}
+        <strong className="text-foreground">Add to sequence</strong>).
       </p>
 
       <Panel className="overflow-x-auto p-0">
@@ -293,7 +422,10 @@ export function RawData({
                 <input
                   type="checkbox"
                   checked={rows.length > 0 && rows.every((r) => selectedIds.has(r.id))}
-                  onChange={(e) => { if (e.target.checked) selectAllVisible(); else clearSelection(); }}
+                  onChange={(e) => {
+                    if (e.target.checked) selectAllVisible();
+                    else clearSelection();
+                  }}
                   className="h-4 w-4 rounded border-border"
                 />
               </th>
@@ -319,7 +451,23 @@ export function RawData({
                   />
                 </td>
                 <td className="px-4 py-3 font-semibold">
-                  {r.business}
+                  <span className="inline-flex items-center gap-2">
+                    {typeof r.score === "number" && (
+                      <span
+                        title={(r.scoreWhy || []).join("\n") || "Lead score"}
+                        className={`inline-grid h-6 min-w-6 place-items-center rounded-md px-1 text-[.68rem] font-bold tabular-nums ${
+                          r.score >= 70
+                            ? "bg-[oklch(.7_.18_150)]/15 text-[oklch(.4_.14_150)]"
+                            : r.score >= 45
+                              ? "bg-[oklch(.8_.16_80)]/20 text-[oklch(.45_.12_70)]"
+                              : "bg-secondary text-muted-foreground"
+                        }`}
+                      >
+                        {r.score}
+                      </span>
+                    )}
+                    {r.business}
+                  </span>
                   {r.contactName && (
                     <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
                       {r.contactName}
@@ -329,21 +477,49 @@ export function RawData({
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-mono text-xs">{revealedIds.has(r.id) ? r.email : maskEmail(r.email)}</span>
+                    <span className="font-mono text-xs">
+                      {revealedIds.has(r.id) ? r.email : maskEmail(r.email)}
+                    </span>
+                    {r.emailSource === "Guess" && r.email && (
+                      <span
+                        title="Pattern guess (e.g. info@domain) — verified against the mail server before it is sent"
+                        className="rounded-full bg-secondary px-1.5 py-0.5 text-[.6rem] font-semibold uppercase text-muted-foreground"
+                      >
+                        guess
+                      </span>
+                    )}
                     <button
                       onClick={() => toggleReveal(r.id)}
                       className="inline-flex items-center rounded p-0.5 text-muted-foreground hover:bg-secondary"
                       title={revealedIds.has(r.id) ? "Hide email" : "Reveal email"}
                     >
-                      {revealedIds.has(r.id) ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                      {revealedIds.has(r.id) ? (
+                        <EyeOff className="h-3 w-3" />
+                      ) : (
+                        <Eye className="h-3 w-3" />
+                      )}
                     </button>
                     {r.email && emailCounts[r.email.trim().toLowerCase()] > 1 && (
-                      <span title="This email address appears more than once in your data" className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[.6rem] font-semibold uppercase" style={{ background: "color-mix(in oklab, var(--brand-coral) 15%, transparent)", color: "var(--brand-coral)" }}>
+                      <span
+                        title="This email address appears more than once in your data"
+                        className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[.6rem] font-semibold uppercase"
+                        style={{
+                          background: "color-mix(in oklab, var(--brand-coral) 15%, transparent)",
+                          color: "var(--brand-coral)",
+                        }}
+                      >
                         <AlertTriangle className="h-2.5 w-2.5" /> dup
                       </span>
                     )}
                     {r.lastEmailedAt && (
-                      <span title={`Emailed ${new Date(r.lastEmailedAt).toLocaleString()}`} className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[.6rem] font-semibold uppercase" style={{ background: "color-mix(in oklab, oklch(.7 .18 150) 18%, transparent)", color: "oklch(.45 .15 150)" }}>
+                      <span
+                        title={`Emailed ${new Date(r.lastEmailedAt).toLocaleString()}`}
+                        className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[.6rem] font-semibold uppercase"
+                        style={{
+                          background: "color-mix(in oklab, oklch(.7 .18 150) 18%, transparent)",
+                          color: "oklch(.45 .15 150)",
+                        }}
+                      >
                         <Mail className="h-2.5 w-2.5" /> sent
                       </span>
                     )}
@@ -353,7 +529,12 @@ export function RawData({
                 <td className="px-4 py-3 text-muted-foreground">{r.phone}</td>
                 <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
                   {r.website ? (
-                    <a href={r.website.startsWith("http") ? r.website : `https://${r.website}`} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                    <a
+                      href={r.website.startsWith("http") ? r.website : `https://${r.website}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary hover:underline"
+                    >
                       {r.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}
                     </a>
                   ) : (
@@ -361,19 +542,25 @@ export function RawData({
                   )}
                 </td>
                 <td className="hidden px-4 py-3 text-muted-foreground lg:table-cell">{r.city}</td>
-                <td className="hidden px-4 py-3 text-muted-foreground lg:table-cell">{r.industry}</td>
+                <td className="hidden px-4 py-3 text-muted-foreground lg:table-cell">
+                  {r.industry}
+                </td>
                 <td className="px-4 py-3">
                   <span
                     className="rounded-full px-2.5 py-1 text-xs font-medium"
                     style={{
                       background:
-                        r.status === "accepted" ? "color-mix(in oklab, oklch(.7 .18 150) 18%, transparent)"
-                        : r.status === "rejected" ? "color-mix(in oklab, var(--destructive) 14%, transparent)"
-                        : "var(--secondary)",
+                        r.status === "accepted"
+                          ? "color-mix(in oklab, oklch(.7 .18 150) 18%, transparent)"
+                          : r.status === "rejected"
+                            ? "color-mix(in oklab, var(--destructive) 14%, transparent)"
+                            : "var(--secondary)",
                       color:
-                        r.status === "accepted" ? "oklch(.45 .15 150)"
-                        : r.status === "rejected" ? "var(--destructive)"
-                        : "var(--muted-foreground)",
+                        r.status === "accepted"
+                          ? "oklch(.45 .15 150)"
+                          : r.status === "rejected"
+                            ? "var(--destructive)"
+                            : "var(--muted-foreground)",
                     }}
                   >
                     {r.status}
@@ -382,19 +569,35 @@ export function RawData({
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-1">
                     {r.status !== "accepted" && (
-                      <button onClick={() => setStatus(r.id, "accepted")} className="grid h-7 w-7 place-items-center rounded-md text-[oklch(.55_.15_150)] hover:bg-[oklch(.7_.18_150)]/15" title="Accept">
+                      <button
+                        onClick={() => setStatus(r.id, "accepted")}
+                        className="grid h-7 w-7 place-items-center rounded-md text-[oklch(.55_.15_150)] hover:bg-[oklch(.7_.18_150)]/15"
+                        title="Accept"
+                      >
                         <Check className="h-4 w-4" />
                       </button>
                     )}
                     {r.status !== "rejected" && (
-                      <button onClick={() => setStatus(r.id, "rejected")} className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-secondary" title="Reject">
+                      <button
+                        onClick={() => setStatus(r.id, "rejected")}
+                        className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-secondary"
+                        title="Reject"
+                      >
                         <X className="h-4 w-4" />
                       </button>
                     )}
-                    <button onClick={() => pushToPipeline(r)} className="grid h-7 w-7 place-items-center rounded-md text-primary hover:bg-primary/10" title="Add to pipeline">
+                    <button
+                      onClick={() => pushToPipeline(r)}
+                      className="grid h-7 w-7 place-items-center rounded-md text-primary hover:bg-primary/10"
+                      title="Add to pipeline"
+                    >
                       <ArrowRightCircle className="h-4 w-4" />
                     </button>
-                    <button onClick={() => remove(r.id)} className="grid h-7 w-7 place-items-center rounded-md text-destructive hover:bg-destructive/10" title="Delete">
+                    <button
+                      onClick={() => remove(r.id)}
+                      className="grid h-7 w-7 place-items-center rounded-md text-destructive hover:bg-destructive/10"
+                      title="Delete"
+                    >
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
@@ -402,7 +605,11 @@ export function RawData({
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={9} className="px-4 py-10 text-center text-sm text-muted-foreground">No rows. Import some scraped data to get started.</td></tr>
+              <tr>
+                <td colSpan={9} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                  No rows. Import some scraped data to get started.
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
@@ -414,7 +621,12 @@ export function RawData({
         </Btn>
       )}
 
-      <Modal open={importOpen} onClose={() => setImportOpen(false)} title="Import scraped businesses" wide>
+      <Modal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        title="Import scraped businesses"
+        wide
+      >
         <p className="mb-3 text-sm text-muted-foreground">
           Paste rows — one business per line. Columns separated by comma, semicolon or tab:
           <br />
@@ -427,8 +639,66 @@ export function RawData({
           className={`${inputCls} min-h-[180px] font-mono text-xs`}
         />
         <div className="mt-4 flex justify-end gap-2">
-          <Btn variant="ghost" onClick={() => setImportOpen(false)}>Cancel</Btn>
-          <Btn onClick={runImport}><Plus className="h-4 w-4" /> Import</Btn>
+          <Btn variant="ghost" onClick={() => setImportOpen(false)}>
+            Cancel
+          </Btn>
+          <Btn onClick={runImport}>
+            <Plus className="h-4 w-4" /> Import
+          </Btn>
+        </div>
+      </Modal>
+      <Modal
+        open={seqOpen}
+        onClose={() => setSeqOpen(false)}
+        title="Add selected leads to a sequence"
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            {data.raw.filter((r) => selectedIds.has(r.id) && r.email).length} selected rows have an
+            email. Guessed addresses are checked for a working mail server first; anything on the
+            suppression list is skipped.
+          </p>
+          {sequences.length ? (
+            <Field label="Sequence">
+              <select className={inputCls} value={seqId} onChange={(e) => setSeqId(e.target.value)}>
+                {sequences.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                    {s.status !== "active" ? ` (${s.status})` : ""}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          ) : (
+            <p className="rounded-lg bg-secondary px-3 py-2 text-sm text-muted-foreground">
+              No sequences yet — create one in the Outreach tab first.
+            </p>
+          )}
+          {enrollResult && (
+            <div className="rounded-lg border border-border p-3 text-sm">
+              <div className="font-semibold">{enrollResult.enrolled} added</div>
+              {enrollResult.skipped.length > 0 && (
+                <ul className="mt-1 max-h-40 space-y-0.5 overflow-auto text-xs text-muted-foreground">
+                  {enrollResult.skipped.map((k, i) => (
+                    <li key={i}>
+                      {k.email} — {k.reason}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <Btn variant="ghost" onClick={() => setSeqOpen(false)}>
+              Close
+            </Btn>
+            <Btn
+              onClick={() => void addSelectedToSequence()}
+              disabled={enrolling || !sequences.length}
+            >
+              {enrolling ? "Adding…" : "Add to sequence"}
+            </Btn>
+          </div>
         </div>
       </Modal>
     </div>

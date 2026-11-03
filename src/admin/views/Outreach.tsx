@@ -1,0 +1,1366 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import {
+  Plus,
+  Play,
+  Pause,
+  Trash2,
+  Pencil,
+  Mail,
+  Inbox,
+  Ban,
+  RefreshCw,
+  Users,
+  Send,
+  Reply,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  ChevronRight,
+  Loader2,
+  Sparkles,
+  Check,
+  BriefcaseBusiness,
+  ExternalLink,
+  FlaskConical,
+} from "lucide-react";
+import { type AdminData, type Deal, uid } from "../store";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { Panel, StatCard, Modal, Field, inputCls, Btn } from "../ui";
+import {
+  type Mailbox,
+  type Sequence,
+  type SequenceStep,
+  type Enrollment,
+  type Message,
+  type Suppression,
+  listMailboxes,
+  listSequences,
+  listSteps,
+  saveSequence,
+  setSequenceStatus,
+  listEnrollments,
+  enrollmentCounts,
+  updateEnrollment,
+  deleteEnrollment,
+  listMessages,
+  sentCounts,
+  listSuppressions,
+  addSuppression,
+  removeSuppression,
+  runDispatchNow,
+  sendReply,
+  markHandled,
+  abStats,
+  type ReplyIntent,
+} from "../outreach";
+
+type Tab = "overview" | "sequences" | "queue" | "inbox" | "suppressed";
+
+const STATUS_STYLE: Record<string, string> = {
+  queued: "bg-secondary text-muted-foreground",
+  active: "bg-[var(--brand-violet)]/12 text-[var(--brand-violet)]",
+  completed: "bg-[oklch(.7_.18_150)]/15 text-[oklch(.4_.12_150)]",
+  replied: "bg-[oklch(.7_.18_150)]/25 text-[oklch(.35_.12_150)]",
+  bounced: "bg-destructive/10 text-destructive",
+  unsubscribed: "bg-destructive/10 text-destructive",
+  paused: "bg-[oklch(.8_.16_80)]/25 text-[oklch(.45_.1_70)]",
+  failed: "bg-destructive/10 text-destructive",
+  skipped: "bg-secondary text-muted-foreground",
+};
+
+function Pill({ s }: { s: string }) {
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-[.65rem] font-semibold uppercase tracking-wide ${STATUS_STYLE[s] ?? "bg-secondary"}`}
+    >
+      {s}
+    </span>
+  );
+}
+
+const fmt = (iso?: string | null) =>
+  iso
+    ? new Date(iso).toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "—";
+
+export function Outreach({
+  go,
+  data,
+  update,
+}: {
+  go?: (v: "settings" | "raw" | "pipeline") => void;
+  data?: AdminData;
+  update?: (fn: (prev: AdminData) => AdminData) => void;
+}) {
+  const [tab, setTab] = useState<Tab>("overview");
+  const [mailboxes, setMailboxes] = useState<Mailbox[]>([]);
+  const [sequences, setSequences] = useState<Sequence[]>([]);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [series, setSeries] = useState<{ day: string; sent: number; replies: number }[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      const [m, s, c, d] = await Promise.all([
+        listMailboxes(),
+        listSequences(),
+        enrollmentCounts(),
+        sentCounts(14),
+      ]);
+      setMailboxes(m);
+      setSequences(s);
+      setCounts(c);
+      setSeries(d);
+      setErr(null);
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }, []);
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  async function runNow(syncOnly = false) {
+    setBusy(true);
+    const r = await runDispatchNow(syncOnly);
+    setBusy(false);
+    if (!r.ok) return toast.error(r.error || "Dispatch failed");
+    const rep = r.report as
+      | {
+          mailboxes?: {
+            email: string;
+            sent: number;
+            skipped?: string;
+            synced?: { replies: number; bounces: number };
+          }[];
+          errors?: string[];
+        }
+      | undefined;
+    const sent = rep?.mailboxes?.reduce((a, m) => a + m.sent, 0) ?? 0;
+    const replies = rep?.mailboxes?.reduce((a, m) => a + (m.synced?.replies ?? 0), 0) ?? 0;
+    toast.success(
+      syncOnly
+        ? `Inbox sync done · ${replies} new repl${replies === 1 ? "y" : "ies"}`
+        : `Sent ${sent} · ${replies} new repl${replies === 1 ? "y" : "ies"}${
+            rep?.mailboxes?.some((m) => m.skipped)
+              ? ` · ${rep.mailboxes
+                  .filter((m) => m.skipped)
+                  .map((m) => `${m.email.split("@")[0]}: ${m.skipped}`)
+                  .join(", ")}`
+              : ""
+          }`,
+    );
+    if (rep?.errors?.length) toast.error(rep.errors.join(" · "));
+    void refresh();
+  }
+
+  const sentTotal = series.reduce((a, d) => a + d.sent, 0);
+  const replyTotal = series.reduce((a, d) => a + d.replies, 0);
+  const activeMailboxes = mailboxes.filter((m) => m.status === "active");
+  const capToday = activeMailboxes.reduce((a, m) => a + m.daily_cap, 0);
+
+  if (err && /relation .* does not exist|schema cache/i.test(err)) {
+    return (
+      <Panel>
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="mt-0.5 h-5 w-5 text-[oklch(.6_.16_60)]" />
+          <div>
+            <h3 className="font-display text-lg font-bold">Database tables not created yet</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Run the migration{" "}
+              <code className="rounded bg-secondary px-1">
+                supabase/migrations/20261102120000_outreach_engine.sql
+              </code>{" "}
+              (Lovable applies migrations on publish, or run it in the Supabase SQL editor). Then
+              reload this page.
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">{err}</p>
+          </div>
+        </div>
+      </Panel>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="In sequences"
+          value={String((counts.queued ?? 0) + (counts.active ?? 0))}
+          hint={`${counts.total ?? 0} enrolled all-time`}
+          icon={Users}
+        />
+        <StatCard
+          label="Sent · 14 days"
+          value={String(sentTotal)}
+          hint={`Capacity ${capToday}/day across ${activeMailboxes.length} mailbox${activeMailboxes.length === 1 ? "" : "es"}`}
+          icon={Send}
+          accent="var(--brand-coral)"
+        />
+        <StatCard
+          label="Replies · 14 days"
+          value={String(replyTotal)}
+          hint={sentTotal ? `${((replyTotal / sentTotal) * 100).toFixed(1)}% reply rate` : "—"}
+          icon={Reply}
+          accent="oklch(.55 .15 150)"
+        />
+        <StatCard
+          label="Bounced / opted out"
+          value={String((counts.bounced ?? 0) + (counts.unsubscribed ?? 0))}
+          hint="Automatically suppressed"
+          icon={Ban}
+          accent="oklch(.55 .2 25)"
+        />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex gap-1 rounded-xl border border-border bg-background p-1">
+          {(
+            [
+              ["overview", "Overview", Clock],
+              ["sequences", "Sequences", Mail],
+              ["queue", "Queue", Users],
+              ["inbox", "Replies", Inbox],
+              ["suppressed", "Suppressed", Ban],
+            ] as [Tab, string, React.ElementType][]
+          ).map(([id, label, Icon]) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              className={`inline-flex min-h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition-colors ${tab === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary"}`}
+            >
+              <Icon className="h-4 w-4" /> {label}
+            </button>
+          ))}
+        </div>
+        <div className="ml-auto flex gap-2">
+          <Btn variant="ghost" onClick={() => void runNow(true)} disabled={busy}>
+            {busy ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}{" "}
+            Check inboxes
+          </Btn>
+          <Btn onClick={() => void runNow(false)} disabled={busy}>
+            <Play className="h-4 w-4" /> Send due emails now
+          </Btn>
+        </div>
+      </div>
+
+      {err && (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          {err}
+        </div>
+      )}
+
+      {tab === "overview" && (
+        <Overview
+          mailboxes={mailboxes}
+          sequences={sequences}
+          series={series}
+          counts={counts}
+          go={go}
+          setTab={setTab}
+        />
+      )}
+      {tab === "sequences" && (
+        <Sequences sequences={sequences} mailboxes={mailboxes} refresh={refresh} />
+      )}
+      {tab === "queue" && <Queue sequences={sequences} refresh={refresh} />}
+      {tab === "inbox" && <InboxView data={data} update={update} go={go} />}
+      {tab === "suppressed" && <Suppressed />}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ overview */
+function Overview({
+  mailboxes,
+  sequences,
+  series,
+  counts,
+  go,
+  setTab,
+}: {
+  mailboxes: Mailbox[];
+  sequences: Sequence[];
+  series: { day: string; sent: number; replies: number }[];
+  counts: Record<string, number>;
+  go?: (v: "settings" | "raw") => void;
+  setTab: (t: Tab) => void;
+}) {
+  const max = Math.max(1, ...series.map((d) => d.sent));
+  const noMailbox = mailboxes.length === 0;
+  const noSequence = sequences.length === 0;
+  const nothingQueued = !(counts.queued || counts.active);
+  return (
+    <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+      <Panel>
+        <h3 className="font-display text-lg font-bold">Sent per day</h3>
+        <p className="text-xs text-muted-foreground">
+          Last 14 days · bars are emails sent, dots are replies
+        </p>
+        <div className="mt-4 flex h-40 items-end gap-1.5">
+          {series.map((d) => (
+            <div
+              key={d.day}
+              className="group relative flex flex-1 flex-col items-center justify-end"
+              title={`${d.day}: ${d.sent} sent, ${d.replies} replies`}
+            >
+              {d.replies > 0 && (
+                <span className="mb-1 h-2 w-2 rounded-full bg-[oklch(.55_.15_150)]" />
+              )}
+              <div
+                className="w-full rounded-t-md bg-[var(--brand-violet)]/80 transition-all group-hover:bg-[var(--brand-violet)]"
+                style={{ height: `${Math.max(3, (d.sent / max) * 100)}%` }}
+              />
+              <span className="mt-1 text-[.55rem] text-muted-foreground">{d.day.slice(8)}</span>
+            </div>
+          ))}
+        </div>
+      </Panel>
+
+      <Panel>
+        <h3 className="font-display text-lg font-bold">Getting started</h3>
+        <ol className="mt-3 space-y-2 text-sm">
+          <Step
+            done={!noMailbox}
+            label="Connect a Google Workspace mailbox"
+            sub="Settings → Mailboxes"
+            onClick={() => go?.("settings")}
+          />
+          <Step
+            done={!noSequence}
+            label="Write a sequence (first email + follow-ups)"
+            sub="Sequences tab"
+            onClick={() => setTab("sequences")}
+          />
+          <Step
+            done={!nothingQueued}
+            label="Add accepted leads to the sequence"
+            sub="Raw Data → select → Add to sequence"
+            onClick={() => go?.("raw")}
+          />
+          <Step
+            done={
+              (counts.total ?? 0) > 0 &&
+              !nothingQueued &&
+              sequences.some((s) => s.status === "active")
+            }
+            label="Set the sequence to Active"
+            sub="Emails then go out every 10 minutes within each mailbox's hours and daily cap"
+            onClick={() => setTab("sequences")}
+          />
+        </ol>
+        <div className="mt-4 space-y-2">
+          {mailboxes.map((m) => (
+            <div
+              key={m.id}
+              className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
+            >
+              <div className="min-w-0">
+                <div className="truncate font-medium">{m.email}</div>
+                <div className="text-xs text-muted-foreground">
+                  {m.daily_cap}/day · {m.window_start}:00–{m.window_end}:00{" "}
+                  {m.timezone.split("/")[1]?.replace("_", " ")} ·{" "}
+                  {m.last_sync_at ? `synced ${fmt(m.last_sync_at)}` : "not synced yet"}
+                </div>
+                {m.last_error && (
+                  <div className="mt-0.5 truncate text-xs text-destructive">{m.last_error}</div>
+                )}
+              </div>
+              <Pill s={m.status} />
+            </div>
+          ))}
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+function Step({
+  done,
+  label,
+  sub,
+  onClick,
+}: {
+  done: boolean;
+  label: string;
+  sub: string;
+  onClick?: () => void;
+}) {
+  return (
+    <li>
+      <button
+        onClick={onClick}
+        className="flex w-full items-start gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-secondary"
+      >
+        {done ? (
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[oklch(.55_.15_150)]" />
+        ) : (
+          <span className="mt-1 h-3 w-3 shrink-0 rounded-full border-2 border-border" />
+        )}
+        <span className="min-w-0">
+          <span className={`block ${done ? "text-muted-foreground line-through" : "font-medium"}`}>
+            {label}
+          </span>
+          <span className="block text-xs text-muted-foreground">{sub}</span>
+        </span>
+        <ChevronRight className="ml-auto mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+      </button>
+    </li>
+  );
+}
+
+/* ----------------------------------------------------------- sequences */
+const SAMPLE_STEPS: SequenceStep[] = [
+  {
+    position: 0,
+    delay_days: 0,
+    subject: "{{company}} — quick idea",
+    body: "Hi {{first_name}},\n\nI came across {{company}} while looking at {{industry|local}} businesses in {{city}} and had a couple of ideas for getting you more jobs this season without raising your ad spend.\n\nWorth a 10-minute call this week?",
+  },
+  {
+    position: 1,
+    delay_days: 3,
+    subject: "",
+    body: "Hi {{first_name}}, bumping this up in case it got buried. Happy to send the two ideas over in writing if that's easier.",
+  },
+  {
+    position: 2,
+    delay_days: 5,
+    subject: "",
+    body: "Last note from me, {{first_name}} — if growing {{company}} isn't a priority right now, no problem at all. If it is, I'm one reply away.",
+  },
+];
+
+function AbStrip({ sequenceId }: { sequenceId: string }) {
+  const [st, setSt] = useState<Record<"A" | "B", { sent: number; replied: number }> | null>(null);
+  useEffect(() => {
+    abStats(sequenceId)
+      .then(setSt)
+      .catch(() => setSt(null));
+  }, [sequenceId]);
+  if (!st || st.A.sent + st.B.sent === 0) return null;
+  const pct = (v: { sent: number; replied: number }) =>
+    v.sent ? `${Math.round((v.replied / v.sent) * 100)}%` : "—";
+  const lead =
+    st.A.sent && st.B.sent
+      ? st.A.replied / st.A.sent >= st.B.replied / st.B.sent
+        ? "A"
+        : "B"
+      : null;
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 text-[.7rem]">
+      <FlaskConical className="h-3.5 w-3.5 text-muted-foreground" />
+      {(["A", "B"] as const).map((v) => (
+        <span
+          key={v}
+          className={`rounded-full px-2 py-0.5 font-semibold tabular-nums ${lead === v ? "bg-[oklch(.7_.18_150)]/15 text-[oklch(.4_.12_150)]" : "bg-secondary text-muted-foreground"}`}
+          title={`Subject ${v}: ${st[v].replied} replies from ${st[v].sent} sent`}
+        >
+          {v} · {pct(st[v])} reply · {st[v].sent} sent
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function Sequences({
+  sequences,
+  mailboxes,
+  refresh,
+}: {
+  sequences: Sequence[];
+  mailboxes: Mailbox[];
+  refresh: () => Promise<void>;
+}) {
+  const [editing, setEditing] = useState<{ seq: Partial<Sequence>; steps: SequenceStep[] } | null>(
+    null,
+  );
+  const [saving, setSaving] = useState(false);
+
+  async function openEdit(seq?: Sequence) {
+    if (!seq)
+      return setEditing({
+        seq: {
+          name: "",
+          status: "draft",
+          mailbox_ids: mailboxes.filter((m) => m.status === "active").map((m) => m.id),
+          stop_on_reply: true,
+          gap_min_sec: 45,
+          gap_max_sec: 180,
+        },
+        steps: SAMPLE_STEPS.map((s) => ({ ...s })),
+      });
+    const steps = await listSteps(seq.id);
+    setEditing({
+      seq,
+      steps: steps.length ? steps : [{ position: 0, delay_days: 0, subject: "", body: "" }],
+    });
+  }
+  async function save() {
+    if (!editing) return;
+    if (!editing.seq.name?.trim()) return toast.error("Give the sequence a name.");
+    if (!editing.steps.length || !editing.steps[0].body.trim())
+      return toast.error("The first email needs a body.");
+    if (!editing.steps[0].subject.trim()) return toast.error("The first email needs a subject.");
+    setSaving(true);
+    try {
+      await saveSequence(editing.seq, editing.steps);
+      toast.success("Sequence saved");
+      setEditing(null);
+      await refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+  async function toggle(seq: Sequence) {
+    if (seq.status !== "active" && !seq.mailbox_ids.length)
+      return toast.error("Pick at least one mailbox first.");
+    await setSequenceStatus(seq.id, seq.status === "active" ? "paused" : "active");
+    await refresh();
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          A sequence is the first email plus timed follow-ups. Follow-ups with no subject are sent
+          as replies in the same thread, which is what gets read.
+        </p>
+        <Btn onClick={() => void openEdit()}>
+          <Plus className="h-4 w-4" /> New sequence
+        </Btn>
+      </div>
+      {!sequences.length && (
+        <Panel className="text-center text-sm text-muted-foreground">
+          No sequences yet. Start with the sample 3-step sequence and edit the copy.
+        </Panel>
+      )}
+      <div className="grid gap-4 md:grid-cols-2">
+        {sequences.map((s) => (
+          <Panel key={s.id}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="truncate font-display text-base font-bold">{s.name}</h3>
+                  <Pill s={s.status} />
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {s.mailbox_ids.length} mailbox{s.mailbox_ids.length === 1 ? "" : "es"} ·{" "}
+                  {s.stop_on_reply ? "stops on reply" : "continues after reply"} · {s.gap_min_sec}–
+                  {s.gap_max_sec}s between sends
+                </p>
+                <AbStrip sequenceId={s.id} />
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <button
+                  aria-label="Edit sequence"
+                  onClick={() => void openEdit(s)}
+                  className="grid h-9 w-9 place-items-center rounded-lg border border-border hover:bg-secondary"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  aria-label={s.status === "active" ? "Pause sequence" : "Activate sequence"}
+                  onClick={() => void toggle(s)}
+                  className={`grid h-9 w-9 place-items-center rounded-lg border ${s.status === "active" ? "border-border hover:bg-secondary" : "border-transparent bg-primary text-primary-foreground"}`}
+                >
+                  {s.status === "active" ? (
+                    <Pause className="h-4 w-4" />
+                  ) : (
+                    <Play className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </Panel>
+        ))}
+      </div>
+
+      <Modal
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        title={editing?.seq.id ? "Edit sequence" : "New sequence"}
+        wide
+      >
+        {editing && (
+          <div className="space-y-4">
+            <Field label="Name">
+              <input
+                className={inputCls}
+                value={editing.seq.name ?? ""}
+                onChange={(e) =>
+                  setEditing({ ...editing, seq: { ...editing.seq, name: e.target.value } })
+                }
+                placeholder="Roofers · Denver · Nov"
+              />
+            </Field>
+            <div>
+              <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
+                Send from (round-robin)
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {mailboxes.map((m) => {
+                  const on = editing.seq.mailbox_ids?.includes(m.id);
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() =>
+                        setEditing({
+                          ...editing,
+                          seq: {
+                            ...editing.seq,
+                            mailbox_ids: on
+                              ? editing.seq.mailbox_ids!.filter((x) => x !== m.id)
+                              : [...(editing.seq.mailbox_ids ?? []), m.id],
+                          },
+                        })
+                      }
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${on ? "border-transparent bg-[var(--brand-violet)] text-white" : "border-border text-muted-foreground"}`}
+                    >
+                      {m.email}
+                    </button>
+                  );
+                })}
+                {!mailboxes.length && (
+                  <span className="text-xs text-muted-foreground">
+                    No mailboxes connected yet (Settings → Mailboxes).
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Gap between sends (s)">
+                <input
+                  type="number"
+                  className={inputCls}
+                  value={editing.seq.gap_min_sec ?? 45}
+                  onChange={(e) =>
+                    setEditing({
+                      ...editing,
+                      seq: { ...editing.seq, gap_min_sec: Number(e.target.value) },
+                    })
+                  }
+                />
+              </Field>
+              <Field label="to (s)">
+                <input
+                  type="number"
+                  className={inputCls}
+                  value={editing.seq.gap_max_sec ?? 180}
+                  onChange={(e) =>
+                    setEditing({
+                      ...editing,
+                      seq: { ...editing.seq, gap_max_sec: Number(e.target.value) },
+                    })
+                  }
+                />
+              </Field>
+              <label className="flex items-end gap-2 pb-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={editing.seq.stop_on_reply ?? true}
+                  onChange={(e) =>
+                    setEditing({
+                      ...editing,
+                      seq: { ...editing.seq, stop_on_reply: e.target.checked },
+                    })
+                  }
+                  className="accent-[var(--brand-violet)]"
+                />{" "}
+                Stop when they reply
+              </label>
+            </div>
+
+            <div className="space-y-3">
+              {editing.steps.map((st, i) => (
+                <div key={i} className="rounded-xl border border-border p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="text-sm font-semibold">
+                      {i === 0 ? "Email 1" : `Follow-up ${i}`}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {i > 0 && (
+                        <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                          after{" "}
+                          <input
+                            type="number"
+                            min={1}
+                            className={inputCls + " w-16 py-1"}
+                            value={st.delay_days}
+                            onChange={(e) =>
+                              setEditing({
+                                ...editing,
+                                steps: editing.steps.map((x, j) =>
+                                  j === i ? { ...x, delay_days: Number(e.target.value) } : x,
+                                ),
+                              })
+                            }
+                          />{" "}
+                          days
+                        </label>
+                      )}
+                      {i > 0 && (
+                        <button
+                          aria-label="Remove step"
+                          onClick={() =>
+                            setEditing({
+                              ...editing,
+                              steps: editing.steps.filter((_, j) => j !== i),
+                            })
+                          }
+                          className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-secondary"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <input
+                    className={inputCls + " mb-2"}
+                    value={st.subject}
+                    onChange={(e) =>
+                      setEditing({
+                        ...editing,
+                        steps: editing.steps.map((x, j) =>
+                          j === i ? { ...x, subject: e.target.value } : x,
+                        ),
+                      })
+                    }
+                    placeholder={
+                      i === 0 ? "Subject A" : "Subject (leave blank to reply in the same thread)"
+                    }
+                  />
+                  {i === 0 && (
+                    <div className="mb-2 flex items-center gap-2">
+                      <FlaskConical className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <input
+                        className={inputCls}
+                        value={st.subject_b ?? ""}
+                        onChange={(e) =>
+                          setEditing({
+                            ...editing,
+                            steps: editing.steps.map((x, j) =>
+                              j === i ? { ...x, subject_b: e.target.value } : x,
+                            ),
+                          })
+                        }
+                        placeholder="Subject B (optional) — half the leads get this one; reply rates show per variant"
+                      />
+                    </div>
+                  )}
+                  <textarea
+                    className={inputCls + " min-h-[110px]"}
+                    value={st.body}
+                    onChange={(e) =>
+                      setEditing({
+                        ...editing,
+                        steps: editing.steps.map((x, j) =>
+                          j === i ? { ...x, body: e.target.value } : x,
+                        ),
+                      })
+                    }
+                  />
+                </div>
+              ))}
+              <Btn
+                variant="ghost"
+                onClick={() =>
+                  setEditing({
+                    ...editing,
+                    steps: [
+                      ...editing.steps,
+                      { position: editing.steps.length, delay_days: 3, subject: "", body: "" },
+                    ],
+                  })
+                }
+              >
+                <Plus className="h-4 w-4" /> Add follow-up
+              </Btn>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Variables: <code>{"{{first_name}}"}</code> <code>{"{{company}}"}</code>{" "}
+              <code>{"{{city}}"}</code> <code>{"{{industry}}"}</code> <code>{"{{website}}"}</code>{" "}
+              <code>{"{{sender_name}}"}</code>. Fallbacks: <code>{"{{first_name|there}}"}</code>.
+              The legal footer and unsubscribe link are added automatically.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Btn variant="ghost" onClick={() => setEditing(null)}>
+                Cancel
+              </Btn>
+              <Btn onClick={() => void save()} disabled={saving}>
+                {saving ? "Saving…" : "Save sequence"}
+              </Btn>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+/* --------------------------------------------------------------- queue */
+function Queue({ sequences, refresh }: { sequences: Sequence[]; refresh: () => Promise<void> }) {
+  const [rows, setRows] = useState<Enrollment[]>([]);
+  const [seqId, setSeqId] = useState("");
+  const [status, setStatus] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [confirm, setConfirm] = useState<Enrollment | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setRows(
+        await listEnrollments({ sequenceId: seqId || undefined, status: status || undefined }),
+      );
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, [seqId, status]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function act(e: Enrollment, patch: Partial<Enrollment>) {
+    await updateEnrollment(e.id, patch);
+    await Promise.all([load(), refresh()]);
+  }
+
+  return (
+    <Panel>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <select
+          className={inputCls + " w-auto"}
+          value={seqId}
+          onChange={(e) => setSeqId(e.target.value)}
+        >
+          <option value="">All sequences</option>
+          {sequences.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+        <select
+          className={inputCls + " w-auto"}
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+        >
+          <option value="">Any status</option>
+          {[
+            "queued",
+            "active",
+            "completed",
+            "replied",
+            "bounced",
+            "unsubscribed",
+            "paused",
+            "failed",
+            "skipped",
+          ].map((s) => (
+            <option key={s}>{s}</option>
+          ))}
+        </select>
+        <span className="ml-auto text-xs text-muted-foreground">{rows.length} shown</span>
+      </div>
+      {loading ? (
+        <div className="py-10 text-center text-sm text-muted-foreground">
+          <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+        </div>
+      ) : !rows.length ? (
+        <div className="py-10 text-center text-sm text-muted-foreground">
+          Nothing here. Add leads from Raw Data → select → "Add to sequence".
+        </div>
+      ) : (
+        <div className="divide-y divide-border">
+          {rows.map((e) => (
+            <div key={e.id} className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
+              <div className="min-w-[220px] flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">
+                    {e.leads?.contact_name || e.leads?.company || "—"}
+                  </span>
+                  {e.leads?.contact_name && (
+                    <span className="text-muted-foreground">· {e.leads.company}</span>
+                  )}
+                  {e.leads?.email_guessed && (
+                    <span className="rounded bg-[oklch(.8_.16_80)]/30 px-1 text-[.6rem] font-semibold uppercase text-[oklch(.45_.1_70)]">
+                      guessed
+                    </span>
+                  )}
+                </div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {e.leads?.email} · {e.sequences?.name} · via{" "}
+                  {e.mailboxes?.email?.split("@")[0] ?? "next free mailbox"}
+                </div>
+                {e.last_error && (
+                  <div className="truncate text-xs text-destructive">{e.last_error}</div>
+                )}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                step {e.current_step}
+                {e.status === "queued" || e.status === "active"
+                  ? ` · next ${fmt(e.next_send_at)}`
+                  : e.replied_at
+                    ? ` · replied ${fmt(e.replied_at)}`
+                    : ""}
+              </div>
+              <Pill s={e.status} />
+              <div className="flex gap-1">
+                {(e.status === "queued" || e.status === "active") && (
+                  <button
+                    aria-label="Pause"
+                    onClick={() => void act(e, { status: "paused" })}
+                    className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-secondary"
+                  >
+                    <Pause className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                {e.status === "paused" && (
+                  <button
+                    aria-label="Resume"
+                    onClick={() =>
+                      void act(e, {
+                        status: e.current_step ? "active" : "queued",
+                        next_send_at: new Date().toISOString(),
+                      })
+                    }
+                    className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-secondary"
+                  >
+                    <Play className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                <button
+                  aria-label="Remove from sequence"
+                  onClick={() => setConfirm(e)}
+                  className="grid h-8 w-8 place-items-center rounded-lg border border-border text-muted-foreground hover:bg-secondary"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <ConfirmDialog
+        open={!!confirm}
+        title="Remove from sequence?"
+        description={`${confirm?.leads?.email ?? "This lead"} will get no further emails from this sequence. Already-sent emails stay in the log.`}
+        confirmLabel="Remove"
+        destructive
+        onOpenChange={(o) => !o && setConfirm(null)}
+        onConfirm={() => {
+          const target = confirm;
+          setConfirm(null);
+          if (!target) return;
+          void deleteEnrollment(target.id).then(() => Promise.all([load(), refresh()]));
+        }}
+      />
+    </Panel>
+  );
+}
+
+/* --------------------------------------------------------------- inbox */
+const INTENT_STYLE: Record<string, { label: string; cls: string }> = {
+  interested: { label: "Interested", cls: "bg-[oklch(.7_.18_150)]/20 text-[oklch(.35_.12_150)]" },
+  question: { label: "Question", cls: "bg-[oklch(.7_.15_250)]/20 text-[oklch(.4_.12_250)]" },
+  later: { label: "Later", cls: "bg-[oklch(.8_.16_80)]/25 text-[oklch(.45_.1_70)]" },
+  not_interested: { label: "Not interested", cls: "bg-destructive/10 text-destructive" },
+  wrong_person: { label: "Wrong person", cls: "bg-secondary text-muted-foreground" },
+  auto: { label: "Auto-reply", cls: "bg-secondary text-muted-foreground" },
+  unknown: { label: "Reply", cls: "bg-secondary text-muted-foreground" },
+};
+const INTENT_ORDER: ReplyIntent[] = [
+  "interested",
+  "question",
+  "later",
+  "unknown",
+  "wrong_person",
+  "not_interested",
+  "auto",
+];
+
+function InboxView({
+  data,
+  update,
+  go,
+}: {
+  data?: AdminData;
+  update?: (fn: (prev: AdminData) => AdminData) => void;
+  go?: (v: "settings" | "raw" | "pipeline") => void;
+}) {
+  const [rows, setRows] = useState<Message[]>([]);
+  const [kind, setKind] = useState<"reply" | "bounce" | "all">("reply");
+  const [showHandled, setShowHandled] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [sending, setSending] = useState<string | null>(null);
+
+  const load = useCallback(
+    () =>
+      listMessages({ direction: "in", kind: kind === "all" ? undefined : kind, limit: 150 })
+        .then(setRows)
+        .catch((e) => toast.error((e as Error).message)),
+    [kind],
+  );
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const visible = useMemo(() => {
+    const list = rows.filter((m) => showHandled || !m.handled_at);
+    if (kind !== "reply") return list;
+    return [...list].sort((a, b) => {
+      const ia = INTENT_ORDER.indexOf((a.intent as ReplyIntent) || "unknown");
+      const ib = INTENT_ORDER.indexOf((b.intent as ReplyIntent) || "unknown");
+      if (ia !== ib) return ia - ib;
+      return new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime();
+    });
+  }, [rows, showHandled, kind]);
+
+  const counts = useMemo(
+    () =>
+      rows
+        .filter((m) => !m.handled_at && m.kind === "reply")
+        .reduce(
+          (a, m) => ({ ...a, [m.intent || "unknown"]: (a[m.intent || "unknown"] ?? 0) + 1 }),
+          {} as Record<string, number>,
+        ),
+    [rows],
+  );
+
+  function draftFor(m: Message) {
+    return drafts[m.id] ?? m.draft_reply ?? "";
+  }
+
+  async function send(m: Message) {
+    const text = draftFor(m).trim();
+    if (!text) return toast.error("Write a reply first.");
+    setSending(m.id);
+    const r = await sendReply(m.id, text);
+    setSending(null);
+    if (!r.ok) return toast.error(r.error || "Could not send");
+    toast.success("Reply sent in the same thread");
+    setOpenId(null);
+    void load();
+  }
+
+  async function handled(m: Message, v = true) {
+    await markHandled(m.id, v);
+    void load();
+  }
+
+  const inPipeline = (m: Message) =>
+    !!data &&
+    !!m.leads?.email &&
+    data.deals.some((d) => d.email.toLowerCase() === (m.leads?.email || "").toLowerCase());
+
+  function createDeal(m: Message) {
+    if (!update || !m.leads) return;
+    const L = m.leads;
+    if (inPipeline(m)) return toast.message("Already in the pipeline");
+    const deal: Deal = {
+      id: uid("d"),
+      name: L.company || L.contact_name || L.email || "Lead",
+      contact: L.contact_name || "",
+      email: L.email || "",
+      phone: L.phone || "",
+      value: 0,
+      stage: m.intent === "interested" ? "qualified" : "contacted",
+      source: "Cold Outreach",
+      template: "",
+      notes: `Replied ${fmt(m.sent_at)} · ${INTENT_STYLE[m.intent || "unknown"]?.label || "reply"}${m.snippet ? ` · "${m.snippet.slice(0, 140)}"` : ""}${L.city ? ` · ${L.city}` : ""}${L.industry ? ` · ${L.industry}` : ""}`,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    update((p) => ({ ...p, deals: [...p.deals, deal] }));
+    toast.success(`${deal.name} added to the pipeline as ${deal.stage}`);
+    void markHandled(m.id, true).then(load);
+  }
+
+  return (
+    <Panel>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {(["reply", "bounce", "all"] as const).map((k) => (
+          <button
+            key={k}
+            onClick={() => setKind(k)}
+            className={`rounded-full border px-3 py-1 text-xs font-semibold ${kind === k ? "border-transparent bg-primary text-primary-foreground" : "border-border text-muted-foreground"}`}
+          >
+            {k === "all" ? "Everything" : k === "reply" ? "Replies" : "Bounces"}
+          </button>
+        ))}
+        <label className="ml-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={showHandled}
+            onChange={(e) => setShowHandled(e.target.checked)}
+            className="accent-[var(--brand-violet)]"
+          />
+          show handled
+        </label>
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+          {INTENT_ORDER.filter((i) => counts[i]).map((i) => (
+            <span
+              key={i}
+              className={`rounded-full px-2 py-0.5 text-[.62rem] font-semibold uppercase tracking-wide ${INTENT_STYLE[i].cls}`}
+            >
+              {counts[i]} {INTENT_STYLE[i].label}
+            </span>
+          ))}
+        </div>
+      </div>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Every reply is read by Claude when it lands: it labels the intent, stops the sequence, and
+        writes the answer you would send. Edit the draft, hit send, and it goes out in the same
+        Gmail thread from the same mailbox.
+      </p>
+      {!visible.length ? (
+        <div className="py-10 text-center text-sm text-muted-foreground">
+          {rows.length && !showHandled
+            ? "Inbox zero — everything here is handled."
+            : `No ${kind === "all" ? "incoming mail" : kind === "reply" ? "replies" : "bounces"} recorded yet.`}
+        </div>
+      ) : (
+        <div className="divide-y divide-border">
+          {visible.map((m) => {
+            const it =
+              INTENT_STYLE[
+                m.kind === "bounce"
+                  ? "not_interested"
+                  : m.kind === "auto_reply"
+                    ? "auto"
+                    : m.intent || "unknown"
+              ];
+            const open = openId === m.id;
+            const gmail =
+              m.gmail_thread_id && m.mailboxes?.email
+                ? `https://mail.google.com/mail/u/${m.mailboxes.email}/#all/${m.gmail_thread_id}`
+                : undefined;
+            return (
+              <div key={m.id} className={`py-3 ${m.handled_at ? "opacity-60" : ""}`}>
+                <button
+                  type="button"
+                  onClick={() => setOpenId(open ? null : m.id)}
+                  className="flex w-full flex-wrap items-center gap-2 text-left text-sm"
+                >
+                  <span className="font-medium">
+                    {m.leads?.contact_name || m.leads?.company || m.from_header || "Unknown sender"}
+                  </span>
+                  {m.leads?.company && m.leads?.contact_name && (
+                    <span className="text-muted-foreground">· {m.leads.company}</span>
+                  )}
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[.6rem] font-semibold uppercase ${m.kind === "bounce" ? "bg-destructive/10 text-destructive" : it.cls}`}
+                  >
+                    {m.kind === "bounce" ? "bounce" : it.label}
+                  </span>
+                  {m.handled_at && (
+                    <span className="rounded-full bg-secondary px-2 py-0.5 text-[.6rem] font-semibold uppercase text-muted-foreground">
+                      handled
+                    </span>
+                  )}
+                  <span className="ml-auto text-xs text-muted-foreground">{fmt(m.sent_at)}</span>
+                  <ChevronRight
+                    className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
+                  />
+                </button>
+                <div className="mt-0.5 text-sm">{m.subject}</div>
+                {!open && <div className="truncate text-xs text-muted-foreground">{m.snippet}</div>}
+
+                {open && (
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <div className="rounded-xl border border-border bg-secondary/40 p-3">
+                      <div className="mb-1 text-[.65rem] font-bold uppercase tracking-wider text-muted-foreground">
+                        They wrote
+                      </div>
+                      <pre className="max-h-64 overflow-auto whitespace-pre-wrap font-sans text-sm">
+                        {m.body_text || m.snippet || "(no text)"}
+                      </pre>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <Mail className="h-3.5 w-3.5" /> {m.leads?.email}
+                        {gmail && (
+                          <a
+                            href={gmail}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="ml-auto inline-flex items-center gap-1 text-primary hover:underline"
+                          >
+                            Open in Gmail <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                    {m.kind === "reply" ? (
+                      <div className="rounded-xl border border-border p-3">
+                        <div className="mb-1 flex items-center gap-1.5 text-[.65rem] font-bold uppercase tracking-wider text-muted-foreground">
+                          <Sparkles className="h-3.5 w-3.5 text-[var(--brand-violet)]" /> Suggested
+                          reply
+                          {m.mailboxes?.email && (
+                            <span className="ml-auto normal-case tracking-normal">
+                              from {m.mailboxes.email}
+                            </span>
+                          )}
+                        </div>
+                        <textarea
+                          className={inputCls + " min-h-[150px]"}
+                          value={draftFor(m)}
+                          onChange={(e) => setDrafts((d) => ({ ...d, [m.id]: e.target.value }))}
+                          placeholder={
+                            m.draft_reply
+                              ? ""
+                              : "No draft yet (add ANTHROPIC_API_KEY to get one). Write your reply here."
+                          }
+                        />
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <Btn
+                            onClick={() => void send(m)}
+                            disabled={sending === m.id || !draftFor(m).trim()}
+                          >
+                            {sending === m.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Send className="h-4 w-4" />
+                            )}{" "}
+                            Send reply
+                          </Btn>
+                          {update && m.leads && (
+                            <Btn
+                              variant="soft"
+                              onClick={() => createDeal(m)}
+                              disabled={inPipeline(m)}
+                              title="Add this lead to the sales pipeline"
+                            >
+                              <BriefcaseBusiness className="h-4 w-4" />{" "}
+                              {inPipeline(m) ? "In pipeline" : "Create deal"}
+                            </Btn>
+                          )}
+                          {inPipeline(m) && go && (
+                            <button
+                              onClick={() => go("pipeline")}
+                              className="text-xs font-semibold text-primary hover:underline"
+                            >
+                              Open pipeline →
+                            </button>
+                          )}
+                          <Btn
+                            variant="ghost"
+                            onClick={() => void handled(m, !m.handled_at)}
+                            className="ml-auto"
+                          >
+                            <Check className="h-4 w-4" />{" "}
+                            {m.handled_at ? "Unhandle" : "Mark handled"}
+                          </Btn>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-border p-3 text-sm text-muted-foreground">
+                        {m.kind === "bounce"
+                          ? "The address bounced. It has been added to the suppression list and the sequence stopped."
+                          : "Automatic reply (out of office). The sequence continues as planned."}
+                        <div className="mt-3">
+                          <Btn variant="ghost" onClick={() => void handled(m, !m.handled_at)}>
+                            <Check className="h-4 w-4" />{" "}
+                            {m.handled_at ? "Unhandle" : "Mark handled"}
+                          </Btn>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+/* ----------------------------------------------------------- suppressed */
+function Suppressed() {
+  const [rows, setRows] = useState<Suppression[]>([]);
+  const [email, setEmail] = useState("");
+  const load = useCallback(
+    () =>
+      listSuppressions()
+        .then(setRows)
+        .catch((e) => toast.error((e as Error).message)),
+    [],
+  );
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const grouped = useMemo(
+    () =>
+      rows.reduce(
+        (a, r) => ({ ...a, [r.reason]: (a[r.reason] ?? 0) + 1 }),
+        {} as Record<string, number>,
+      ),
+    [rows],
+  );
+  return (
+    <Panel>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <input
+          className={inputCls + " max-w-xs"}
+          placeholder="Add an email to never contact"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <Btn
+          variant="ghost"
+          onClick={async () => {
+            if (!email.includes("@")) return;
+            await addSuppression(email);
+            setEmail("");
+            toast.success("Added");
+            void load();
+          }}
+        >
+          <Plus className="h-4 w-4" /> Add
+        </Btn>
+        <span className="ml-auto text-xs text-muted-foreground">
+          {Object.entries(grouped)
+            .map(([k, v]) => `${v} ${k.replace("_", " ")}`)
+            .join(" · ") || "Empty"}
+        </span>
+      </div>
+      <div className="divide-y divide-border">
+        {rows.map((r) => (
+          <div key={r.id} className="flex items-center gap-3 py-2 text-sm">
+            <span className="font-medium">{r.email ?? `*@${r.domain}`}</span>
+            <Pill s={r.reason === "bounce" || r.reason === "unsubscribed" ? "bounced" : "paused"} />
+            <span className="truncate text-xs text-muted-foreground">{r.note}</span>
+            <span className="ml-auto text-xs text-muted-foreground">{fmt(r.created_at)}</span>
+            <button
+              aria-label="Remove"
+              onClick={async () => {
+                await removeSuppression(r.id);
+                void load();
+              }}
+              className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-secondary"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}

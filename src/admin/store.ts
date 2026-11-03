@@ -4,13 +4,7 @@
 /* Types                                                                    */
 /* ----------------------------------------------------------------------- */
 
-export type StageId =
-  | "new"
-  | "contacted"
-  | "qualified"
-  | "proposal"
-  | "won"
-  | "lost";
+export type StageId = "new" | "contacted" | "qualified" | "proposal" | "won" | "lost";
 
 export interface Deal {
   id: string;
@@ -45,6 +39,11 @@ export interface RawBusiness {
   seniority?: string;
   linkedin?: string;
   source?: string; // e.g. "Apollo" | "Manual import"
+  emailSource?: string; // "Website" | "Guess" | "Apollo" | …
+  rating?: number;
+  reviews?: number;
+  score?: number; // 0–100 lead score
+  scoreWhy?: string[];
 }
 
 export interface Client {
@@ -167,7 +166,6 @@ export interface AdScan {
   raw?: unknown;
 }
 
-
 export interface AdminData {
   deals: Deal[];
   raw: RawBusiness[];
@@ -184,8 +182,6 @@ export interface AdminData {
   scraper?: ScraperState;
 }
 
-
-
 /* ----------------------------------------------------------------------- */
 /* Pipeline stage config                                                    */
 /* ----------------------------------------------------------------------- */
@@ -201,10 +197,26 @@ export const STAGES: { id: StageId; label: string; tone: string }[] = [
 
 /* Pipeline starter templates — pick one when creating a deal. */
 export const DEAL_TEMPLATES: Record<string, Partial<Deal>> = {
-  "Paid Ads Retainer": { value: 2500, source: "Meta/Google Ads", notes: "Monthly paid media management retainer." },
-  "Website Build": { value: 4500, source: "Referral", notes: "Conversion-focused website + landing pages." },
-  "Lead-Gen Sprint": { value: 1800, source: "Cold Outreach", notes: "30-day lead generation campaign." },
-  "Full Growth System": { value: 6000, source: "Inbound", notes: "Ads + email + automation + CRM build." },
+  "Paid Ads Retainer": {
+    value: 2500,
+    source: "Meta/Google Ads",
+    notes: "Monthly paid media management retainer.",
+  },
+  "Website Build": {
+    value: 4500,
+    source: "Referral",
+    notes: "Conversion-focused website + landing pages.",
+  },
+  "Lead-Gen Sprint": {
+    value: 1800,
+    source: "Cold Outreach",
+    notes: "30-day lead generation campaign.",
+  },
+  "Full Growth System": {
+    value: 6000,
+    source: "Inbound",
+    notes: "Ads + email + automation + CRM build.",
+  },
 };
 
 /* ----------------------------------------------------------------------- */
@@ -254,7 +266,8 @@ async function currentUserId(): Promise<string | null> {
 function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData {
   const s = seed();
   if (!d || typeof d !== "object") return s;
-  const arrayOr = <T,>(value: unknown, fallback: T[]): T[] => (Array.isArray(value) ? (value as T[]) : fallback);
+  const arrayOr = <T>(value: unknown, fallback: T[]): T[] =>
+    Array.isArray(value) ? (value as T[]) : fallback;
   const settings = d.settings && typeof d.settings === "object" ? d.settings : {};
   const denylist = d.denylist && typeof d.denylist === "object" ? d.denylist : {};
   const scraper = d.scraper && typeof d.scraper === "object" ? d.scraper : undefined;
@@ -274,15 +287,23 @@ function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData
     scraper: scraper
       ? {
           results: arrayOr<ScrapedPerson>((scraper as Partial<ScraperState>).results, []),
-          emailSource: ((scraper as Partial<ScraperState>).emailSource ?? {}) as Record<string, string>,
-          emailSourceUrl: ((scraper as Partial<ScraperState>).emailSourceUrl ?? {}) as Record<string, string>,
-          discoverSources: ((scraper as Partial<ScraperState>).discoverSources ?? {}) as Record<string, ScrapeSource[]>,
+          emailSource: ((scraper as Partial<ScraperState>).emailSource ?? {}) as Record<
+            string,
+            string
+          >,
+          emailSourceUrl: ((scraper as Partial<ScraperState>).emailSourceUrl ?? {}) as Record<
+            string,
+            string
+          >,
+          discoverSources: ((scraper as Partial<ScraperState>).discoverSources ?? {}) as Record<
+            string,
+            ScrapeSource[]
+          >,
           updatedAt: Number((scraper as Partial<ScraperState>).updatedAt ?? Date.now()),
         }
       : s.scraper,
   };
 }
-
 
 function isEmptyRemote(d: unknown): boolean {
   if (!d || typeof d !== "object") return true;
@@ -343,7 +364,10 @@ export async function loadDataRemote(): Promise<AdminData> {
   }
 }
 
-async function pushRemote(data: AdminData, opts: { allowScraperClear?: boolean } = {}): Promise<void> {
+async function pushRemote(
+  data: AdminData,
+  opts: { allowScraperClear?: boolean } = {},
+): Promise<void> {
   const { supabase } = await import("@/integrations/supabase/client");
   const userId = await currentUserId();
   if (!userId) return;
@@ -354,17 +378,18 @@ async function pushRemote(data: AdminData, opts: { allowScraperClear?: boolean }
       .select("data")
       .eq("user_id", userId)
       .maybeSingle();
-    const existingData = withSchemaDefaults(existing?.data as Partial<AdminData> | null | undefined);
-    if (existingData.scraper) nextData = compactForRemote({ ...data, scraper: existingData.scraper });
+    const existingData = withSchemaDefaults(
+      existing?.data as Partial<AdminData> | null | undefined,
+    );
+    if (existingData.scraper)
+      nextData = compactForRemote({ ...data, scraper: existingData.scraper });
   }
-  const { error } = await supabase
-    .from("admin_state")
-    .upsert({
-      user_id: userId,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      data: nextData as any,
-      updated_at: new Date().toISOString(),
-    });
+  const { error } = await supabase.from("admin_state").upsert({
+    user_id: userId,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    data: nextData as any,
+    updated_at: new Date().toISOString(),
+  });
   if (error) console.warn("[admin] cloud save failed", error);
 }
 
@@ -467,7 +492,10 @@ function classifyLoginError(raw: string): { kind: string; message: string } {
     };
   }
   if (/rate|too many|429/i.test(msg)) {
-    return { kind: "RATE", message: "Too many sign-in attempts. Please wait ~30 seconds and try again." };
+    return {
+      kind: "RATE",
+      message: "Too many sign-in attempts. Please wait ~30 seconds and try again.",
+    };
   }
   if (/invalid login|invalid.*credential|wrong/i.test(msg)) {
     return { kind: "AUTH", message: "Wrong username or password." };
@@ -476,7 +504,10 @@ function classifyLoginError(raw: string): { kind: string; message: string } {
     return { kind: "ROLE", message: "This account isn't authorised to use the admin panel." };
   }
   if (/timeout|timed out/i.test(msg)) {
-    return { kind: "TIME", message: "The login server took too long to respond. Please try again." };
+    return {
+      kind: "TIME",
+      message: "The login server took too long to respond. Please try again.",
+    };
   }
   return { kind: "ERR", message: msg || "Sign in failed. Please try again." };
 }
@@ -525,7 +556,9 @@ export async function login(identifier: string, password: string): Promise<Login
         .from("user_roles")
         .select("role")
         .eq("user_id", data.user.id);
-      const allowed = (roles ?? []).some((r) => r.role === "admin" || r.role === "ceo" || r.role === "user");
+      const allowed = (roles ?? []).some(
+        (r) => r.role === "admin" || r.role === "ceo" || r.role === "user",
+      );
       if (roleErr) {
         console.warn("[login] role check failed after sign-in", roleErr);
         return null;
@@ -547,7 +580,6 @@ export async function logout(): Promise<void> {
   const { supabase } = await import("@/integrations/supabase/client");
   await supabase.auth.signOut();
 }
-
 
 /* ----------------------------------------------------------------------- */
 /* GoHighLevel helper                                                       */
@@ -581,7 +613,7 @@ export async function ghlSendEmail(opts: {
   fromEmail: string;
 }): Promise<{ ok: boolean; simulated?: boolean; message: string; details: GhlSendDetail[] }> {
   try {
-    const res = await fetch("/api/ghl/send", {
+    const res = await authFetch("/api/ghl/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(opts),
@@ -653,6 +685,10 @@ export interface ScrapedPerson {
   website: string;
   city: string;
   industry: string;
+  rating?: number;
+  reviews?: number;
+  score?: number;
+  scoreWhy?: string[];
 }
 
 export interface GeocodeResult {
@@ -676,7 +712,7 @@ export interface ScrapeResponse {
 export async function geocodeLocation(q: string): Promise<GeocodeResult | null> {
   if (!q.trim()) return null;
   try {
-    const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`);
+    const res = await authFetch(`/api/geocode?q=${encodeURIComponent(q)}`);
     if (!res.ok) return null;
     const j = (await res.json()) as Partial<GeocodeResult> | null;
     if (!j || typeof j.lat !== "number" || typeof j.lng !== "number") return null;
@@ -698,7 +734,7 @@ export async function geocodeLocation(q: string): Promise<GeocodeResult | null> 
 export async function apolloSearch(filters: ScrapeFilters): Promise<ScrapeResponse> {
   let reason = "";
   try {
-    const res = await fetch("/api/apollo/search", {
+    const res = await authFetch("/api/apollo/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(filters),
@@ -746,13 +782,12 @@ function describeApolloReason(j: { reason?: string; status?: number; detail?: st
       return `Apollo rejected the key (HTTP ${s}) — check it's your current master key${tail}`;
     if (s === 402)
       return `Apollo says you're out of credits (HTTP 402) — check your Apollo credit balance${tail}`;
-    if (s === 422)
-      return `Apollo couldn't parse the search (HTTP 422)${tail}`;
-    if (s === 429)
-      return `Apollo rate limit hit (HTTP 429) — wait a minute and retry${tail}`;
+    if (s === 422) return `Apollo couldn't parse the search (HTTP 422)${tail}`;
+    if (s === 429) return `Apollo rate limit hit (HTTP 429) — wait a minute and retry${tail}`;
     return `Apollo returned HTTP ${s}${tail}`;
   }
-  if (j.reason === "exception") return `the server hit an error calling Apollo${j.detail ? ` — ${j.detail}` : ""}`;
+  if (j.reason === "exception")
+    return `the server hit an error calling Apollo${j.detail ? ` — ${j.detail}` : ""}`;
   return "";
 }
 
@@ -761,20 +796,44 @@ export function demoScrape(filters: ScrapeFilters): ScrapedPerson[] {
   const city = (filters.location.split(",")[0] || "Antwerp").trim();
   const industry = filters.industry.trim() || "Real Estate";
   const slug = (s: string) =>
-    s.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 14) || "company";
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "")
+      .slice(0, 14) || "company";
   const companies = [
-    "Northwind Group", "Lumen Studio", "Bricks & Co", "Verde Living",
-    "Atlas Property", "Urban Nest", "Domus Plus", "Coastal Homes",
-    "Fjord Estates", "Meridian Partners",
+    "Northwind Group",
+    "Lumen Studio",
+    "Bricks & Co",
+    "Verde Living",
+    "Atlas Property",
+    "Urban Nest",
+    "Domus Plus",
+    "Coastal Homes",
+    "Fjord Estates",
+    "Meridian Partners",
   ];
   const titlePool = filters.titles.trim()
-    ? filters.titles.split(",").map((t) => t.trim()).filter(Boolean)
+    ? filters.titles
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
     : ["Owner", "Managing Director", "CEO", "Head of Marketing", "Commercial Director", "Founder"];
   const seniorityPool = filters.seniorities.length
     ? filters.seniorities
     : ["owner", "c_suite", "director"];
   const firsts = ["Anna", "Tom", "Sara", "Joris", "Eva", "Luc", "Femke", "Dries", "Lotte", "Bram"];
-  const lasts = ["De Vos", "Pauwels", "Janssen", "Maes", "Smeets", "Peeters", "Claes", "Willems", "Goossens", "Aerts"];
+  const lasts = [
+    "De Vos",
+    "Pauwels",
+    "Janssen",
+    "Maes",
+    "Smeets",
+    "Peeters",
+    "Claes",
+    "Willems",
+    "Goossens",
+    "Aerts",
+  ];
 
   const n = Math.max(3, Math.min(filters.perPage || 8, 14));
   const out: ScrapedPerson[] = [];
@@ -792,7 +851,11 @@ export function demoScrape(filters: ScrapeFilters): ScrapedPerson[] {
       seniority,
       email: `${first.toLowerCase()}.${last.toLowerCase().replace(/\s+/g, "")}@${domain}`,
       emailLocked: false,
-      phone: `+32 ${4 + (i % 5)}${(70 + i).toString().slice(-2)} ${(10 + i)} ${(20 + i)} ${(30 + i)}`.slice(0, 18),
+      phone:
+        `+32 ${4 + (i % 5)}${(70 + i).toString().slice(-2)} ${10 + i} ${20 + i} ${30 + i}`.slice(
+          0,
+          18,
+        ),
       linkedin: `https://www.linkedin.com/in/${first.toLowerCase()}-${last.toLowerCase().replace(/\s+/g, "")}`,
       company,
       website: domain,
@@ -808,8 +871,15 @@ export interface EnrichResult {
   email: string;
   phone: string;
   website: string; // company website found/confirmed during enrichment
-  source: string; // "Apollo" | "Hunter" | "Google" | "demo" | ""
-  sourceUrl: string; // URL where the email was found (Hunter source / Google result link)
+  source: string; // "Website" | "Guess" | "Apollo" | "Hunter" | "Google" | "demo" | ""
+  sourceUrl: string; // URL where the email was found (site page / Hunter source / Google result link)
+  name?: string; // decision-maker found on the website
+  title?: string;
+  linkedin?: string;
+  mx?: boolean | null; // domain accepts mail?
+  guessed?: boolean; // pattern guess, not a published address
+  score?: number;
+  scoreReasons?: string[];
 }
 
 /**
@@ -826,19 +896,27 @@ export async function enrichContacts(
     domain: string;
     organizationName?: string;
     linkedin?: string;
+    rating?: number;
+    reviews?: number;
+    phone?: string;
   }[],
   revealPhone = false,
+  usePaid = false,
 ): Promise<EnrichResult[]> {
   try {
-    const res = await fetch("/api/enrich", {
+    const res = await authFetch("/api/enrich", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ people, revealPhone }),
+      body: JSON.stringify({ people, revealPhone, usePaid }),
     });
     if (res.ok) {
       const j = (await res.json()) as { results?: EnrichResult[] };
       if (Array.isArray(j.results)) {
-        return j.results.map((r) => ({ ...r, website: r.website ?? "", sourceUrl: r.sourceUrl ?? "" }));
+        return j.results.map((r) => ({
+          ...r,
+          website: r.website ?? "",
+          sourceUrl: r.sourceUrl ?? "",
+        }));
       }
     }
   } catch {
@@ -846,15 +924,30 @@ export async function enrichContacts(
   }
   // Demo fallback: synthesise emails locally.
   return people.map((p) => {
-    const dom = p.domain.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "") || "example.com";
+    const dom =
+      p.domain
+        .replace(/^https?:\/\//, "")
+        .replace(/^www\./, "")
+        .replace(/\/.*$/, "") || "example.com";
     const f = (p.firstName || p.name.split(" ")[0] || "contact").toLowerCase();
     const l = (p.lastName || p.name.split(" ").slice(-1)[0] || "info").toLowerCase();
-    return { id: p.id, email: `${f}.${l}@${dom}`, phone: "", website: dom, source: "demo", sourceUrl: "" };
+    return {
+      id: p.id,
+      email: `${f}.${l}@${dom}`,
+      phone: "",
+      website: dom,
+      source: "demo",
+      sourceUrl: "",
+    };
   });
 }
 
 export function fmtEuro(n: number): string {
-  return new Intl.NumberFormat("nl-BE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat("nl-BE", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(n);
 }
 
 export function fillTemplate(tpl: string, vars: Record<string, string>): string {
@@ -871,7 +964,12 @@ function norm(s: string | undefined): string {
 
 export function cleanDomain(s: string | undefined): string {
   if (!s) return "";
-  return s.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "").trim().toLowerCase();
+  return s
+    .replace(/^https?:\/\//i, "")
+    .replace(/^www\./i, "")
+    .replace(/\/.*$/, "")
+    .trim()
+    .toLowerCase();
 }
 
 /** Stable lookup keys for a contact — any match means "denied". */
@@ -975,31 +1073,66 @@ export interface DiscoveredBusiness {
   source: "Google Maps" | "Google";
 }
 
-export async function googleBusinessSearch(filters: {
+export type DiscoverProvider = "places" | "serper" | "serpapi" | "osm";
+
+export async function businessDiscovery(filters: {
   location: string;
   industry: string;
   perPage: number;
-}): Promise<{ live: boolean; businesses: DiscoveredBusiness[]; reason?: string }> {
+  providers: DiscoverProvider[];
+  geo?: GeocodeResult | null;
+}): Promise<{
+  live: boolean;
+  businesses: DiscoveredBusiness[];
+  reason?: string;
+  used?: Record<string, number>;
+  available?: Record<string, boolean>;
+  errors?: string[];
+}> {
   try {
-    const res = await fetch("/api/google/businesses", {
+    const res = await authFetch("/api/discover/businesses", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(filters),
+      body: JSON.stringify({
+        location: filters.location,
+        industry: filters.industry,
+        perPage: filters.perPage,
+        providers: filters.providers,
+        lat: filters.geo?.lat,
+        lng: filters.geo?.lng,
+        bbox: filters.geo?.bbox,
+      }),
     });
+    if (res.status === 401) return { live: false, businesses: [], reason: "Not signed in" };
     if (!res.ok) return { live: false, businesses: [], reason: `HTTP ${res.status}` };
     const j = (await res.json()) as {
       demo?: boolean;
       businesses?: DiscoveredBusiness[];
       reason?: string;
+      used?: Record<string, number>;
+      available?: Record<string, boolean>;
+      errors?: string[];
     };
     return {
       live: !j.demo,
       businesses: j.businesses ?? [],
       reason: j.reason,
+      used: j.used,
+      available: j.available,
+      errors: j.errors,
     };
   } catch (e) {
     return { live: false, businesses: [], reason: (e as Error).message };
   }
+}
+
+/** @deprecated kept for older callers — routes to the cheapest available provider. */
+export async function googleBusinessSearch(filters: {
+  location: string;
+  industry: string;
+  perPage: number;
+}) {
+  return businessDiscovery({ ...filters, providers: ["places", "serper", "serpapi", "osm"] });
 }
 
 /* ----------------------------------------------------------------------- */
@@ -1024,7 +1157,7 @@ export async function claudeExtractFromSite(input: {
 }): Promise<ClaudeExtracted | null> {
   if (!input.website) return null;
   try {
-    const siteRes = await fetch("/api/scrape-site", {
+    const siteRes = await authFetch("/api/scrape-site", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url: input.website }),
@@ -1032,7 +1165,7 @@ export async function claudeExtractFromSite(input: {
     if (!siteRes.ok) return null;
     const siteJ = (await siteRes.json()) as { ok?: boolean; text?: string };
     if (!siteJ.ok || !siteJ.text) return null;
-    const extractRes = await fetch("/api/claude/extract", {
+    const extractRes = await authFetch("/api/claude/extract", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ company: input.company, website: input.website, text: siteJ.text }),
@@ -1060,16 +1193,19 @@ export async function claudeExtractFromSite(input: {
 /* Unified discovery — fan-out across Apollo + Google + Claude              */
 /* ----------------------------------------------------------------------- */
 
-export type ScrapeSource = "apollo" | "google" | "claude";
+export type ScrapeSource = "apollo" | "google" | "osm" | "claude";
 
 export interface DiscoverOptions {
   sources: Record<ScrapeSource, boolean>;
   denylist?: Record<string, DenylistEntry>;
+  geo?: GeocodeResult | null;
   onProgress?: (phase: string, done: number, total: number) => void;
 }
 
 function googleToPerson(b: DiscoveredBusiness, kw: string): ScrapedPerson {
   return {
+    rating: b.rating,
+    reviews: b.reviews,
     id: uid("gp"),
     name: "",
     title: "",
@@ -1108,16 +1244,22 @@ export async function discoverLeads(
     sources.apollo
       ? apolloSearch(filters)
       : Promise.resolve({ live: false, people: [], message: "" } as ScrapeResponse),
-    sources.google
-      ? googleBusinessSearch({
+    sources.google || sources.osm
+      ? businessDiscovery({
           location: filters.location,
           industry: filters.industry,
           perPage: wanted,
+          providers: [
+            ...(sources.google ? (["places", "serper", "serpapi"] as DiscoverProvider[]) : []),
+            ...(sources.osm ? (["osm"] as DiscoverProvider[]) : []),
+          ],
+          geo: opts.geo,
         })
       : Promise.resolve({ live: false, businesses: [], reason: "off" } as {
           live: boolean;
           businesses: DiscoveredBusiness[];
           reason?: string;
+          used?: Record<string, number>;
         }),
   ]);
 
@@ -1145,7 +1287,7 @@ export async function discoverLeads(
     } else {
       const person = googleToPerson(b, kw);
       merged.set(key, person);
-      sourcesById[person.id] = ["google"];
+      sourcesById[person.id] = [b.id.startsWith("osm_") ? "osm" : "google"];
     }
   }
 
@@ -1197,9 +1339,23 @@ export async function discoverLeads(
   }
 
   const bits: string[] = [];
-  if (sources.apollo) bits.push(apolloRes.live ? `Apollo: ${apolloRes.people.length}` : `Apollo: demo`);
-  if (sources.google)
-    bits.push(googleRes.live ? `Google Maps: ${googleRes.businesses.length}` : `Google: ${googleRes.reason ?? "off"}`);
+  if (sources.apollo)
+    bits.push(apolloRes.live ? `Apollo: ${apolloRes.people.length}` : `Apollo: demo`);
+  if (sources.google || sources.osm) {
+    const used = (googleRes as { used?: Record<string, number> }).used ?? {};
+    const label: Record<string, string> = {
+      places: "Google Places",
+      serper: "Serper",
+      serpapi: "SerpApi",
+      osm: "OpenStreetMap",
+    };
+    const parts = Object.entries(used).map(([k, v]) => `${label[k] ?? k}: ${v}`);
+    bits.push(
+      googleRes.live
+        ? parts.join(" · ") || `Local: ${googleRes.businesses.length}`
+        : `Local: ${googleRes.reason ?? "off"}`,
+    );
+  }
   if (sources.claude) bits.push("Claude: enriched");
   const message = `${people.length} unique business(es) after merge. ${bits.join(" · ")}${
     skippedDenied ? ` · ${skippedDenied} skipped (denied)` : ""
@@ -1221,7 +1377,12 @@ export async function discoverLeads(
 
 function toCsv(rows: Record<string, unknown>[]): string {
   if (!rows.length) return "";
-  const cols = Array.from(rows.reduce((s, r) => { Object.keys(r).forEach((k) => s.add(k)); return s; }, new Set<string>()));
+  const cols = Array.from(
+    rows.reduce((s, r) => {
+      Object.keys(r).forEach((k) => s.add(k));
+      return s;
+    }, new Set<string>()),
+  );
   const esc = (v: unknown) => {
     if (v === null || v === undefined) return "";
     const s = typeof v === "object" ? JSON.stringify(v) : String(v);
@@ -1234,8 +1395,11 @@ function download(name: string, mime: string, content: string) {
   const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = name;
-  document.body.appendChild(a); a.click(); a.remove();
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
@@ -1257,7 +1421,11 @@ export function exportAccountJson(data: AdminData, accountName: string) {
     },
     data,
   };
-  download(`inspirova-${accountName || "account"}-${stamp}.json`, "application/json", JSON.stringify(payload, null, 2));
+  download(
+    `inspirova-${accountName || "account"}-${stamp}.json`,
+    "application/json",
+    JSON.stringify(payload, null, 2),
+  );
 }
 
 /** Download each table as its own CSV. CRM-import friendly. */
@@ -1272,12 +1440,33 @@ export function exportAccountCsvs(data: AdminData, accountName: string) {
     tasks: (data.tasks ?? []) as unknown as Record<string, unknown>[],
     campaigns: data.campaigns as unknown as Record<string, unknown>[],
     templates: data.templates as unknown as Record<string, unknown>[],
-    ad_scans: (data.adScans ?? []).map((a) => ({ id: a.id, clientId: a.clientId, platform: a.platform, capturedAt: a.capturedAt, label: a.label, ...a.metrics })) as unknown as Record<string, unknown>[],
+    ad_scans: (data.adScans ?? []).map((a) => ({
+      id: a.id,
+      clientId: a.clientId,
+      platform: a.platform,
+      capturedAt: a.capturedAt,
+      label: a.label,
+      ...a.metrics,
+    })) as unknown as Record<string, unknown>[],
   };
   Object.entries(tables).forEach(([name, rows]) => {
     if (!rows.length) return;
     download(`${prefix}-${name}.csv`, "text/csv", toCsv(rows));
   });
+}
+
+/* ----------------------------------------------------------------------- */
+/* authFetch — every /api/* call carries the signed-in user's token.        */
+/* The Worker rejects anonymous calls (see src/lib/api-auth.ts), so nobody  */
+/* can burn your API credits or send mail by hitting the URL directly.      */
+/* ----------------------------------------------------------------------- */
+export async function authFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  const { supabase } = await import("@/integrations/supabase/client");
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  const headers = new Headers(init.headers ?? {});
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return fetch(input, { ...init, headers });
 }
 
 /* ----------------------------------------------------------------------- */
@@ -1291,16 +1480,22 @@ export async function claudeScanAdScreenshot(opts: {
   hint?: string;
 }): Promise<{ ok: boolean; metrics?: AdScan["metrics"]; raw?: unknown; error?: string }> {
   try {
-    const res = await fetch("/api/claude/ad-scan", {
+    const res = await authFetch("/api/claude/ad-scan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(opts),
     });
-    const j = (await res.json()) as { ok?: boolean; metrics?: AdScan["metrics"]; raw?: unknown; error?: string; reason?: string };
-    if (!j.ok) return { ok: false, error: j.error || j.reason || `Scan failed (HTTP ${res.status})` };
+    const j = (await res.json()) as {
+      ok?: boolean;
+      metrics?: AdScan["metrics"];
+      raw?: unknown;
+      error?: string;
+      reason?: string;
+    };
+    if (!j.ok)
+      return { ok: false, error: j.error || j.reason || `Scan failed (HTTP ${res.status})` };
     return { ok: true, metrics: j.metrics, raw: j.raw };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
 }
-

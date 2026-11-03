@@ -14,6 +14,13 @@
  * front-end falls back to sample data, so the UI stays usable before go-live.
  */
 
+import { getApiUser, hasCronSecret, unauthorized } from "./api-auth";
+import { placesTextSearch } from "./providers/places";
+import { overpassBusinesses } from "./providers/osm";
+import { freeEnrich, hasMx, scoreLead, type SiteSignals } from "./providers/free-enrich";
+import { handleOutreachRoute } from "./outreach-routes";
+import { Db } from "./db";
+
 type Env = Record<string, string | undefined>;
 
 /** Read a secret from Worker env binding OR process.env (Lovable injects secrets via process.env). */
@@ -34,8 +41,48 @@ function json(body: unknown, status = 200): Response {
 export async function handleApiRequest(request: Request, env: Env): Promise<Response | null> {
   const url = new URL(request.url);
   const path = url.pathname;
+  if (!path.startsWith("/api/")) return null;
 
+  // Public endpoints (no login): unsubscribe links + health. Everything else
+  // costs money or acts on your behalf, so it needs a signed-in admin — or the
+  // cron secret for scheduled jobs.
+  const isPublic =
+    path === "/api/health" || path === "/api/unsub" || path === "/api/google/oauth/callback";
+  let user = null as Awaited<ReturnType<typeof getApiUser>>;
+  if (!isPublic) {
+    user = await getApiUser(request, env);
+    if (!user && !hasCronSecret(request, env)) return unauthorized();
+  }
+
+  if (path === "/api/health") return json({ ok: true });
+
+  // Rate limits per signed-in user (cron and public routes are exempt).
+  // Expensive routes: 30/min. Everything else: 120/min.
+  if (user && Db.available(env)) {
+    const heavy = /^\/api\/(discover|enrich|apollo|claude|scrape-site|outreach\/(enroll|test-send|verify|search))/.test(path);
+    try {
+      const ok = await new Db(env).rpc<boolean>("check_rate_limit", {
+        _key: `${heavy ? "heavy" : "api"}:${user.id}`,
+        _max: heavy ? 30 : 120,
+        _window_seconds: 60,
+      });
+      if (ok === false) {
+        return new Response(JSON.stringify({ error: "rate_limited", message: "Too many requests — wait a minute and try again." }), {
+          status: 429,
+          headers: { ...JSON_HEADERS, "Retry-After": "60" },
+        });
+      }
+    } catch {
+      /* limiter unavailable (migration not applied yet) — allow */
+    }
+  }
+
+  const outreach = await handleOutreachRoute(path, request, env, user);
+  if (outreach) return outreach;
   if (path === "/api/geocode") return geocode(url, env);
+  if (path === "/api/discover/businesses") return discoverBusinesses(request, env);
+  if (path === "/api/enrich/free") return enrichFree(request, env);
+  if (path === "/api/verify-domain") return verifyDomain(url);
   if (path === "/api/diag") return diag(env);
   if (path === "/api/apollo/search") return apolloSearch(request, env);
   if (path === "/api/enrich") return enrich(request, env);
@@ -60,8 +107,11 @@ async function diag(env: Env): Promise<Response> {
     apolloKeyPresent: !!apolloKey,
     apolloKeyLength: apolloKey ? apolloKey.length : 0,
     hunterKeyPresent: !!secret(env, "HUNTER_API_KEY"),
-    serperKeyPresent: !!secret(env, "SERPAPI_API_KEY"),
+    serpapiKeyPresent: !!secret(env, "SERPAPI_API_KEY"),
     ghlKeyPresent: !!secret(env, "GHL_API_KEY"),
+    placesKeyPresent: !!secret(env, "GOOGLE_PLACES_API_KEY"),
+    serperKeyPresent: !!secret(env, "SERPER_API_KEY"),
+    anthropicKeyPresent: !!secret(env, "ANTHROPIC_API_KEY"),
   };
   if (apolloKey) {
     try {
@@ -276,11 +326,19 @@ interface EnrichInput {
   domain?: string; // company website / domain
   organizationName?: string;
   linkedin?: string;
+  rating?: number;
+  reviews?: number;
+  phone?: string;
 }
 
 async function enrich(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") return json({ error: "POST only" }, 405);
-  let payload: { people?: EnrichInput[]; revealPhone?: boolean } = {};
+  let payload: {
+    people?: EnrichInput[];
+    revealPhone?: boolean;
+    usePaid?: boolean;
+    useClaude?: boolean;
+  } = {};
   try {
     payload = (await request.json()) as typeof payload;
   } catch {
@@ -289,27 +347,14 @@ async function enrich(request: Request, env: Env): Promise<Response> {
   const people = (payload.people ?? []).slice(0, 10);
   if (!people.length) return json({ results: [] });
 
-  const apolloKey = secret(env, "APOLLO_API_KEY");
-  const hunterKey = secret(env, "HUNTER_API_KEY");
-  // Google key: accept either name. SerpApi.com or Serper.dev (auto-detected).
-  const googleKey = secret(env, "SERPAPI_API_KEY") || secret(env, "SERPER_API_KEY");
+  // Paid sources are OPT-IN per call. Default is free only.
+  const usePaid = payload.usePaid === true;
+  const apolloKey = usePaid ? secret(env, "APOLLO_API_KEY") : undefined;
+  const hunterKey = usePaid ? secret(env, "HUNTER_API_KEY") : undefined;
+  // Cheap Google (Serper ≈ $1/1k) is allowed as a fallback even without usePaid; SerpApi only with usePaid.
+  const googleKey =
+    secret(env, "SERPER_API_KEY") || (usePaid ? secret(env, "SERPAPI_API_KEY") : undefined);
 
-  if (!apolloKey && !hunterKey && !googleKey) {
-    return json({
-      demo: true,
-      reason: "missing_reveal_keys",
-      results: people.map((p) => ({
-        id: p.id,
-        email: demoEmail(p),
-        phone: "",
-        website: cleanDomain(p.domain),
-        source: "demo",
-        sourceUrl: "",
-      })),
-    });
-  }
-
-  // Seed each result with the website Apollo's search already gave us.
   const results = people.map((p) => ({
     id: p.id,
     email: "",
@@ -317,15 +362,81 @@ async function enrich(request: Request, env: Env): Promise<Response> {
     website: cleanDomain(p.domain),
     source: "",
     sourceUrl: "",
+    name: "",
+    title: "",
+    linkedin: "",
+    mx: null as boolean | null,
+    guessed: false,
+    score: 0,
+    scoreReasons: [] as string[],
+    signals: null as SiteSignals | null,
   }));
   const byId = new Map(results.map((r) => [r.id, r]));
 
-  // 1) Apollo enrichment (Professional plan): emails + websites + phones, one batch call.
+  // 0) FREE pass — read each company's own website (3 at a time).
+  const CONC = 3;
+  for (let i = 0; i < people.length; i += CONC) {
+    await Promise.all(
+      people.slice(i, i + CONC).map(async (p) => {
+        const r = byId.get(p.id);
+        if (!r || !r.website) return;
+        const fe = await freeEnrich({ website: r.website, ownerName: p.name });
+        if (!fe.ok) return;
+        r.website = fe.website || r.website;
+        r.mx = fe.mx;
+        r.signals = fe.signals;
+        if (fe.socials.linkedin && !r.linkedin) r.linkedin = fe.socials.linkedin;
+        if (!r.phone && fe.phones[0]) r.phone = fe.phones[0];
+        // Claude picks the decision-maker from the text we already have.
+        type Ex = {
+          ownerName?: string;
+          ownerTitle?: string;
+          email?: string;
+          linkedin?: string;
+          phone?: string;
+        };
+        let ex: Ex | null = null;
+        if (payload.useClaude !== false && secret(env, "ANTHROPIC_API_KEY") && fe.text) {
+          const hint = fe.names.length
+            ? `People found on the site: ${fe.names.map((n) => `${n.name}${n.title ? ` (${n.title})` : ""}`).join("; ")}`
+            : undefined;
+          ex = (await runClaudeExtract(env, {
+            company: p.organizationName || "",
+            website: r.website,
+            text: fe.text,
+            hint,
+          })) as Ex | null;
+        }
+        const owner = ex?.ownerName || fe.names[0]?.name || "";
+        if (owner && !p.name) r.name = owner;
+        if (ex?.ownerTitle) r.title = ex.ownerTitle;
+        if (ex?.linkedin && !r.linkedin) r.linkedin = ex.linkedin;
+        if (ex?.phone && !r.phone) r.phone = ex.phone;
+        // Best published email: Claude's pick if it's on the site, else top-ranked site email.
+        const site = fe.emails.filter((e) => e.source === "site");
+        const claudeEmail = (ex?.email || "").toLowerCase();
+        const pick = (claudeEmail && site.find((e) => e.email === claudeEmail)) || site[0];
+        if (pick && fe.mx !== false) {
+          r.email = pick.email;
+          r.source = "Website";
+          r.sourceUrl = `https://${fe.website}${pick.page && pick.page !== "/" ? pick.page : ""}`;
+        }
+      }),
+    );
+  }
+
+  // 1) Apollo enrichment (paid, opt-in): emails + websites + phones, one batch call.
   if (apolloKey) {
     try {
-      const matches = await apolloBulkMatch(apolloKey, people, !!payload.revealPhone);
+      const missing = people.filter((p) => {
+        const r = byId.get(p.id);
+        return r && (!r.email || (payload.revealPhone && !r.phone));
+      });
+      const matches = missing.length
+        ? await apolloBulkMatch(apolloKey, missing, !!payload.revealPhone)
+        : [];
       matches.forEach((m, i) => {
-        const r = byId.get(people[i].id);
+        const r = byId.get(missing[i].id);
         if (!r || !m) return;
         if (m.email) {
           r.email = m.email;
@@ -411,9 +522,45 @@ async function enrich(request: Request, env: Env): Promise<Response> {
     }
   }
 
+  // 3) Last resort: a pattern guess on a domain that accepts mail. Flagged so the
+  //    UI shows it as a guess and sequences can verify/skip it.
+  for (const r of results) {
+    if (r.email || !r.website) continue;
+    const mx = r.mx ?? (await hasMx(r.website));
+    r.mx = mx;
+    if (mx !== true) continue;
+    const who = (r.name || people.find((p) => p.id === r.id)?.name || "")
+      .replace(/^Dr\.?\s+/i, "")
+      .trim();
+    const [first, ...rest] = who.split(/\s+/);
+    const last = rest.at(-1) || "";
+    const f = (first || "").toLowerCase().replace(/[^a-z]/g, "");
+    const l = last.toLowerCase().replace(/[^a-z]/g, "");
+    r.email = f && l ? `${f}@${r.website}` : `info@${r.website}`;
+    r.source = "Guess";
+    r.guessed = true;
+  }
+
+  // 4) Score every contact for prioritisation.
+  for (const r of results) {
+    const p = people.find((x) => x.id === r.id);
+    const sc = scoreLead({
+      rating: p?.rating,
+      reviews: p?.reviews,
+      website: r.website,
+      name: r.name || p?.name || "",
+      email: r.email,
+      emailGuessed: r.guessed,
+      mx: r.mx,
+      phone: r.phone || p?.phone || "",
+      signals: r.signals,
+    });
+    r.score = sc.score;
+    r.scoreReasons = sc.reasons;
+  }
+
   return json({ demo: false, results });
 }
-
 
 /** SerpApi.com keys are 64 hex chars; Serper.dev keys are ~40. */
 function isSerpApi(key: string): boolean {
@@ -736,7 +883,12 @@ async function ghlSend(request: Request, env: Env): Promise<Response> {
         return json({
           ok: false,
           message: "GHL could not create a location-scoped token from that Agency token.",
-          details: recipients.map((r) => ({ email: r.email, ok: false, status: tokenRes.status, error: `location token: ${detail}` })),
+          details: recipients.map((r) => ({
+            email: r.email,
+            ok: false,
+            status: tokenRes.status,
+            error: `location token: ${detail}`,
+          })),
         });
       }
       const tokenJson = (await tokenRes.json()) as { accessToken?: string };
@@ -760,16 +912,23 @@ async function ghlSend(request: Request, env: Env): Promise<Response> {
         if (res.status !== 429 && res.status < 500) return res;
         if (attempt >= maxRetries) return res;
         const retryAfter = Number(res.headers.get("retry-after"));
-        const backoff = Number.isFinite(retryAfter) && retryAfter > 0
-          ? Math.min(retryAfter * 1000, 10000)
-          : Math.min(1000 * 2 ** attempt, 8000) + jitter();
+        const backoff =
+          Number.isFinite(retryAfter) && retryAfter > 0
+            ? Math.min(retryAfter * 1000, 10000)
+            : Math.min(1000 * 2 ** attempt, 8000) + jitter();
         await sleep(backoff);
         attempt++;
       }
     }
 
     // Sequential send — GHL caps at ~10 req/sec/location and each recipient uses 2 calls.
-    const details: Array<{ email: string; ok: boolean; status?: number; error?: string; simulated?: boolean }> = [];
+    const details: Array<{
+      email: string;
+      ok: boolean;
+      status?: number;
+      error?: string;
+      simulated?: boolean;
+    }> = [];
     for (let i = 0; i < recipients.length; i++) {
       const rcpt = recipients[i];
       try {
@@ -790,7 +949,12 @@ async function ghlSend(request: Request, env: Env): Promise<Response> {
         );
         if (!upsertRes.ok) {
           const detail = (await upsertRes.text()).slice(0, 300);
-          details.push({ email: rcpt.email, ok: false, status: upsertRes.status, error: `upsert: ${detail}` });
+          details.push({
+            email: rcpt.email,
+            ok: false,
+            status: upsertRes.status,
+            error: `upsert: ${detail}`,
+          });
         } else {
           const upsertJson = (await upsertRes.json()) as { contact?: { id?: string }; id?: string };
           const contactId = upsertJson.contact?.id ?? upsertJson.id;
@@ -842,6 +1006,188 @@ async function ghlSend(request: Request, env: Env): Promise<Response> {
   } catch (e) {
     return json({ ok: false, message: (e as Error).message, details: [] }, 500);
   }
+}
+
+/* --------------------------------------------------------------------- */
+/* Business discovery — cheapest provider first                            */
+/*   Google Places (New)  → free monthly allowance, best data              */
+/*   Serper.dev            → ~$1 per 1,000 searches                         */
+/*   SerpApi               → legacy, expensive                               */
+/*   OpenStreetMap         → free, patchier coverage                         */
+/* --------------------------------------------------------------------- */
+
+type DiscoverProvider = "places" | "serper" | "serpapi" | "osm";
+
+export interface DiscoverFilters {
+  location?: string;
+  industry?: string;
+  perPage?: number;
+  providers?: DiscoverProvider[];
+  /** From /api/geocode — lets Places bias to the area and OSM query a bbox. */
+  lat?: number;
+  lng?: number;
+  bbox?: [number, number, number, number];
+}
+
+async function discoverBusinesses(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") return json({ error: "POST only" }, 405);
+  let f: DiscoverFilters = {};
+  try {
+    f = (await request.json()) as DiscoverFilters;
+  } catch {
+    return json({ error: "invalid json" }, 400);
+  }
+  const r = await discoverCore(f, env);
+  return json(r.businesses.length ? { demo: false, ...r } : { demo: true, reason: r.reason, ...r });
+}
+
+export interface DiscoverResult {
+  businesses: (DiscoveredBusiness & { provider: string })[];
+  used: Record<string, number>;
+  available: Record<string, boolean>;
+  errors: string[];
+  reason?: string;
+}
+
+/** Provider waterfall shared by the UI route and scheduled saved searches. */
+export async function discoverCore(f: DiscoverFilters, env: Env): Promise<DiscoverResult> {
+  const wanted = Math.min(Math.max(f.perPage ?? 25, 1), 200);
+  const keywords = (f.industry ?? "").split(",").map((k) => k.trim()).filter(Boolean).slice(0, 6);
+  const queries = keywords.length ? keywords : ["business"];
+  const location = (f.location ?? "").trim();
+  const city = location.split(",")[0] || "";
+  const want = f.providers?.length ? f.providers : (["places", "serper", "serpapi", "osm"] as DiscoverProvider[]);
+
+  const placesKey = secret(env, "GOOGLE_PLACES_API_KEY");
+  const serperKey = secret(env, "SERPER_API_KEY");
+  const serpapiKey = secret(env, "SERPAPI_API_KEY");
+
+  const byKey = new Map<string, DiscoveredBusiness & { provider: string }>();
+  const used: Record<string, number> = {};
+  const errors: string[] = [];
+  const perQuery = Math.ceil(wanted / queries.length);
+
+  const add = (b: DiscoveredBusiness, provider: string) => {
+    const k = cleanDomain(b.website) || `${b.company.toLowerCase()}|${(b.phone || "").replace(/\D/g, "")}`;
+    if (!k || byKey.has(k)) return false;
+    byKey.set(k, { ...b, provider });
+    used[provider] = (used[provider] ?? 0) + 1;
+    return true;
+  };
+
+  if (want.includes("places") && placesKey) {
+    for (const kw of queries) {
+      if (byKey.size >= wanted) break;
+      const r = await placesTextSearch(placesKey, {
+        keyword: kw,
+        location,
+        max: Math.min(perQuery, 60),
+        bias: typeof f.lat === "number" && typeof f.lng === "number" ? { lat: f.lat, lng: f.lng } : undefined,
+      });
+      if (r.error) errors.push(r.error);
+      for (const b of r.businesses) {
+        add({ ...b, source: "Google Maps" }, "places");
+        if (byKey.size >= wanted) break;
+      }
+    }
+  }
+
+  if (byKey.size < wanted && want.includes("serper") && serperKey) {
+    for (const kw of queries) {
+      if (byKey.size >= wanted) break;
+      try {
+        const res = await fetch("https://google.serper.dev/places", {
+          method: "POST",
+          headers: { "X-API-KEY": serperKey, "Content-Type": "application/json" },
+          body: JSON.stringify({ q: location ? `${kw} in ${location}` : kw, num: 20 }),
+        });
+        if (!res.ok) { errors.push(`Serper ${res.status}`); continue; }
+        const d = (await res.json()) as { places?: Array<{ title?: string; address?: string; phoneNumber?: string; website?: string; category?: string; rating?: number; ratingCount?: number; cid?: string }> };
+        for (const r of d.places ?? []) {
+          add({ id: r.cid || `${(r.title || "").toLowerCase()}|${cleanDomain(r.website || "")}`, company: r.title || "", website: cleanDomain(r.website || ""), phone: r.phoneNumber || "", address: r.address || "", city, industry: r.category || kw, rating: r.rating, reviews: r.ratingCount, source: "Google Maps" }, "serper");
+          if (byKey.size >= wanted) break;
+        }
+      } catch (e) { errors.push((e as Error).message); }
+    }
+  }
+
+  if (byKey.size < wanted && want.includes("serpapi") && serpapiKey && !placesKey && !serperKey) {
+    for (const kw of queries) {
+      if (byKey.size >= wanted) break;
+      try {
+        const u = new URL("https://serpapi.com/search.json");
+        u.searchParams.set("engine", "google_maps");
+        u.searchParams.set("q", location ? `${kw} in ${location}` : kw);
+        u.searchParams.set("type", "search");
+        u.searchParams.set("api_key", serpapiKey);
+        const res = await fetch(u.toString());
+        if (!res.ok) { errors.push(`SerpApi ${res.status}`); continue; }
+        const d = (await res.json()) as { local_results?: Array<{ place_id?: string; title?: string; website?: string; phone?: string; address?: string; type?: string; rating?: number; reviews?: number }> };
+        for (const r of d.local_results ?? []) {
+          add({ id: r.place_id || `${(r.title || "").toLowerCase()}|${cleanDomain(r.website)}`, company: r.title || "", website: cleanDomain(r.website || ""), phone: r.phone || "", address: r.address || "", city, industry: r.type || kw, rating: r.rating, reviews: r.reviews, source: "Google Maps" }, "serpapi");
+          if (byKey.size >= wanted) break;
+        }
+      } catch (e) { errors.push((e as Error).message); }
+    }
+  }
+
+  if (byKey.size < wanted && want.includes("osm") && f.bbox) {
+    for (const kw of queries) {
+      if (byKey.size >= wanted) break;
+      const r = await overpassBusinesses({ keyword: kw, bbox: f.bbox, city, max: wanted - byKey.size });
+      if (r.error) errors.push(r.error);
+      for (const b of r.businesses) add({ ...b, source: "Google" }, "osm");
+    }
+  }
+
+  const businesses = Array.from(byKey.values()).slice(0, wanted);
+  const available = { places: !!placesKey, serper: !!serperKey, serpapi: !!serpapiKey, osm: true };
+  const reason = businesses.length ? undefined : !placesKey && !serperKey && !serpapiKey && !f.bbox ? "missing_key" : "no_results";
+  return { businesses, used, available, errors, reason };
+}
+
+/* --------------------------------------------------------------------- */
+/* Free enrichment — website scrape + MX check (+ Claude on the same text) */
+/* --------------------------------------------------------------------- */
+
+async function enrichFree(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") return json({ error: "POST only" }, 405);
+  let body: { website?: string; company?: string; ownerName?: string; useClaude?: boolean } = {};
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    return json({ error: "invalid json" }, 400);
+  }
+  const r = await freeEnrich({ website: body.website || "", ownerName: body.ownerName });
+  if (!r.ok) return json({ ok: false, error: r.error, website: r.website });
+
+  // Optional Claude pass on the SAME text (no second fetch), to name the decision-maker.
+  let extracted: unknown = null;
+  if (body.useClaude !== false && secret(env, "ANTHROPIC_API_KEY") && r.text) {
+    const hint = r.names.length
+      ? `People found on the site: ${r.names.map((n) => `${n.name}${n.title ? ` (${n.title})` : ""}`).join("; ")}`
+      : undefined;
+    extracted = await runClaudeExtract(env, {
+      company: body.company || "",
+      website: r.website,
+      text: r.text,
+      hint,
+    });
+  }
+  // Don't ship 30 KB of page text back to the browser.
+  const { text: _t, ...rest } = r;
+  void _t;
+  const ex = (extracted ?? {}) as { ownerName?: string; email?: string };
+  const best = r.emails.find((e) => e.source === "site") ?? r.emails[0];
+  const sc = scoreLead({ website: r.website, name: ex.ownerName || r.names[0]?.name || "", email: ex.email || best?.email || "", emailGuessed: best?.source === "guess" && !ex.email, mx: r.mx, phone: r.phones[0] || "", signals: r.signals });
+  return json({ ...rest, extracted, score: sc.score, scoreReasons: sc.reasons });
+}
+
+/** MX check for any domain — the UI uses it before queueing a guessed address. */
+async function verifyDomain(url: URL): Promise<Response> {
+  const domain = cleanDomain(url.searchParams.get("domain") ?? "");
+  if (!domain) return json({ error: "missing domain" }, 400);
+  return json({ domain, mx: await hasMx(domain) });
 }
 
 /* --------------------------------------------------------------------- */
@@ -924,9 +1270,7 @@ async function googleBusinesses(request: Request, env: Env): Promise<Response> {
           const batch = d.local_results ?? [];
           if (!batch.length) break;
           for (const r of batch) {
-            const id =
-              r.place_id ||
-              `${(r.title || "").toLowerCase()}|${cleanDomain(r.website)}`;
+            const id = r.place_id || `${(r.title || "").toLowerCase()}|${cleanDomain(r.website)}`;
             if (byKey.has(id)) continue;
             byKey.set(id, {
               id,
@@ -1006,61 +1350,19 @@ async function scrapeSite(request: Request, env: Env): Promise<Response> {
   } catch {
     return json({ error: "invalid json" }, 400);
   }
-  let target = (body.url || "").trim();
+  const target = (body.url || "").trim();
   if (!target) return json({ error: "missing url" }, 400);
-  if (!/^https?:\/\//i.test(target)) target = `https://${target}`;
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 12000);
-    const res = await fetch(target, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (compatible; Inspirova-Scraper/1.0; +https://inspirovamarketing.com)",
-        Accept: "text/html,*/*",
-      },
-      signal: controller.signal,
-      redirect: "follow",
-    });
-    clearTimeout(timer);
-    if (!res.ok) return json({ ok: false, status: res.status });
-    const html = (await res.text()).slice(0, 200000);
-    // Try /contact + /about in parallel for richer data (best effort).
-    const extras = await Promise.all(
-      ["/contact", "/about", "/team", "/contact-us", "/about-us"].map(async (p) => {
-        try {
-          const r = await fetch(new URL(p, target).toString(), {
-            headers: { "User-Agent": "Inspirova-Scraper/1.0" },
-            signal: AbortSignal.timeout(6000),
-          });
-          if (!r.ok) return "";
-          return (await r.text()).slice(0, 60000);
-        } catch {
-          return "";
-        }
-      }),
-    );
-    const combined = [html, ...extras].filter(Boolean).join("\n\n");
-    const text = htmlToText(combined).slice(0, 18000);
-    return json({ ok: true, text });
-  } catch (e) {
-    return json({ ok: false, error: (e as Error).message });
-  }
-}
-
-function htmlToText(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&#?\w+;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  const r = await freeEnrich({ website: target });
+  if (!r.ok) return json({ ok: false, error: r.error });
+  return json({
+    ok: true,
+    text: r.text.slice(0, 18000),
+    emails: r.emails,
+    phones: r.phones,
+    socials: r.socials,
+    names: r.names,
+    mx: r.mx,
+  });
 }
 
 /* --------------------------------------------------------------------- */
@@ -1076,20 +1378,20 @@ interface ClaudeExtractInput {
 
 async function claudeExtract(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") return json({ error: "POST only" }, 405);
-  const key = secret(env, "ANTHROPIC_API_KEY");
-  if (!key) return json({ demo: true, reason: "missing_key", extracted: null });
+  if (!secret(env, "ANTHROPIC_API_KEY"))
+    return json({ demo: true, reason: "missing_key", extracted: null });
   let body: ClaudeExtractInput = {};
   try {
     body = (await request.json()) as ClaudeExtractInput;
   } catch {
     return json({ error: "invalid json" }, 400);
   }
-  const company = (body.company || "").slice(0, 200);
-  const website = (body.website || "").slice(0, 200);
-  const text = (body.text || "").slice(0, 16000);
-  if (!text) return json({ ok: false, reason: "no_text" });
+  if (!body.text) return json({ ok: false, reason: "no_text" });
+  const extracted = await runClaudeExtract(env, body);
+  return json({ ok: extracted !== null, extracted });
+}
 
-  const system = `You are a B2B lead-research assistant. Extract the SINGLE most senior decision-maker (Owner/Founder/CEO/Managing Director > C-Suite > VP > Director > Manager) plus reachable contact info from the provided website text.
+const EXTRACT_SYSTEM = `You are a B2B lead-research assistant. Extract the SINGLE most senior decision-maker (Owner/Founder/CEO/Managing Director > C-Suite > VP > Director > Manager) plus reachable contact info from the provided website text.
 
 Respond with ONLY a JSON object, no prose, no markdown fences, matching:
 {
@@ -1108,17 +1410,17 @@ Rules:
 - Never invent. If you can't find a field, return "".
 - If you only find a generic info@/contact@ email but no person, still return the email with ownerName="" and confidence ~0.3.`;
 
-  const user = `Company: ${company}
-Website: ${website}
-${body.hint ? `Hint: ${body.hint}\n` : ""}
-
-Website text (truncated):
-"""
-${text}
-"""`;
-
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+/** Claude Haiku call shared by /api/claude/extract and /api/enrich/free. */
+async function runClaudeExtract(env: Env, body: ClaudeExtractInput): Promise<unknown> {
+  const key = secret(env, "ANTHROPIC_API_KEY");
+  if (!key) return null;
+  const company = (body.company || "").slice(0, 200);
+  const website = (body.website || "").slice(0, 200);
+  const text = (body.text || "").slice(0, 16000);
+  if (!text) return null;
+  const user = `Company: ${company}\nWebsite: ${website}\n${body.hint ? `Hint: ${body.hint}\n` : ""}\nWebsite text (truncated):\n"""\n${text}\n"""`;
+  const call = (model: string) =>
+    fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "x-api-key": key,
@@ -1126,42 +1428,21 @@ ${text}
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5",
+        model,
         max_tokens: 600,
-        system,
+        system: EXTRACT_SYSTEM,
         messages: [{ role: "user", content: user }],
       }),
     });
-    if (!res.ok) {
-      const detail = (await res.text()).slice(0, 300);
-      // Fallback to Sonnet alias on bad model.
-      if (res.status === 404 || res.status === 400) {
-        const retry = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "x-api-key": key,
-            "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "claude-3-5-haiku-latest",
-            max_tokens: 600,
-            system,
-            messages: [{ role: "user", content: user }],
-          }),
-        });
-        if (retry.ok) {
-          const data = (await retry.json()) as { content?: { text?: string }[] };
-          return json({ ok: true, extracted: parseClaudeJson(data.content?.[0]?.text || "") });
-        }
-      }
-      return json({ ok: false, status: res.status, detail });
-    }
+  try {
+    let res = await call("claude-haiku-4-5");
+    if (!res.ok && (res.status === 404 || res.status === 400))
+      res = await call("claude-3-5-haiku-latest");
+    if (!res.ok) return null;
     const data = (await res.json()) as { content?: { text?: string }[] };
-    const raw = data.content?.[0]?.text || "";
-    return json({ ok: true, extracted: parseClaudeJson(raw) });
-  } catch (e) {
-    return json({ ok: false, error: (e as Error).message });
+    return parseClaudeJson(data.content?.[0]?.text || "");
+  } catch {
+    return null;
   }
 }
 
@@ -1228,7 +1509,12 @@ Suggest the best keywords.`;
       res = await callClaude("claude-3-5-haiku-latest");
     }
     if (!res.ok) {
-      return json({ ok: false, status: res.status, detail: (await res.text()).slice(0, 300), keywords: [] });
+      return json({
+        ok: false,
+        status: res.status,
+        detail: (await res.text()).slice(0, 300),
+        keywords: [],
+      });
     }
     const data = (await res.json()) as { content?: { text?: string }[] };
     const raw = data.content?.[0]?.text || "";
@@ -1252,8 +1538,6 @@ Suggest the best keywords.`;
   }
 }
 
-
-
 /* ----------------------------------------------------------------------- */
 /* Claude vision — extract ad-dashboard metrics from a screenshot           */
 /* ----------------------------------------------------------------------- */
@@ -1272,7 +1556,12 @@ async function claudeAdScan(request: Request, env: Env): Promise<Response> {
   const lovableKey = secret(env, "LOVABLE_API_KEY");
   const anthropicKey = secret(env, "ANTHROPIC_API_KEY");
   if (!lovableKey && !anthropicKey) {
-    return json({ ok: false, reason: "missing_key", error: "No vision API configured. Lovable AI Gateway is not available and ANTHROPIC_API_KEY is unset." });
+    return json({
+      ok: false,
+      reason: "missing_key",
+      error:
+        "No vision API configured. Lovable AI Gateway is not available and ANTHROPIC_API_KEY is unset.",
+    });
   }
 
   let body: AdScanInput = {};
@@ -1285,19 +1574,23 @@ async function claudeAdScan(request: Request, env: Env): Promise<Response> {
   if (!img) return json({ ok: false, error: "no image" });
   let mediaType = (body.mediaType || "image/png").toLowerCase();
   const m = img.match(/^data:([^;]+);base64,(.*)$/);
-  if (m) { mediaType = m[1]; img = m[2]; }
+  if (m) {
+    mediaType = m[1];
+    img = m[2];
+  }
   if (!/^image\/(png|jpeg|jpg|gif|webp)$/.test(mediaType)) mediaType = "image/png";
   if (mediaType === "image/jpg") mediaType = "image/jpeg";
   if (img.length > 6_500_000) return json({ ok: false, error: "image too large (max ~5MB)" });
 
   const platform = (body.platform || "other").toLowerCase();
-  const platformHint = platform === "meta"
-    ? "Meta / Facebook / Instagram Ads Manager"
-    : platform === "google"
-      ? "Google Ads"
-      : platform === "tiktok"
-        ? "TikTok Ads Manager"
-        : "generic ad platform";
+  const platformHint =
+    platform === "meta"
+      ? "Meta / Facebook / Instagram Ads Manager"
+      : platform === "google"
+        ? "Google Ads"
+        : platform === "tiktok"
+          ? "TikTok Ads Manager"
+          : "generic ad platform";
 
   const system = `You are a marketing-analytics assistant. The user gives you a screenshot of an ad platform or e-commerce / service-business analytics dashboard (${platformHint}) and you extract the headline metrics.
 
@@ -1337,7 +1630,9 @@ Rules:
 - Percentages must be plain numbers (e.g. 3.2 means 3.2%), not decimals.
 - If several campaigns/rows are shown, prefer the aggregate totals; if only per-row is available, sum them and mention in "notes".`;
 
-  const userText = body.hint ? `Context hint: ${body.hint}` : "Extract the metrics from this screenshot.";
+  const userText = body.hint
+    ? `Context hint: ${body.hint}`
+    : "Extract the metrics from this screenshot.";
   const dataUrl = `data:${mediaType};base64,${img}`;
 
   // --- Path 1: Lovable AI Gateway (free / included credits) ------------------
@@ -1371,14 +1666,26 @@ Rules:
         res = await callGateway("google/gemini-2.5-flash-lite");
       }
       if (res.status === 429) {
-        return json({ ok: false, status: 429, error: "AI gateway rate limit hit — please retry in a moment." });
+        return json({
+          ok: false,
+          status: 429,
+          error: "AI gateway rate limit hit — please retry in a moment.",
+        });
       }
       if (res.status === 402) {
-        return json({ ok: false, status: 402, error: "Workspace AI credits exhausted. Add credits in Settings → Plans & credits." });
+        return json({
+          ok: false,
+          status: 402,
+          error: "Workspace AI credits exhausted. Add credits in Settings → Plans & credits.",
+        });
       }
       if (!res.ok) {
         const detail = (await res.text()).slice(0, 400);
-        return json({ ok: false, status: res.status, error: `AI gateway ${res.status}: ${detail}` });
+        return json({
+          ok: false,
+          status: res.status,
+          error: `AI gateway ${res.status}: ${detail}`,
+        });
       }
       const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
       const text = data.choices?.[0]?.message?.content || "";
@@ -1416,7 +1723,11 @@ Rules:
     });
     if (!res.ok) {
       const detail = (await res.text()).slice(0, 400);
-      return json({ ok: false, status: res.status, error: `Anthropic responded ${res.status}: ${detail}` });
+      return json({
+        ok: false,
+        status: res.status,
+        error: `Anthropic responded ${res.status}: ${detail}`,
+      });
     }
     const data = (await res.json()) as { content?: { text?: string }[] };
     const parsed = parseClaudeJson(data.content?.[0]?.text || "") as Record<string, unknown> | null;
@@ -1425,5 +1736,3 @@ Rules:
     return json({ ok: false, error: (e as Error).message });
   }
 }
-
-

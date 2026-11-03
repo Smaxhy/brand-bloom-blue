@@ -32,7 +32,7 @@ import { Scraper } from "./views/Scraper";
 import { RawData } from "./views/RawData";
 import { Clients } from "./views/Clients";
 import { Finance } from "./views/Finance";
-import { EmailHub } from "./views/EmailHub";
+import { Outreach } from "./views/Outreach";
 import { Tasks } from "./views/Tasks";
 import { SettingsView } from "./views/SettingsView";
 import { Statistics } from "./views/Statistics";
@@ -65,13 +65,14 @@ const BASE_NAV: { id: ViewId; label: string; icon: React.ElementType }[] = [
   { id: "clients", label: "Clients", icon: Users },
   { id: "statistics", label: "Statistics", icon: BarChart3 },
   { id: "finance", label: "Finance", icon: Wallet },
-  { id: "email", label: "Email / GHL", icon: Mail },
+  { id: "email", label: "Outreach", icon: Mail },
   { id: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
 export function AdminApp() {
   const [mounted, setMounted] = useState(false);
   const [authed, setAuthed] = useState(false);
+  const [mfaPending, setMfaPending] = useState(false);
   const [role, setRole] = useState<TeamRole | null>(null);
   const [accountName, setAccountName] = useState("");
   const [view, setView] = useState<ViewId>("dashboard");
@@ -110,6 +111,19 @@ export function AdminApp() {
       // Skip re-hydration if the same user is already loaded — e.g. TOKEN_REFRESHED
       // fires when the tab regains focus; we don't want to clear state.
       if (userId === currentUserId) return;
+      // Two-factor: if this account has an authenticator set up, the session
+      // must complete it before anything loads.
+      try {
+        const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (aal?.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
+          setMfaPending(true);
+          setAuthed(false);
+          return;
+        }
+      } catch {
+        /* MFA unavailable — continue */
+      }
+      setMfaPending(false);
       currentUserId = userId;
       const { data: roles, error: roleError } = await supabase
         .from("user_roles")
@@ -117,7 +131,9 @@ export function AdminApp() {
         .eq("user_id", userId);
       if (roleError) {
         setAuthed(true);
-        setLoadError("Your login worked, but the role check is temporarily unavailable. Your data was not changed.");
+        setLoadError(
+          "Your login worked, but the role check is temporarily unavailable. Your data was not changed.",
+        );
         setData(null);
         return;
       }
@@ -158,7 +174,13 @@ export function AdminApp() {
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       // Only react to real sign-in/out. TOKEN_REFRESHED / USER_UPDATED fire
       // on tab focus and would otherwise cause a flicker / data reload.
-      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "INITIAL_SESSION") return;
+      if (
+        event !== "SIGNED_IN" &&
+        event !== "SIGNED_OUT" &&
+        event !== "INITIAL_SESSION" &&
+        event !== "MFA_CHALLENGE_VERIFIED"
+      )
+        return;
       void verifyAndHydrate(session?.user?.id);
     });
 
@@ -177,7 +199,8 @@ export function AdminApp() {
       setData((prev) => {
         if (!prev) return prev;
         const base = prev;
-        const resolved = typeof next === "function" ? (next as (p: AdminData) => AdminData)(base) : next;
+        const resolved =
+          typeof next === "function" ? (next as (p: AdminData) => AdminData)(base) : next;
         saveData(resolved);
         return resolved;
       });
@@ -205,18 +228,24 @@ export function AdminApp() {
   }
 
   if (!authed) {
-    return <LoginScreen />;
+    return <LoginScreen mfaPending={mfaPending} />;
   }
 
   if (!data) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="max-w-sm rounded-xl border border-border bg-card p-5 text-center shadow-sm">
-          <div className="text-sm font-semibold text-foreground">{loadError ? "Data load paused" : "Loading data…"}</div>
+          <div className="text-sm font-semibold text-foreground">
+            {loadError ? "Data load paused" : "Loading data…"}
+          </div>
           {loadError && <p className="mt-2 text-sm text-muted-foreground">{loadError}</p>}
           {loadError && (
             <button
-              onClick={() => void supabase.auth.getSession().then(({ data: { session } }) => session?.user?.id && location.reload())}
+              onClick={() =>
+                void supabase.auth
+                  .getSession()
+                  .then(({ data: { session } }) => session?.user?.id && location.reload())
+              }
               className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
             >
               Retry safely
@@ -250,7 +279,9 @@ export function AdminApp() {
           <img src={logo} alt="Inspirova" className="h-9 w-9 rounded-lg object-cover" />
           <div className="leading-tight">
             <div className="font-display text-[1.05rem] font-bold">Inspirova</div>
-            <div className="text-[.65rem] uppercase tracking-[.14em] text-muted-foreground">Admin Suite</div>
+            <div className="text-[.65rem] uppercase tracking-[.14em] text-muted-foreground">
+              Admin Suite
+            </div>
           </div>
         </div>
 
@@ -303,7 +334,8 @@ export function AdminApp() {
           </button>
           <h1 className="font-display text-xl font-bold tracking-tight">{current.label}</h1>
           <span className="ml-auto hidden items-center gap-2 rounded-full bg-secondary px-3 py-1.5 text-xs text-muted-foreground sm:flex">
-            <span className="h-2 w-2 rounded-full bg-[oklch(.7_.18_150)]" /> Signed in as {accountName}
+            <span className="h-2 w-2 rounded-full bg-[oklch(.7_.18_150)]" /> Signed in as{" "}
+            {accountName}
           </span>
         </header>
 
@@ -317,7 +349,7 @@ export function AdminApp() {
           {view === "clients" && <Clients data={data} update={update} />}
           {view === "statistics" && <Statistics data={data} update={update} />}
           {view === "finance" && <Finance data={data} update={update} />}
-          {view === "email" && <EmailHub data={data} update={update} />}
+          {view === "email" && <Outreach go={(v) => setView(v)} data={data} update={update} />}
           {view === "team" && role === "ceo" && <TeamUsers />}
           {view === "settings" && <SettingsView data={data} update={update} />}
         </main>
@@ -328,7 +360,31 @@ export function AdminApp() {
 
 /* --------------------------------------------------------------------- */
 
-function LoginScreen() {
+function LoginScreen({ mfaPending = false }: { mfaPending?: boolean }) {
+  const [code, setCode] = useState("");
+  const [mfaBusy, setMfaBusy] = useState(false);
+  const [mfaError, setMfaError] = useState("");
+
+  async function verifyCode() {
+    if (mfaBusy || code.trim().length < 6) return;
+    setMfaBusy(true);
+    setMfaError("");
+    try {
+      const { data: f } = await supabase.auth.mfa.listFactors();
+      const factor = f?.totp?.[0];
+      if (!factor) throw new Error("No authenticator found on this account.");
+      const { error } = await supabase.auth.mfa.challengeAndVerify({
+        factorId: factor.id,
+        code: code.trim(),
+      });
+      if (error) throw error;
+    } catch (e) {
+      setMfaError((e as Error).message || "That code didn't work.");
+    } finally {
+      setMfaBusy(false);
+    }
+  }
+
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [error, setError] = useState<{ message: string; code: string } | null>(null);
@@ -342,11 +398,15 @@ function LoginScreen() {
     if (busy) return;
     // Client-side throttle — defence in depth against brute-force attempts
     // from this device. Server auth throttles independently.
-    const { loginLockRemainingMs, recordLoginFailure, recordLoginSuccess } = await import("@/lib/login-throttle");
+    const { loginLockRemainingMs, recordLoginFailure, recordLoginSuccess } =
+      await import("@/lib/login-throttle");
     const locked = loginLockRemainingMs();
     if (locked > 0) {
       const mins = Math.ceil(locked / 60000);
-      setError({ message: `Too many failed attempts. Try again in ${mins} minute(s).`, code: "LOCK-LOCAL" });
+      setError({
+        message: `Too many failed attempts. Try again in ${mins} minute(s).`,
+        code: "LOCK-LOCAL",
+      });
       return;
     }
     setBusy(true);
@@ -420,65 +480,99 @@ function LoginScreen() {
             <Lock className="h-6 w-6" />
           </div>
           <h1 className="font-display text-2xl font-bold text-white">Inspirova Admin</h1>
-          <p className="mt-1 text-sm text-white/50">Private management suite. Authorised access only.</p>
+          <p className="mt-1 text-sm text-white/50">
+            Private management suite. Authorised access only.
+          </p>
         </div>
 
-        <div className="space-y-3">
-          <input
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Username"
-            type="text"
-            autoComplete="username"
-            className="w-full rounded-xl border border-white/15 bg-white/[.06] px-4 py-3 text-sm text-white placeholder-white/40 outline-none focus:border-[var(--brand-light)]"
-          />
-          <input
-            value={pass}
-            onChange={(e) => setPass(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && void submit()}
-            type="password"
-            placeholder="Password"
-            autoComplete="current-password"
-            className="w-full rounded-xl border border-white/15 bg-white/[.06] px-4 py-3 text-sm text-white placeholder-white/40 outline-none focus:border-[var(--brand-light)]"
-          />
-          {error && (
-            <div className="rounded-xl border border-[oklch(.55_.18_25/.4)] bg-[oklch(.35_.12_25/.15)] p-3">
-              <p className="text-sm text-[oklch(.82_.15_25)]">{error.message}</p>
-              <div className="mt-2 flex items-center justify-between gap-2">
-                <code className="rounded-md bg-black/30 px-2 py-1 font-mono text-[.7rem] text-white/70">
-                  {error.code}
-                </code>
-                <button
-                  type="button"
-                  onClick={() => void copyCode()}
-                  className="rounded-md border border-white/15 bg-white/5 px-2 py-1 text-[.7rem] font-medium text-white/80 transition hover:bg-white/10"
-                >
-                  {copied ? "Copied ✓" : "Copy code"}
-                </button>
+        {mfaPending ? (
+          <div className="space-y-3">
+            <p className="text-sm text-white/70">
+              Enter the 6-digit code from your authenticator app.
+            </p>
+            <input
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              onKeyDown={(e) => e.key === "Enter" && void verifyCode()}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder="123456"
+              className="w-full rounded-xl border border-white/15 bg-white/[.06] px-4 py-3 text-center text-lg tracking-[.4em] text-white placeholder-white/30 outline-none focus:border-[var(--brand-light)]"
+            />
+            {mfaError && <p className="text-sm text-[oklch(.82_.15_25)]">{mfaError}</p>}
+            <button
+              onClick={() => void verifyCode()}
+              disabled={mfaBusy || code.length < 6}
+              className="w-full rounded-xl bg-gradient-to-r from-[var(--brand-violet)] to-[var(--brand-coral)] px-4 py-3 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5 disabled:opacity-60"
+            >
+              {mfaBusy ? "Checking…" : "Verify"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void supabase.auth.signOut().then(() => location.reload())}
+              className="w-full text-xs text-white/50 hover:text-white/80"
+            >
+              Use a different account
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Username"
+              type="text"
+              autoComplete="username"
+              className="w-full rounded-xl border border-white/15 bg-white/[.06] px-4 py-3 text-sm text-white placeholder-white/40 outline-none focus:border-[var(--brand-light)]"
+            />
+            <input
+              value={pass}
+              onChange={(e) => setPass(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && void submit()}
+              type="password"
+              placeholder="Password"
+              autoComplete="current-password"
+              className="w-full rounded-xl border border-white/15 bg-white/[.06] px-4 py-3 text-sm text-white placeholder-white/40 outline-none focus:border-[var(--brand-light)]"
+            />
+            {error && (
+              <div className="rounded-xl border border-[oklch(.55_.18_25/.4)] bg-[oklch(.35_.12_25/.15)] p-3">
+                <p className="text-sm text-[oklch(.82_.15_25)]">{error.message}</p>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <code className="rounded-md bg-black/30 px-2 py-1 font-mono text-[.7rem] text-white/70">
+                    {error.code}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => void copyCode()}
+                    className="rounded-md border border-white/15 bg-white/5 px-2 py-1 text-[.7rem] font-medium text-white/80 transition hover:bg-white/10"
+                  >
+                    {copied ? "Copied ✓" : "Copy code"}
+                  </button>
+                </div>
+                <p className="mt-2 text-[.65rem] leading-snug text-white/40">
+                  Send this code to support so they can look up the exact failure.
+                </p>
               </div>
-              <p className="mt-2 text-[.65rem] leading-snug text-white/40">
-                Send this code to support so they can look up the exact failure.
-              </p>
-            </div>
-          )}
-          <button
-            onClick={() => void submit()}
-            disabled={busy}
-            className="w-full rounded-xl bg-gradient-to-r from-[var(--brand-violet)] to-[var(--brand-coral)] px-4 py-3 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-60"
-          >
-            {busy ? "Signing in…" : "Sign in"}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setResetEmail(email);
-              setResetOpen(true);
-            }}
-            className="w-full text-center text-xs text-white/50 transition-colors hover:text-white/80 focus-visible:outline-none focus-visible:text-white"
-          >
-            Forgot password?
-          </button>
-        </div>
+            )}
+            <button
+              onClick={() => void submit()}
+              disabled={busy}
+              className="w-full rounded-xl bg-gradient-to-r from-[var(--brand-violet)] to-[var(--brand-coral)] px-4 py-3 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-60"
+            >
+              {busy ? "Signing in…" : "Sign in"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setResetEmail(email);
+                setResetOpen(true);
+              }}
+              className="w-full text-center text-xs text-white/50 transition-colors hover:text-white/80 focus-visible:outline-none focus-visible:text-white"
+            >
+              Forgot password?
+            </button>
+          </div>
+        )}
 
         <p className="mt-6 text-center text-[.7rem] leading-relaxed text-white/35">
           Accounts are managed by Inspirova. Contact the team if you need access.

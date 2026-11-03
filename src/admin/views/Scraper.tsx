@@ -18,6 +18,9 @@ import {
   Download,
   X,
   Trash2,
+  Gauge,
+  BookmarkPlus,
+  ArrowDownWideNarrow,
 } from "lucide-react";
 import {
   type AdminData,
@@ -34,8 +37,10 @@ import {
   restoreFromDenylist,
   denylistEntries,
   uid,
+  authFetch,
 } from "../store";
 import { Panel, Field, inputCls, Btn } from "../ui";
+import { SavedSearchesPanel, SaveSearchModal } from "./SavedSearches";
 
 const SIZE_PRESETS: { id: string; label: string }[] = [
   { id: "1,10", label: "1–10" },
@@ -62,58 +67,226 @@ const REVENUE_OPTS: { v: number; label: string }[] = [
 const KEYWORD_GROUPS: { group: string; keywords: string[] }[] = [
   {
     group: "Real Estate & Property",
-    keywords: ["Real Estate", "Real Estate Agency", "Realtor", "Property Management", "Property Developer", "Commercial Real Estate", "Mortgage Broker", "Home Staging", "Property Inspector"],
+    keywords: [
+      "Real Estate",
+      "Real Estate Agency",
+      "Realtor",
+      "Property Management",
+      "Property Developer",
+      "Commercial Real Estate",
+      "Mortgage Broker",
+      "Home Staging",
+      "Property Inspector",
+    ],
   },
   {
     group: "Home Services — Exterior",
-    keywords: ["Roofing", "Roof Repair", "Solar Installation", "Gutter Cleaning", "Siding Contractor", "Window Installation", "Garage Door", "Fencing", "Deck Builder", "Concrete Contractor", "Paving", "Driveway Sealing", "Pressure Washing", "Chimney Sweep"],
+    keywords: [
+      "Roofing",
+      "Roof Repair",
+      "Solar Installation",
+      "Gutter Cleaning",
+      "Siding Contractor",
+      "Window Installation",
+      "Garage Door",
+      "Fencing",
+      "Deck Builder",
+      "Concrete Contractor",
+      "Paving",
+      "Driveway Sealing",
+      "Pressure Washing",
+      "Chimney Sweep",
+    ],
   },
   {
     group: "Home Services — Interior",
-    keywords: ["Plumbing", "HVAC", "Electrician", "Handyman", "Painter", "Interior Designer", "Flooring", "Kitchen Remodel", "Bathroom Remodel", "Cabinet Maker", "Carpet Cleaning", "Junk Removal", "Moving Company", "Cleaning Service", "House Cleaning"],
+    keywords: [
+      "Plumbing",
+      "HVAC",
+      "Electrician",
+      "Handyman",
+      "Painter",
+      "Interior Designer",
+      "Flooring",
+      "Kitchen Remodel",
+      "Bathroom Remodel",
+      "Cabinet Maker",
+      "Carpet Cleaning",
+      "Junk Removal",
+      "Moving Company",
+      "Cleaning Service",
+      "House Cleaning",
+    ],
   },
   {
     group: "Outdoor & Landscaping",
-    keywords: ["Landscaping", "Lawn Care", "Tree Specialists", "Tree Care", "Tree Removal", "Arborist", "Snow Removal", "Pool Service", "Pool Builder", "Irrigation", "Pest Control", "Fence Builder", "Hardscaping", "Garden Center", "Nursery"],
+    keywords: [
+      "Landscaping",
+      "Lawn Care",
+      "Tree Specialists",
+      "Tree Care",
+      "Tree Removal",
+      "Arborist",
+      "Snow Removal",
+      "Pool Service",
+      "Pool Builder",
+      "Irrigation",
+      "Pest Control",
+      "Fence Builder",
+      "Hardscaping",
+      "Garden Center",
+      "Nursery",
+    ],
   },
   {
     group: "Automotive",
-    keywords: ["Auto Repair", "Auto Body Shop", "Car Detailing", "Tire Shop", "Car Dealership", "Used Car Dealer", "Motorcycle Dealer", "RV Dealer", "Boat Dealer", "Car Wash", "Windshield Repair", "Towing Service"],
+    keywords: [
+      "Auto Repair",
+      "Auto Body Shop",
+      "Car Detailing",
+      "Tire Shop",
+      "Car Dealership",
+      "Used Car Dealer",
+      "Motorcycle Dealer",
+      "RV Dealer",
+      "Boat Dealer",
+      "Car Wash",
+      "Windshield Repair",
+      "Towing Service",
+    ],
   },
   {
     group: "Health & Wellness",
-    keywords: ["Dental", "Dental Clinic", "Orthodontist", "Chiropractor", "Physiotherapy", "Med Spa", "Cosmetic Surgery", "Dermatology", "Optometrist", "Veterinarian", "Mental Health Clinic", "Massage Therapy", "Acupuncture", "Nutritionist", "Personal Trainer", "Fitness", "Gym", "CrossFit", "Yoga Studio", "Pilates Studio"],
+    keywords: [
+      "Dental",
+      "Dental Clinic",
+      "Orthodontist",
+      "Chiropractor",
+      "Physiotherapy",
+      "Med Spa",
+      "Cosmetic Surgery",
+      "Dermatology",
+      "Optometrist",
+      "Veterinarian",
+      "Mental Health Clinic",
+      "Massage Therapy",
+      "Acupuncture",
+      "Nutritionist",
+      "Personal Trainer",
+      "Fitness",
+      "Gym",
+      "CrossFit",
+      "Yoga Studio",
+      "Pilates Studio",
+    ],
   },
   {
     group: "Beauty",
-    keywords: ["Salon", "Hair Salon", "Barber Shop", "Nail Salon", "Beauty Spa", "Tattoo Studio", "Lash Extensions", "Waxing Studio", "Tanning Salon"],
+    keywords: [
+      "Salon",
+      "Hair Salon",
+      "Barber Shop",
+      "Nail Salon",
+      "Beauty Spa",
+      "Tattoo Studio",
+      "Lash Extensions",
+      "Waxing Studio",
+      "Tanning Salon",
+    ],
   },
   {
     group: "Food & Hospitality",
-    keywords: ["Restaurant", "Cafe", "Coffee Shop", "Bakery", "Catering", "Food Truck", "Bar", "Brewery", "Winery", "Hotel", "Bed and Breakfast", "Event Venue"],
+    keywords: [
+      "Restaurant",
+      "Cafe",
+      "Coffee Shop",
+      "Bakery",
+      "Catering",
+      "Food Truck",
+      "Bar",
+      "Brewery",
+      "Winery",
+      "Hotel",
+      "Bed and Breakfast",
+      "Event Venue",
+    ],
   },
   {
     group: "Professional Services",
-    keywords: ["Law Firm", "Accountant", "CPA", "Bookkeeping", "Tax Preparation", "Financial Advisor", "Insurance Agency", "Notary", "Consulting", "Marketing Agency", "IT Services", "Managed IT", "Web Design Studio", "Security Company", "Printing Company"],
+    keywords: [
+      "Law Firm",
+      "Accountant",
+      "CPA",
+      "Bookkeeping",
+      "Tax Preparation",
+      "Financial Advisor",
+      "Insurance Agency",
+      "Notary",
+      "Consulting",
+      "Marketing Agency",
+      "IT Services",
+      "Managed IT",
+      "Web Design Studio",
+      "Security Company",
+      "Printing Company",
+    ],
   },
   {
     group: "Events, Photo & Creative",
-    keywords: ["Wedding Photographer", "Photographer", "Videographer", "Wedding Planner", "Event Planner", "DJ Service", "Florist"],
+    keywords: [
+      "Wedding Photographer",
+      "Photographer",
+      "Videographer",
+      "Wedding Planner",
+      "Event Planner",
+      "DJ Service",
+      "Florist",
+    ],
   },
   {
     group: "Trades & B2B",
-    keywords: ["General Contractor", "Construction", "Welding", "Machine Shop", "Metal Fabrication", "Commercial Cleaning", "Janitorial", "Waste Management", "Logistics", "Trucking Company", "Warehousing"],
+    keywords: [
+      "General Contractor",
+      "Construction",
+      "Welding",
+      "Machine Shop",
+      "Metal Fabrication",
+      "Commercial Cleaning",
+      "Janitorial",
+      "Waste Management",
+      "Logistics",
+      "Trucking Company",
+      "Warehousing",
+    ],
   },
   {
     group: "Retail",
-    keywords: ["Store", "Retail Store", "Boutique", "Jewelry Store", "Furniture Store", "Mattress Store", "Pet Store", "Bike Shop", "Sporting Goods", "Music Store"],
+    keywords: [
+      "Store",
+      "Retail Store",
+      "Boutique",
+      "Jewelry Store",
+      "Furniture Store",
+      "Mattress Store",
+      "Pet Store",
+      "Bike Shop",
+      "Sporting Goods",
+      "Music Store",
+    ],
   },
   {
     group: "Family & Education",
-    keywords: ["Daycare", "Preschool", "Private Tutor", "Music School", "Dance Studio", "Martial Arts", "Driving School"],
+    keywords: [
+      "Daycare",
+      "Preschool",
+      "Private Tutor",
+      "Music School",
+      "Dance Studio",
+      "Martial Arts",
+      "Driving School",
+    ],
   },
 ];
-
 
 export function Scraper({
   data,
@@ -150,16 +323,27 @@ export function Scraper({
   // id -> which source revealed the email ("Apollo" | "Hunter" | "Google" | "demo")
   const [emailSource, setEmailSource] = useState<Record<string, string>>(saved?.emailSource ?? {});
   // id -> URL where the email was found (Hunter source / Google result link)
-  const [emailSourceUrl, setEmailSourceUrl] = useState<Record<string, string>>(saved?.emailSourceUrl ?? {});
+  const [emailSourceUrl, setEmailSourceUrl] = useState<Record<string, string>>(
+    saved?.emailSourceUrl ?? {},
+  );
   // id -> sources used to discover this row (apollo / google / claude)
-  const [discoverSources, setDiscoverSources] = useState<Record<string, ScrapeSource[]>>(saved?.discoverSources ?? {});
+  const [discoverSources, setDiscoverSources] = useState<Record<string, ScrapeSource[]>>(
+    saved?.discoverSources ?? {},
+  );
 
   // Which discovery sources to run
   const [sources, setSources] = useState<Record<ScrapeSource, boolean>>({
-    apollo: true,
-    google: true,
-    claude: true,
+    apollo: false, // paid credits — opt in
+    google: true, // Google Places free tier → Serper → SerpApi
+    osm: true, // OpenStreetMap, free
+    claude: true, // reads each website (fractions of a cent)
   });
+  // Paid reveal sources (Apollo / Hunter / SerpApi) are opt-in per run.
+  const [usePaid, setUsePaid] = useState(false);
+  const [scores, setScores] = useState<Record<string, { score: number; why: string[] }>>({});
+  const [sortByScore, setSortByScore] = useState(true);
+  const [showSave, setShowSave] = useState(false);
+  const [savedRefresh, setSavedRefresh] = useState(0);
   const [aiProgress, setAiProgress] = useState({ done: 0, total: 0 });
   const [showHistory, setShowHistory] = useState(false);
   const [historyFilter, setHistoryFilter] = useState("");
@@ -172,7 +356,7 @@ export function Scraper({
     setAiKwBusy(true);
     setAiKwError(null);
     try {
-      const res = await fetch("/api/claude/keywords", {
+      const res = await authFetch("/api/claude/keywords", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -183,7 +367,11 @@ export function Scraper({
       });
       const j = (await res.json()) as { ok?: boolean; keywords?: string[]; reason?: string };
       if (!j.ok || !j.keywords?.length) {
-        setAiKwError(j.reason === "missing_key" ? "AI key not configured on the server." : "AI didn't return suggestions. Try again.");
+        setAiKwError(
+          j.reason === "missing_key"
+            ? "AI key not configured on the server."
+            : "AI didn't return suggestions. Try again.",
+        );
       } else {
         setAiKeywords(j.keywords);
       }
@@ -209,14 +397,18 @@ export function Scraper({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [results, emailSource, emailSourceUrl, discoverSources]);
 
-
   function persistDeny(people: ScrapedPerson[]) {
     if (!people.length) return;
     update((prev) =>
       addToDenylist(
         prev,
         "denied",
-        people.map((p) => ({ name: p.name, company: p.company, email: p.email, website: p.website })),
+        people.map((p) => ({
+          name: p.name,
+          company: p.company,
+          email: p.email,
+          website: p.website,
+        })),
       ),
     );
   }
@@ -257,7 +449,9 @@ export function Scraper({
       contactTitle: p.title,
       seniority: p.seniority,
       linkedin: p.linkedin,
-      source: (discoverSources[p.id] ?? []).map((s) => s[0].toUpperCase() + s.slice(1)).join("+") || "Apollo",
+      source:
+        (discoverSources[p.id] ?? []).map((s) => s[0].toUpperCase() + s.slice(1)).join("+") ||
+        "Apollo",
     };
     update((prev) => {
       const withDenied = addToDenylist(prev, "accepted", [
@@ -275,14 +469,17 @@ export function Scraper({
 
   function clearAllResults() {
     if (!results.length) return;
-    if (typeof window !== "undefined" && !window.confirm(`Remove all ${results.length} scraped contacts?`)) return;
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(`Remove all ${results.length} scraped contacts?`)
+    )
+      return;
     setResults([]);
     setSelected({});
     setEmailSource({});
     setEmailSourceUrl({});
     setBanner(null);
   }
-
 
   function splitName(name: string): { first: string; last: string } {
     const parts = name.trim().split(/\s+/);
@@ -309,9 +506,7 @@ export function Scraper({
       .map((k) => k.trim())
       .filter(Boolean);
     const exists = list.some((k) => k.toLowerCase() === kw.toLowerCase());
-    const next = exists
-      ? list.filter((k) => k.toLowerCase() !== kw.toLowerCase())
-      : [...list, kw];
+    const next = exists ? list.filter((k) => k.toLowerCase() !== kw.toLowerCase()) : [...list, kw];
     setFilters({ ...filters, industry: next.join(", ") });
   }
 
@@ -324,7 +519,19 @@ export function Scraper({
 
     const updates: Record<
       string,
-      { email: string; phone: string; website: string; source: string; sourceUrl: string }
+      {
+        email: string;
+        phone: string;
+        website: string;
+        source: string;
+        sourceUrl: string;
+        name: string;
+        title: string;
+        linkedin: string;
+        guessed: boolean;
+        score?: number;
+        scoreReasons?: string[];
+      }
     > = {};
     // Process in batches of 10 (Apollo bulk limit) to stay within Worker limits.
     for (let i = 0; i < list.length; i += 10) {
@@ -339,9 +546,12 @@ export function Scraper({
           domain: p.website,
           organizationName: p.company,
           linkedin: p.linkedin,
+          rating: p.rating,
+          reviews: p.reviews,
+          phone: p.phone,
         };
       });
-      const res = await enrichContacts(payload, revealPhone);
+      const res = await enrichContacts(payload, revealPhone, usePaid);
       res.forEach((r) => {
         if (r.id)
           updates[r.id] = {
@@ -350,6 +560,12 @@ export function Scraper({
             website: r.website,
             source: r.source,
             sourceUrl: r.sourceUrl,
+            name: r.name || "",
+            title: r.title || "",
+            linkedin: r.linkedin || "",
+            guessed: !!r.guessed,
+            score: r.score,
+            scoreReasons: r.scoreReasons,
           };
       });
       setEnrichProgress({ done: Math.min(i + chunk.length, list.length), total: list.length });
@@ -365,13 +581,23 @@ export function Scraper({
           emailLocked: u.email ? false : p.emailLocked,
           phone: u.phone || p.phone,
           website: u.website || p.website,
+          name: p.name || u.name,
+          title: p.title || u.title,
+          linkedin: p.linkedin || u.linkedin,
         };
       }),
     );
     setEmailSource((prev) => {
       const next = { ...prev };
       Object.entries(updates).forEach(([id, u]) => {
-        if (u.email) next[id] = u.source || "Apollo";
+        if (u.email) next[id] = u.guessed ? "Guess" : u.source || "Website";
+      });
+      return next;
+    });
+    setScores((prev) => {
+      const next = { ...prev };
+      Object.entries(updates).forEach(([id, u]) => {
+        if (typeof u.score === "number") next[id] = { score: u.score, why: u.scoreReasons ?? [] };
       });
       return next;
     });
@@ -414,18 +640,25 @@ export function Scraper({
 
   async function runScrape() {
     if (!filters.location.trim()) return;
-    if (!sources.apollo && !sources.google) {
-      setBanner({ live: false, text: "Pick at least one discovery source (Apollo or Google Maps)." });
+    if (!sources.apollo && !sources.google && !sources.osm) {
+      setBanner({ live: false, text: "Pick at least one discovery source." });
       return;
     }
     setScrapeBusy(true);
     setBanner(null);
     setPushed(0);
     setAiProgress({ done: 0, total: 0 });
-    if (!geo) locate();
+    let g = geo;
+    if (!g) {
+      setGeoBusy(true);
+      g = await geocodeLocation(filters.location);
+      setGeo(g);
+      setGeoBusy(false);
+    }
     const res = await discoverLeads(filters, {
       sources,
       denylist,
+      geo: g,
       onProgress: (phase, done, total) => {
         if (phase === "ai") setAiProgress({ done, total });
       },
@@ -444,6 +677,15 @@ export function Scraper({
   }
 
   const selectedPeople = results.filter((p) => selected[p.id]);
+  const scoreOf = (p: ScrapedPerson) => scores[p.id]?.score ?? -1;
+  const ordered = sortByScore ? [...results].sort((a, b) => scoreOf(b) - scoreOf(a)) : results;
+  const scoredCount = results.filter((p) => scores[p.id]).length;
+
+  function selectTop(fraction: number) {
+    const ranked = [...results].sort((a, b) => scoreOf(b) - scoreOf(a));
+    const n = Math.max(1, Math.round(ranked.length * fraction));
+    setSelected(Object.fromEntries(ranked.slice(0, n).map((p) => [p.id, true])));
+  }
 
   function sendToRaw() {
     if (!selectedPeople.length) return;
@@ -461,13 +703,25 @@ export function Scraper({
       contactTitle: p.title,
       seniority: p.seniority,
       linkedin: p.linkedin,
-      source: (discoverSources[p.id] ?? []).map((s) => s[0].toUpperCase() + s.slice(1)).join("+") || "Apollo",
+      source:
+        (discoverSources[p.id] ?? []).map((s) => s[0].toUpperCase() + s.slice(1)).join("+") ||
+        "Apollo",
+      emailSource: emailSource[p.id],
+      rating: p.rating,
+      reviews: p.reviews,
+      score: scores[p.id]?.score,
+      scoreWhy: scores[p.id]?.why,
     }));
     update((prev) => {
       const withDenied = addToDenylist(
         prev,
         "accepted",
-        selectedPeople.map((p) => ({ name: p.name, company: p.company, email: p.email, website: p.website })),
+        selectedPeople.map((p) => ({
+          name: p.name,
+          company: p.company,
+          email: p.email,
+          website: p.website,
+        })),
       );
       return { ...withDenied, raw: [...rows, ...withDenied.raw] };
     });
@@ -539,11 +793,11 @@ export function Scraper({
       {/* intro */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Enter a city, region or address and tap the keywords you want (Real Estate, Tree, Store…).
-          Apollo finds the decision-makers at matching businesses, then automatically enriches each
-          one — Apollo reveals emails, websites and phones (your Professional plan), and SerpApi +
-          Hunter fill any gaps in websites and emails. Pull up to 500 at once and accept the good
-          ones into your raw-data queue.
+          Enter a city, region or address and tap the keywords you want (Roofing, Tree Service,
+          Dentist…). Google Places and OpenStreetMap find the local businesses for free, each
+          website is read for the owner, published emails and phone, and the domain is checked for
+          mail delivery. Paid sources (Apollo, Hunter) only run when you switch on "paid fallback".
+          Accept the good ones into your raw-data queue, then add them to an outreach sequence.
         </p>
       </div>
 
@@ -561,7 +815,11 @@ export function Scraper({
                   placeholder="e.g. Antwerp, Belgium  ·  or  Meir 88, Antwerpen"
                 />
                 <Btn variant="ghost" onClick={locate}>
-                  {geoBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
+                  {geoBusy ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <MapPin className="h-4 w-4" />
+                  )}
                   Locate
                 </Btn>
               </div>
@@ -589,7 +847,8 @@ export function Scraper({
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="block text-xs font-semibold text-muted-foreground">
-                  Quick keywords <span className="font-normal">(tap to add — searched as a union)</span>
+                  Quick keywords{" "}
+                  <span className="font-normal">(tap to add — searched as a union)</span>
                 </span>
                 <button
                   onClick={suggestKeywordsWithAI}
@@ -597,13 +856,19 @@ export function Scraper({
                   className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[var(--brand-violet)] to-[var(--brand-coral)] px-3 py-1.5 text-xs font-semibold text-white transition-transform hover:-translate-y-0.5 disabled:opacity-60"
                   title="Ask AI for the best service-based verticals to target for this location"
                 >
-                  {aiKwBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  {aiKwBusy ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
                   {aiKwBusy ? "Thinking…" : "AI suggest keywords"}
                 </button>
               </div>
 
               {aiKwError && (
-                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">{aiKwError}</div>
+                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+                  {aiKwError}
+                </div>
               )}
 
               {aiKeywords.length > 0 && (
@@ -668,7 +933,6 @@ export function Scraper({
                 ))}
               </div>
             </div>
-
 
             <div>
               <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
@@ -737,7 +1001,10 @@ export function Scraper({
                   className={inputCls}
                   value={filters.locationScope ?? "both"}
                   onChange={(e) =>
-                    setFilters({ ...filters, locationScope: e.target.value as "person" | "company" | "both" })
+                    setFilters({
+                      ...filters,
+                      locationScope: e.target.value as "person" | "company" | "both",
+                    })
                   }
                 >
                   <option value="both">Person & company HQ</option>
@@ -749,7 +1016,8 @@ export function Scraper({
 
             <div>
               <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
-                Reachability <span className="font-normal">(only pull leads you can actually contact)</span>
+                Reachability{" "}
+                <span className="font-normal">(only pull leads you can actually contact)</span>
               </span>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -780,11 +1048,14 @@ export function Scraper({
                 Discovery sources <span className="font-normal">(combine for the widest net)</span>
               </span>
               <div className="flex flex-wrap gap-2">
-                {([
-                  { id: "apollo", label: "Apollo (people)" },
-                  { id: "google", label: "Google Maps (local businesses)" },
-                  { id: "claude", label: "Claude — deep website scrape" },
-                ] as { id: ScrapeSource; label: string }[]).map((s) => {
+                {(
+                  [
+                    { id: "google", label: "Google Places · free tier" },
+                    { id: "osm", label: "OpenStreetMap · free" },
+                    { id: "claude", label: "Claude reads each website · ~¢" },
+                    { id: "apollo", label: "Apollo people search · paid credits" },
+                  ] as { id: ScrapeSource; label: string }[]
+                ).map((s) => {
                   const on = sources[s.id];
                   return (
                     <button
@@ -802,7 +1073,9 @@ export function Scraper({
                 })}
               </div>
               <p className="mt-1.5 text-[.7rem] text-muted-foreground">
-                Google Maps finds local businesses Apollo doesn't list. Claude reads each website to extract the real owner/decision-maker, their email and phone.
+                Free sources run first. Google Places and OpenStreetMap find the businesses; each
+                website is then read for the owner, published emails and phone, and the domain is
+                checked for mail delivery. Apollo only runs when you switch it on.
               </p>
             </div>
 
@@ -821,15 +1094,30 @@ export function Scraper({
                 </select>
               </Field>
               <Btn onClick={runScrape} className="px-5">
-                {scrapeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radar className="h-4 w-4" />}
+                {scrapeBusy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Radar className="h-4 w-4" />
+                )}
                 {scrapeBusy
                   ? aiProgress.total
                     ? `AI scrape ${aiProgress.done}/${aiProgress.total}…`
                     : "Discovering…"
                   : "Scrape leads"}
               </Btn>
+              <Btn
+                variant="soft"
+                onClick={() => setShowSave(true)}
+                disabled={!filters.location.trim()}
+                title="Save these filters as a search that re-runs itself and can auto-enrol new leads"
+              >
+                <BookmarkPlus className="h-4 w-4" /> Save search
+              </Btn>
               <div className="text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">{Object.keys(denylist).length > 0 ? Object.keys(denylist).length : 0}</span> entries in deny-memory
+                <span className="font-semibold text-foreground">
+                  {Object.keys(denylist).length > 0 ? Object.keys(denylist).length : 0}
+                </span>{" "}
+                entries in deny-memory
               </div>
             </div>
           </div>
@@ -870,7 +1158,9 @@ export function Scraper({
         >
           <span
             className={`rounded-full px-2 py-0.5 text-[.65rem] font-bold uppercase tracking-wider ${
-              banner.live ? "bg-[oklch(.7_.18_150)] text-white" : "bg-[oklch(.75_.16_70)] text-white"
+              banner.live
+                ? "bg-[oklch(.7_.18_150)] text-white"
+                : "bg-[oklch(.75_.16_70)] text-white"
             }`}
           >
             {banner.live ? "Live" : "Demo"}
@@ -886,7 +1176,9 @@ export function Scraper({
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-primary" />
               <h3 className="font-display text-lg font-bold">{results.length} contacts found</h3>
-              <span className="text-sm text-muted-foreground">· {selectedPeople.length} selected</span>
+              <span className="text-sm text-muted-foreground">
+                · {selectedPeople.length} selected
+              </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground">
@@ -898,10 +1190,23 @@ export function Scraper({
                 />
                 + phones
               </label>
+              <label
+                className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground"
+                title="Falls back to Apollo / Hunter / SerpApi (costs credits) for contacts the free pass couldn't resolve"
+              >
+                <input
+                  type="checkbox"
+                  checked={usePaid}
+                  onChange={(e) => setUsePaid(e.target.checked)}
+                  className="accent-[var(--brand-violet)]"
+                />
+                paid fallback
+              </label>
               <Btn variant="soft" onClick={() => revealEmails(selectedPeople)}>
                 {enrichBusy ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" /> Revealing {enrichProgress.done}/{enrichProgress.total}
+                    <Loader2 className="h-4 w-4 animate-spin" /> Revealing {enrichProgress.done}/
+                    {enrichProgress.total}
                   </>
                 ) : (
                   <>
@@ -909,6 +1214,25 @@ export function Scraper({
                   </>
                 )}
               </Btn>
+              {scoredCount > 0 && (
+                <>
+                  <Btn
+                    variant="ghost"
+                    onClick={() => setSortByScore((v) => !v)}
+                    title="Order rows by lead score"
+                  >
+                    <ArrowDownWideNarrow className="h-4 w-4" />{" "}
+                    {sortByScore ? "Sorted by score" : "Sort by score"}
+                  </Btn>
+                  <Btn
+                    variant="ghost"
+                    onClick={() => selectTop(0.4)}
+                    title="Select the best-scoring 40% of this list"
+                  >
+                    <Gauge className="h-4 w-4" /> Select top 40%
+                  </Btn>
+                </>
+              )}
               <Btn
                 variant="ghost"
                 onClick={() =>
@@ -937,25 +1261,30 @@ export function Scraper({
           </div>
 
           <p className="mb-4 text-xs text-muted-foreground">
-            Enrichment runs automatically after a search and you can re-run it here. Apollo reveals
-            emails + websites first; for anything missing, SerpApi searches Google for the website,
-            then Hunter and SerpApi find the email. Phone is best-effort. EU contacts' personal info
-            may be limited under GDPR.
+            Enrichment runs automatically after a search and you can re-run it here. The free pass
+            reads each website for the owner and a published address, checks the domain accepts
+            mail, and scores every row 0–100: can we reach them, is it a real business, and is there
+            visible room to improve (no pixel, no booking, old site). Paid lookups only run with the
+            box ticked. EU contacts' personal info may be limited under GDPR.
           </p>
 
           {pushed > 0 && (
             <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-secondary px-3 py-2.5 text-sm">
               <CheckSquare className="h-4 w-4 text-[oklch(.6_.15_150)]" />
               Added {pushed} contact(s) to your raw-data queue.
-              <button onClick={() => go("raw")} className="font-semibold text-primary underline-offset-2 hover:underline">
+              <button
+                onClick={() => go("raw")}
+                className="font-semibold text-primary underline-offset-2 hover:underline"
+              >
                 Open Raw Data →
               </button>
             </div>
           )}
 
           <div className="space-y-2">
-            {results.map((p) => {
+            {ordered.map((p) => {
               const on = !!selected[p.id];
+              const sc = scores[p.id];
               return (
                 <div
                   key={p.id}
@@ -968,12 +1297,34 @@ export function Scraper({
                     className="shrink-0 text-primary"
                     aria-label="select"
                   >
-                    {on ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5 text-muted-foreground" />}
+                    {on ? (
+                      <CheckSquare className="h-5 w-5" />
+                    ) : (
+                      <Square className="h-5 w-5 text-muted-foreground" />
+                    )}
                   </button>
 
+                  {sc && (
+                    <div
+                      title={sc.why.join("\n")}
+                      className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg text-xs font-bold tabular-nums ${
+                        sc.score >= 70
+                          ? "bg-[oklch(.7_.18_150)]/15 text-[oklch(.4_.14_150)]"
+                          : sc.score >= 45
+                            ? "bg-[oklch(.8_.16_80)]/20 text-[oklch(.45_.12_70)]"
+                            : "bg-secondary text-muted-foreground"
+                      }`}
+                    >
+                      {sc.score}
+                    </div>
+                  )}
                   <div className="min-w-[180px] flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold">{p.name || <span className="text-muted-foreground italic">No person yet</span>}</span>
+                      <span className="font-semibold">
+                        {p.name || (
+                          <span className="text-muted-foreground italic">No person yet</span>
+                        )}
+                      </span>
                       {p.seniority && (
                         <span className="rounded-full bg-secondary px-2 py-0.5 text-[.62rem] font-bold uppercase tracking-wider text-muted-foreground">
                           {p.seniority.replace("_", " ")}
@@ -986,8 +1337,8 @@ export function Scraper({
                             s === "apollo"
                               ? "bg-[var(--brand-violet)]/15 text-[var(--brand-violet)]"
                               : s === "google"
-                              ? "bg-[oklch(.7_.18_150)]/15 text-[oklch(.45_.15_150)]"
-                              : "bg-[var(--brand-coral)]/15 text-[var(--brand-coral)]"
+                                ? "bg-[oklch(.7_.18_150)]/15 text-[oklch(.45_.15_150)]"
+                                : "bg-[var(--brand-coral)]/15 text-[var(--brand-coral)]"
                           }`}
                         >
                           {s === "claude" ? "AI" : s}
@@ -1095,14 +1446,30 @@ export function Scraper({
         </div>
       )}
 
+      {/* Saved searches */}
+      <SavedSearchesPanel refreshKey={savedRefresh} />
+
+      {showSave && (
+        <SaveSearchModal
+          filters={filters}
+          geo={geo}
+          sources={sources}
+          onClose={() => setShowSave(false)}
+          onSaved={() => {
+            setShowSave(false);
+            setSavedRefresh((n) => n + 1);
+          }}
+        />
+      )}
+
       {/* Deny / accepted memory */}
       <Panel>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="font-display text-lg font-bold">Deny memory</h3>
             <p className="text-xs text-muted-foreground">
-              {history.length} contact(s) the scraper will never resurface for this account
-              (denied + accepted are both remembered).
+              {history.length} contact(s) the scraper will never resurface for this account (denied
+              + accepted are both remembered).
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -1149,8 +1516,12 @@ export function Scraper({
                     {entry.reason}
                   </span>
                   <span className="min-w-[120px] font-semibold">{entry.name || "—"}</span>
-                  <span className="min-w-[120px] text-muted-foreground">{entry.company || "—"}</span>
-                  <span className="min-w-[160px] text-muted-foreground truncate">{entry.email || entry.domain || "—"}</span>
+                  <span className="min-w-[120px] text-muted-foreground">
+                    {entry.company || "—"}
+                  </span>
+                  <span className="min-w-[160px] text-muted-foreground truncate">
+                    {entry.email || entry.domain || "—"}
+                  </span>
                   <span className="text-muted-foreground">
                     {new Date(entry.ts).toLocaleDateString()}
                   </span>
