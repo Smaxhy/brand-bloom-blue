@@ -553,9 +553,14 @@ export function Scraper({
         scoreReasons?: string[];
       }
     > = {};
-    // Process in batches of 10 (Apollo bulk limit) to stay within Worker limits.
-    for (let i = 0; i < list.length; i += 10) {
-      const chunk = list.slice(i, i + 10);
+    // Batches of 8, three in flight at once: each batch is its own Worker
+    // invocation (own connection budget), so this is ~3x faster than serial.
+    const BATCH = 8;
+    const PARALLEL = 3;
+    const chunks: ScrapedPerson[][] = [];
+    for (let i = 0; i < list.length; i += BATCH) chunks.push(list.slice(i, i + BATCH));
+    let done = 0;
+    const runChunk = async (chunk: ScrapedPerson[]) => {
       const payload = chunk.map((p) => {
         const { first, last } = splitName(p.name);
         return {
@@ -571,7 +576,9 @@ export function Scraper({
           phone: p.phone,
         };
       });
-      const res = await enrichContacts(payload, revealPhone, usePaid);
+      const res = await enrichContacts(payload, revealPhone, usePaid).catch(
+        () => [] as Awaited<ReturnType<typeof enrichContacts>>,
+      );
       res.forEach((r) => {
         if (r.id)
           updates[r.id] = {
@@ -588,8 +595,15 @@ export function Scraper({
             scoreReasons: r.scoreReasons,
           };
       });
-      setEnrichProgress({ done: Math.min(i + chunk.length, list.length), total: list.length });
-    }
+      done += chunk.length;
+      setEnrichProgress({ done: Math.min(done, list.length), total: list.length });
+    };
+    let next = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(PARALLEL, chunks.length) }, async () => {
+        while (next < chunks.length) await runChunk(chunks[next++]);
+      }),
+    );
 
     setResults((prev) =>
       prev.map((p) => {

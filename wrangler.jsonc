@@ -7,4 +7,5 @@
   // Outreach sequencer: every 10 minutes. Needs the Workers Paid plan ($5/mo)
   // for enough CPU time; on the free plan the cron still fires but may time out.
   "triggers": { "crons": ["*/10 * * * *"] },
+  "limits": { "cpu_ms": 120000 },
 }
