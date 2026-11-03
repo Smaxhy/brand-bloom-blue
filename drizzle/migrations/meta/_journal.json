@@ -15,6 +15,13 @@
       "when": 1793708478142,
       "tag": "0001_outreach_v2",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793711663314,
+      "tag": "0002_secure_integration_settings",
+      "breakpoints": true
     }
   ]
 }

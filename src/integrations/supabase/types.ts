@@ -114,6 +114,27 @@ export type Database = {
           },
         ]
       }
+      integration_credentials: {
+        Row: {
+          ciphertext: string
+          name: string
+          updated_at: string
+          updated_by: string
+        }
+        Insert: {
+          ciphertext: string
+          name: string
+          updated_at?: string
+          updated_by: string
+        }
+        Update: {
+          ciphertext?: string
+          name?: string
+          updated_at?: string
+          updated_by?: string
+        }
+        Relationships: []
+      }
       leads: {
         Row: {
           city: string
