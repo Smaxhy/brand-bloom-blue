@@ -8,3 +8,8 @@
 - [x] Apply inspected inspirova-rebuilt-2.zip differences without replacing Cloud configuration or saved data.
 - [x] Verify homepage calculator, navigation, and existing public pages.
 - [ ] Live outreach verification: blocked by provider setup and published schedule verification; do not send test emails.
+
+# Homepage-only reversal
+- [ ] Restore the homepage design from before the editorial redesign.
+- [ ] Preserve the new ZIP's scraper files, migrations, and saved backend data unchanged.
+- [ ] Verify restored homepage rendering, calculator, and navigation.
