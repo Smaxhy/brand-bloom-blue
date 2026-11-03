@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import {
   Radar,
   MapPin,
@@ -21,6 +21,11 @@ import {
   Gauge,
   BookmarkPlus,
   ArrowDownWideNarrow,
+  ChevronDown,
+  ChevronRight,
+  SlidersHorizontal,
+  Star,
+  Info,
 } from "lucide-react";
 import {
   type AdminData,
@@ -340,7 +345,9 @@ export function Scraper({
   });
   // Paid reveal sources (Apollo / Hunter / SerpApi) are opt-in per run.
   const [usePaid, setUsePaid] = useState(false);
-  const [scores, setScores] = useState<Record<string, { score: number; why: string[] }>>({});
+  const [scores, setScores] = useState<Record<string, { score: number; why: string[] }>>(
+    saved?.scores ?? {},
+  );
   const [sortByScore, setSortByScore] = useState(true);
   const [showSave, setShowSave] = useState(false);
   const [savedRefresh, setSavedRefresh] = useState(0);
@@ -350,6 +357,12 @@ export function Scraper({
   const [aiKeywords, setAiKeywords] = useState<string[]>([]);
   const [aiKwBusy, setAiKwBusy] = useState(false);
   const [aiKwError, setAiKwError] = useState<string | null>(null);
+  const [nichesOpen, setNichesOpen] = useState(false);
+  const [nicheQuery, setNicheQuery] = useState("");
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [nicheDraft, setNicheDraft] = useState("");
 
   async function suggestKeywordsWithAI() {
     if (aiKwBusy) return;
@@ -392,10 +405,17 @@ export function Scraper({
       firstSync.current = false;
       return;
     }
-    const snap = { results, emailSource, emailSourceUrl, discoverSources, updatedAt: Date.now() };
+    const snap = {
+      results,
+      emailSource,
+      emailSourceUrl,
+      discoverSources,
+      scores,
+      updatedAt: Date.now(),
+    };
     update((prev) => ({ ...prev, scraper: snap }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [results, emailSource, emailSourceUrl, discoverSources]);
+  }, [results, emailSource, emailSourceUrl, discoverSources, scores]);
 
   function persistDeny(people: ScrapedPerson[]) {
     if (!people.length) return;
@@ -778,123 +798,236 @@ export function Scraper({
     ? `https://www.openstreetmap.org/export/embed.html?bbox=${geo.bbox[2]}%2C${geo.bbox[0]}%2C${geo.bbox[3]}%2C${geo.bbox[1]}&layer=mapnik&marker=${geo.lat}%2C${geo.lng}`
     : "";
 
+  const selectedKeywordLabels = filters.industry
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean);
+  const nicheMatches = nicheQuery.trim()
+    ? KEYWORD_GROUPS.map((g) => ({
+        ...g,
+        keywords: g.keywords.filter((k) =>
+          k.toLowerCase().includes(nicheQuery.trim().toLowerCase()),
+        ),
+      })).filter((g) => g.keywords.length)
+    : KEYWORD_GROUPS;
+  function addNicheDraft() {
+    const v = nicheDraft.trim().replace(/,$/, "");
+    if (!v) return;
+    if (!activeKeywords.includes(v.toLowerCase())) toggleKeyword(v);
+    setNicheDraft("");
+  }
+  const withEmail = results.filter((p) => p.email && !p.emailLocked).length;
+  const scoredList = results
+    .map((p) => scores[p.id]?.score)
+    .filter((n): n is number => typeof n === "number");
+  const avgScore = scoredList.length
+    ? Math.round(scoredList.reduce((a, b) => a + b, 0) / scoredList.length)
+    : null;
+  const bands = {
+    strong: scoredList.filter((n) => n >= 70).length,
+    ok: scoredList.filter((n) => n >= 45 && n < 70).length,
+    weak: scoredList.filter((n) => n < 45).length,
+  };
+  const sourceTotals = Object.values(discoverSources).reduce(
+    (acc, arr) => {
+      arr.forEach((s) => (acc[s] = (acc[s] ?? 0) + 1));
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+  const bandCls = (n: number) =>
+    n >= 70
+      ? "bg-[oklch(.62_.17_150)]"
+      : n >= 45
+        ? "bg-[oklch(.78_.15_80)]"
+        : "bg-[oklch(.8_.02_290)]";
+  const pill = (on: boolean) =>
+    `rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+      on
+        ? "border-transparent bg-[var(--brand-violet)] text-white"
+        : "border-border bg-background text-muted-foreground hover:bg-secondary"
+    }`;
+  const busy = scrapeBusy || enrichBusy;
+
   return (
-    <div className="space-y-6">
-      {/* rules */}
-      <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
-        <h3 className="mb-2 font-display text-lg font-bold text-red-500">(RULES)</h3>
-        <ul className="list-disc space-y-1 pl-5 text-sm font-semibold text-red-400">
-          <li>DONT ADD MULTIPLE PEOPLE FROM THE SAME COMPANY ONLY THE HIGHEST RANK</li>
-          <li>DONT DO 500+ SCRAPES FOR NOW</li>
-          <li>ONLY DO 100K+ BUSINESSES FOR NOW</li>
-        </ul>
-      </div>
-
-      {/* intro */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          Enter a city, region or address and tap the keywords you want (Roofing, Tree Service,
-          Dentist…). Google Places and OpenStreetMap find the local businesses for free, each
-          website is read for the owner, published emails and phone, and the domain is checked for
-          mail delivery. Paid sources (Apollo, Hunter) only run when you switch on "paid fallback".
-          Accept the good ones into your raw-data queue, then add them to an outreach sequence.
-        </p>
-      </div>
-
-      {/* Filter panel */}
-      <Panel>
-        <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
-          <div className="space-y-3">
-            <Field label="Location / address">
-              <div className="flex gap-2">
-                <input
-                  className={inputCls}
-                  value={filters.location}
-                  onChange={(e) => setFilters({ ...filters, location: e.target.value })}
-                  onKeyDown={(e) => e.key === "Enter" && locate()}
-                  placeholder="e.g. Antwerp, Belgium  ·  or  Meir 88, Antwerpen"
-                />
-                <Btn variant="ghost" onClick={locate}>
-                  {geoBusy ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <MapPin className="h-4 w-4" />
-                  )}
-                  Locate
-                </Btn>
-              </div>
-            </Field>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Job titles (optional, comma-separated)">
-                <input
-                  className={inputCls}
-                  value={filters.titles}
-                  onChange={(e) => setFilters({ ...filters, titles: e.target.value })}
-                  placeholder="CEO, Owner, Marketing Manager"
-                />
-              </Field>
-              <Field label="Keywords (comma-separated)">
-                <input
-                  className={inputCls}
-                  value={filters.industry}
-                  onChange={(e) => setFilters({ ...filters, industry: e.target.value })}
-                  placeholder="Real Estate, Tree, Store…"
-                />
-              </Field>
+    <div className="space-y-5">
+      {/* Command bar */}
+      <Panel className="!p-0 overflow-hidden">
+        <div className="grid gap-3 p-4 lg:grid-cols-[1.1fr_1.5fr_auto_auto] lg:items-end">
+          <Field label="Where">
+            <div className="relative">
+              <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                className={inputCls + " pl-9 pr-20"}
+                value={filters.location}
+                onChange={(e) => setFilters({ ...filters, location: e.target.value })}
+                onKeyDown={(e) => e.key === "Enter" && locate()}
+                placeholder="City, region or address"
+              />
+              <button
+                onClick={locate}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-xs font-semibold text-primary hover:bg-secondary"
+              >
+                {geoBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Locate"}
+              </button>
             </div>
+          </Field>
 
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="block text-xs font-semibold text-muted-foreground">
-                  Quick keywords{" "}
-                  <span className="font-normal">(tap to add — searched as a union)</span>
-                </span>
-                <button
-                  onClick={suggestKeywordsWithAI}
-                  disabled={aiKwBusy}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[var(--brand-violet)] to-[var(--brand-coral)] px-3 py-1.5 text-xs font-semibold text-white transition-transform hover:-translate-y-0.5 disabled:opacity-60"
-                  title="Ask AI for the best service-based verticals to target for this location"
+          <Field label="What kind of business">
+            <div
+              className={
+                inputCls + " flex min-h-[42px] flex-wrap items-center gap-1.5 py-1.5 cursor-text"
+              }
+              onClick={(e) =>
+                (e.currentTarget.querySelector("input") as HTMLInputElement | null)?.focus()
+              }
+            >
+              {selectedKeywordLabels.map((kw) => (
+                <span
+                  key={kw}
+                  className="inline-flex items-center gap-1 rounded-full bg-[var(--brand-violet)]/12 px-2.5 py-0.5 text-xs font-semibold text-[var(--brand-violet)]"
                 >
-                  {aiKwBusy ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Sparkles className="h-3.5 w-3.5" />
-                  )}
-                  {aiKwBusy ? "Thinking…" : "AI suggest keywords"}
-                </button>
-              </div>
+                  {kw}
+                  <button
+                    onClick={() => toggleKeyword(kw)}
+                    aria-label={`Remove ${kw}`}
+                    className="opacity-70 hover:opacity-100"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+              <input
+                className="min-w-[120px] flex-1 bg-transparent text-sm outline-none"
+                value={nicheDraft}
+                onChange={(e) => setNicheDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === ",") {
+                    e.preventDefault();
+                    addNicheDraft();
+                  } else if (e.key === "Backspace" && !nicheDraft && selectedKeywordLabels.length) {
+                    toggleKeyword(selectedKeywordLabels[selectedKeywordLabels.length - 1]);
+                  }
+                }}
+                onBlur={addNicheDraft}
+                placeholder={
+                  selectedKeywordLabels.length ? "Add another…" : "Roofing, dentist, tree service…"
+                }
+              />
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setNichesOpen((v) => !v);
+                }}
+                className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-primary hover:bg-secondary"
+              >
+                Browse{" "}
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition-transform ${nichesOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+            </div>
+          </Field>
 
-              {aiKwError && (
-                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">
-                  {aiKwError}
-                </div>
+          <Field label="How many">
+            <select
+              className={inputCls + " w-24"}
+              value={filters.perPage}
+              onChange={(e) => setFilters({ ...filters, perPage: Number(e.target.value) })}
+            >
+              {[25, 50, 100, 200, 500].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <div className="flex gap-2">
+            <Btn onClick={runScrape} disabled={busy || !filters.location.trim()} className="px-5">
+              {scrapeBusy ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Radar className="h-4 w-4" />
               )}
+              {scrapeBusy
+                ? aiProgress.total
+                  ? `Reading sites ${aiProgress.done}/${aiProgress.total}`
+                  : "Finding…"
+                : "Find businesses"}
+            </Btn>
+            <Btn
+              variant="ghost"
+              onClick={() => setShowSave(true)}
+              disabled={!filters.location.trim()}
+              title="Save as a search that re-runs itself and can auto-enrol new leads"
+            >
+              <BookmarkPlus className="h-4 w-4" />
+            </Btn>
+          </div>
+        </div>
 
-              {aiKeywords.length > 0 && (
-                <div>
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <span className="text-[.7rem] font-semibold uppercase tracking-wider text-[var(--brand-violet)]">
-                      AI picks ({aiKeywords.length})
-                    </span>
+        {/* Niche browser */}
+        {nichesOpen && (
+          <div className="border-t border-border bg-secondary/40 p-4">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <input
+                className={inputCls + " max-w-xs"}
+                placeholder="Filter niches…"
+                value={nicheQuery}
+                onChange={(e) => setNicheQuery(e.target.value)}
+                autoFocus
+              />
+              <button
+                onClick={suggestKeywordsWithAI}
+                disabled={aiKwBusy}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold hover:bg-secondary disabled:opacity-60"
+              >
+                {aiKwBusy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5 text-[var(--brand-violet)]" />
+                )}
+                Suggest niches for this area
+              </button>
+              {aiKwError && <span className="text-xs text-destructive">{aiKwError}</span>}
+              <span className="ml-auto text-xs text-muted-foreground">
+                {selectedKeywordLabels.length} selected · searched together
+              </span>
+            </div>
+            {aiKeywords.length > 0 && (
+              <div className="mb-3">
+                <div className="mb-1 text-xs font-semibold text-[var(--brand-violet)]">
+                  Suggested
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {aiKeywords.map((kw) => (
                     <button
-                      onClick={() => setAiKeywords([])}
-                      className="text-[.7rem] text-muted-foreground hover:text-foreground"
+                      key={`ai-${kw}`}
+                      onClick={() => toggleKeyword(kw)}
+                      className={pill(activeKeywords.includes(kw.toLowerCase()))}
                     >
-                      clear
+                      {kw}
                     </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {aiKeywords.map((kw) => {
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="grid max-h-[400px] gap-x-6 gap-y-3 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
+              {nicheMatches.map((g) => (
+                <div key={g.group}>
+                  <div className="mb-1 text-xs font-semibold text-foreground">{g.group}</div>
+                  <div className="flex flex-wrap gap-1">
+                    {g.keywords.map((kw) => {
                       const on = activeKeywords.includes(kw.toLowerCase());
                       return (
                         <button
-                          key={`ai-${kw}`}
+                          key={kw}
                           onClick={() => toggleKeyword(kw)}
-                          className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                          className={`rounded-md px-2 py-1 text-[.72rem] ${
                             on
-                              ? "border-transparent bg-[var(--brand-violet)] text-white"
-                              : "border-[var(--brand-violet)]/40 bg-[var(--brand-violet)]/10 text-[var(--brand-violet)] hover:bg-[var(--brand-violet)]/20"
+                              ? "bg-[var(--brand-violet)] font-semibold text-white"
+                              : "bg-background text-muted-foreground hover:text-foreground"
                           }`}
                         >
                           {kw}
@@ -903,90 +1036,123 @@ export function Scraper({
                     })}
                   </div>
                 </div>
-              )}
+              ))}
+            </div>
+          </div>
+        )}
 
-              <div className="space-y-2.5">
-                {KEYWORD_GROUPS.map((g) => (
-                  <div key={g.group}>
-                    <div className="mb-1 text-[.65rem] font-semibold uppercase tracking-wider text-muted-foreground/70">
-                      {g.group}
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {g.keywords.map((kw) => {
-                        const on = activeKeywords.includes(kw.toLowerCase());
-                        return (
-                          <button
-                            key={kw}
-                            onClick={() => toggleKeyword(kw)}
-                            className={`rounded-full border px-2.5 py-1 text-[.7rem] font-semibold transition-colors ${
-                              on
-                                ? "border-transparent bg-[var(--brand-coral)] text-white"
-                                : "border-border bg-background text-muted-foreground hover:bg-secondary"
-                            }`}
-                          >
-                            {kw}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+        {/* Options row */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-2.5">
+          <span className="text-xs text-muted-foreground">Sources</span>
+          {(
+            [
+              { id: "google", label: "Google Maps" },
+              { id: "osm", label: "OpenStreetMap" },
+              { id: "claude", label: "Read each website" },
+              { id: "apollo", label: "Apollo (paid)" },
+            ] as { id: ScrapeSource; label: string }[]
+          ).map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setSources({ ...sources, [s.id]: !sources[s.id] })}
+              className={pill(sources[s.id])}
+            >
+              {s.label}
+            </button>
+          ))}
+          <span className="mx-1 h-4 w-px bg-border" />
+          <button
+            onClick={() => setRevealPhone((v) => !v)}
+            className={pill(revealPhone)}
+            title="Also look up phone numbers"
+          >
+            Phones
+          </button>
+          <button
+            onClick={() => setUsePaid((v) => !v)}
+            className={pill(usePaid)}
+            title="Use Apollo / Hunter / SerpApi credits for contacts the free pass can't resolve"
+          >
+            Paid fallback
+          </button>
+          <button
+            onClick={() => setOptionsOpen((v) => !v)}
+            className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" /> More filters
+            <ChevronDown
+              className={`h-3.5 w-3.5 transition-transform ${optionsOpen ? "rotate-180" : ""}`}
+            />
+          </button>
+        </div>
+
+        {optionsOpen && (
+          <div className="grid gap-4 border-t border-border bg-secondary/40 p-4 md:grid-cols-2">
+            <div className="space-y-3">
+              <div>
+                <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
+                  Must have
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setFilters({ ...filters, requireEmail: !filters.requireEmail })}
+                    className={pill(!!filters.requireEmail)}
+                  >
+                    Email address
+                  </button>
+                  <button
+                    onClick={() => setFilters({ ...filters, requirePhone: !filters.requirePhone })}
+                    className={pill(!!filters.requirePhone)}
+                  >
+                    Direct phone
+                  </button>
+                </div>
+              </div>
+              <Field label="Job titles to look for on the website (optional)">
+                <input
+                  className={inputCls}
+                  value={filters.titles}
+                  onChange={(e) => setFilters({ ...filters, titles: e.target.value })}
+                  placeholder="Owner, Founder, Managing Director"
+                />
+              </Field>
+            </div>
+            <div className={`space-y-3 ${sources.apollo ? "" : "opacity-50"}`}>
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                Apollo filters
+                {!sources.apollo && (
+                  <span className="font-normal">— turn on the Apollo source to use these</span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {SENIORITIES.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => toggleSeniority(s.id)}
+                    className={pill(filters.seniorities.includes(s.id))}
+                    disabled={!sources.apollo}
+                  >
+                    {s.label}
+                  </button>
                 ))}
               </div>
-            </div>
-
-            <div>
-              <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
-                Seniority (high ranks)
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {SENIORITIES.map((s) => {
-                  const on = filters.seniorities.includes(s.id);
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => toggleSeniority(s.id)}
-                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                        on
-                          ? "border-transparent bg-primary text-primary-foreground"
-                          : "border-border bg-background text-muted-foreground hover:bg-secondary"
-                      }`}
-                    >
-                      {s.label}
-                    </button>
-                  );
-                })}
+              <div className="flex flex-wrap gap-1.5">
+                {SIZE_PRESETS.map((sz) => (
+                  <button
+                    key={sz.id}
+                    onClick={() => toggleEmployeeRange(sz.id)}
+                    className={pill((filters.employeeRanges ?? []).includes(sz.id))}
+                    disabled={!sources.apollo}
+                  >
+                    {sz.label}
+                  </button>
+                ))}
               </div>
-            </div>
-
-            <div>
-              <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
-                Company size <span className="font-normal">(employees — great for local SMBs)</span>
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {SIZE_PRESETS.map((sz) => {
-                  const on = (filters.employeeRanges ?? []).includes(sz.id);
-                  return (
-                    <button
-                      key={sz.id}
-                      onClick={() => toggleEmployeeRange(sz.id)}
-                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                        on
-                          ? "border-transparent bg-primary text-primary-foreground"
-                          : "border-border bg-background text-muted-foreground hover:bg-secondary"
-                      }`}
-                    >
-                      {sz.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Min company revenue">
+              <div className="grid grid-cols-2 gap-2">
                 <select
                   className={inputCls}
                   value={filters.minRevenue ?? 0}
+                  disabled={!sources.apollo}
                   onChange={(e) => setFilters({ ...filters, minRevenue: Number(e.target.value) })}
                 >
                   {REVENUE_OPTS.map((r) => (
@@ -995,11 +1161,10 @@ export function Scraper({
                     </option>
                   ))}
                 </select>
-              </Field>
-              <Field label="Match location by">
                 <select
                   className={inputCls}
                   value={filters.locationScope ?? "both"}
+                  disabled={!sources.apollo}
                   onChange={(e) =>
                     setFilters({
                       ...filters,
@@ -1011,157 +1176,22 @@ export function Scraper({
                   <option value="company">Company HQ only</option>
                   <option value="person">Person's location only</option>
                 </select>
-              </Field>
-            </div>
-
-            <div>
-              <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
-                Reachability{" "}
-                <span className="font-normal">(only pull leads you can actually contact)</span>
-              </span>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setFilters({ ...filters, requireEmail: !filters.requireEmail })}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                    filters.requireEmail
-                      ? "border-transparent bg-[var(--brand-coral)] text-white"
-                      : "border-border bg-background text-muted-foreground hover:bg-secondary"
-                  }`}
-                >
-                  Has email
-                </button>
-                <button
-                  onClick={() => setFilters({ ...filters, requirePhone: !filters.requirePhone })}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                    filters.requirePhone
-                      ? "border-transparent bg-[var(--brand-coral)] text-white"
-                      : "border-border bg-background text-muted-foreground hover:bg-secondary"
-                  }`}
-                >
-                  Has direct phone
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <span className="mb-1.5 block text-xs font-semibold text-muted-foreground">
-                Discovery sources <span className="font-normal">(combine for the widest net)</span>
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {(
-                  [
-                    { id: "google", label: "Google Places · free tier" },
-                    { id: "osm", label: "OpenStreetMap · free" },
-                    { id: "claude", label: "Claude reads each website · ~¢" },
-                    { id: "apollo", label: "Apollo people search · paid credits" },
-                  ] as { id: ScrapeSource; label: string }[]
-                ).map((s) => {
-                  const on = sources[s.id];
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => setSources({ ...sources, [s.id]: !on })}
-                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                        on
-                          ? "border-transparent bg-[var(--brand-violet)] text-white"
-                          : "border-border bg-background text-muted-foreground hover:bg-secondary"
-                      }`}
-                    >
-                      {s.label}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="mt-1.5 text-[.7rem] text-muted-foreground">
-                Free sources run first. Google Places and OpenStreetMap find the businesses; each
-                website is then read for the owner, published emails and phone, and the domain is
-                checked for mail delivery. Apollo only runs when you switch it on.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-end gap-3 pt-1">
-              <Field label="Results to pull">
-                <select
-                  className={inputCls + " w-28"}
-                  value={filters.perPage}
-                  onChange={(e) => setFilters({ ...filters, perPage: Number(e.target.value) })}
-                >
-                  {[25, 50, 100, 200, 500].map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Btn onClick={runScrape} className="px-5">
-                {scrapeBusy ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Radar className="h-4 w-4" />
-                )}
-                {scrapeBusy
-                  ? aiProgress.total
-                    ? `AI scrape ${aiProgress.done}/${aiProgress.total}…`
-                    : "Discovering…"
-                  : "Scrape leads"}
-              </Btn>
-              <Btn
-                variant="soft"
-                onClick={() => setShowSave(true)}
-                disabled={!filters.location.trim()}
-                title="Save these filters as a search that re-runs itself and can auto-enrol new leads"
-              >
-                <BookmarkPlus className="h-4 w-4" /> Save search
-              </Btn>
-              <div className="text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">
-                  {Object.keys(denylist).length > 0 ? Object.keys(denylist).length : 0}
-                </span>{" "}
-                entries in deny-memory
               </div>
             </div>
           </div>
-
-          {/* Map */}
-          <div className="min-h-[260px] overflow-hidden rounded-xl border border-border bg-secondary">
-            {geo ? (
-              <div className="flex h-full flex-col">
-                <iframe
-                  title="map"
-                  src={mapSrc}
-                  className="h-[230px] w-full border-0"
-                  loading="lazy"
-                />
-                <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
-                  <MapPin className="h-3.5 w-3.5 text-primary" />
-                  <span className="truncate">{geo.displayName}</span>
-                </div>
-              </div>
-            ) : (
-              <div className="flex h-full min-h-[260px] flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted-foreground">
-                <MapPin className="h-7 w-7 opacity-40" />
-                Enter a location and hit <strong>Locate</strong> to drop it on the map.
-              </div>
-            )}
-          </div>
-        </div>
+        )}
       </Panel>
 
-      {/* Banner */}
       {banner && (
         <div
-          className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${
+          className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm ${
             banner.live
               ? "border-[oklch(.7_.18_150/.4)] bg-[oklch(.7_.18_150/.08)] text-[oklch(.4_.12_150)]"
               : "border-[oklch(.7_.16_60/.4)] bg-[oklch(.8_.16_80/.1)] text-[oklch(.45_.1_70)]"
           }`}
         >
           <span
-            className={`rounded-full px-2 py-0.5 text-[.65rem] font-bold uppercase tracking-wider ${
-              banner.live
-                ? "bg-[oklch(.7_.18_150)] text-white"
-                : "bg-[oklch(.75_.16_70)] text-white"
-            }`}
+            className={`rounded-full px-2 py-0.5 text-[.65rem] font-bold uppercase tracking-wider text-white ${banner.live ? "bg-[oklch(.7_.18_150)]" : "bg-[oklch(.75_.16_70)]"}`}
           >
             {banner.live ? "Live" : "Demo"}
           </span>
@@ -1169,284 +1199,483 @@ export function Scraper({
         </div>
       )}
 
-      {/* Results */}
-      {results.length > 0 && (
-        <Panel>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-primary" />
-              <h3 className="font-display text-lg font-bold">{results.length} contacts found</h3>
-              <span className="text-sm text-muted-foreground">
-                · {selectedPeople.length} selected
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground">
-                <input
-                  type="checkbox"
-                  checked={revealPhone}
-                  onChange={(e) => setRevealPhone(e.target.checked)}
-                  className="accent-[var(--brand-violet)]"
-                />
-                + phones
-              </label>
-              <label
-                className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground"
-                title="Falls back to Apollo / Hunter / SerpApi (costs credits) for contacts the free pass couldn't resolve"
-              >
-                <input
-                  type="checkbox"
-                  checked={usePaid}
-                  onChange={(e) => setUsePaid(e.target.checked)}
-                  className="accent-[var(--brand-violet)]"
-                />
-                paid fallback
-              </label>
-              <Btn variant="soft" onClick={() => revealEmails(selectedPeople)}>
-                {enrichBusy ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" /> Revealing {enrichProgress.done}/
-                    {enrichProgress.total}
-                  </>
-                ) : (
-                  <>
-                    <Unlock className="h-4 w-4" /> Reveal emails
-                  </>
-                )}
-              </Btn>
-              {scoredCount > 0 && (
-                <>
-                  <Btn
-                    variant="ghost"
-                    onClick={() => setSortByScore((v) => !v)}
-                    title="Order rows by lead score"
-                  >
-                    <ArrowDownWideNarrow className="h-4 w-4" />{" "}
-                    {sortByScore ? "Sorted by score" : "Sort by score"}
-                  </Btn>
-                  <Btn
-                    variant="ghost"
-                    onClick={() => selectTop(0.4)}
-                    title="Select the best-scoring 40% of this list"
-                  >
-                    <Gauge className="h-4 w-4" /> Select top 40%
-                  </Btn>
-                </>
-              )}
-              <Btn
-                variant="ghost"
-                onClick={() =>
-                  setSelected(
-                    selectedPeople.length === results.length
-                      ? {}
-                      : Object.fromEntries(results.map((p) => [p.id, true])),
-                  )
-                }
-              >
-                {selectedPeople.length === results.length ? "Clear all" : "Select all"}
-              </Btn>
-              <Btn variant="ghost" onClick={() => exportCSV(selectedPeople)}>
-                <Download className="h-4 w-4" /> Download CSV
-              </Btn>
-              <Btn variant="danger" onClick={denySelected}>
-                <X className="h-4 w-4" /> Deny {selectedPeople.length}
-              </Btn>
-              <Btn variant="ghost" onClick={clearAllResults}>
-                <Trash2 className="h-4 w-4" /> Clear all
-              </Btn>
-              <Btn onClick={sendToRaw}>
-                <ArrowRightCircle className="h-4 w-4" /> Accept {selectedPeople.length} → Raw Data
-              </Btn>
-            </div>
-          </div>
-
-          <p className="mb-4 text-xs text-muted-foreground">
-            Enrichment runs automatically after a search and you can re-run it here. The free pass
-            reads each website for the owner and a published address, checks the domain accepts
-            mail, and scores every row 0–100: can we reach them, is it a real business, and is there
-            visible room to improve (no pixel, no booking, old site). Paid lookups only run with the
-            box ticked. EU contacts' personal info may be limited under GDPR.
-          </p>
-
-          {pushed > 0 && (
-            <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-secondary px-3 py-2.5 text-sm">
-              <CheckSquare className="h-4 w-4 text-[oklch(.6_.15_150)]" />
-              Added {pushed} contact(s) to your raw-data queue.
-              <button
-                onClick={() => go("raw")}
-                className="font-semibold text-primary underline-offset-2 hover:underline"
-              >
-                Open Raw Data →
-              </button>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            {ordered.map((p) => {
-              const on = !!selected[p.id];
-              const sc = scores[p.id];
-              return (
-                <div
-                  key={p.id}
-                  className={`flex flex-wrap items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors ${
-                    on ? "border-primary/40 bg-primary/[.04]" : "border-border bg-background"
-                  }`}
-                >
-                  <button
-                    onClick={() => setSelected((s) => ({ ...s, [p.id]: !on }))}
-                    className="shrink-0 text-primary"
-                    aria-label="select"
-                  >
-                    {on ? (
-                      <CheckSquare className="h-5 w-5" />
-                    ) : (
-                      <Square className="h-5 w-5 text-muted-foreground" />
-                    )}
-                  </button>
-
-                  {sc && (
-                    <div
-                      title={sc.why.join("\n")}
-                      className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg text-xs font-bold tabular-nums ${
-                        sc.score >= 70
-                          ? "bg-[oklch(.7_.18_150)]/15 text-[oklch(.4_.14_150)]"
-                          : sc.score >= 45
-                            ? "bg-[oklch(.8_.16_80)]/20 text-[oklch(.45_.12_70)]"
-                            : "bg-secondary text-muted-foreground"
-                      }`}
-                    >
-                      {sc.score}
-                    </div>
-                  )}
-                  <div className="min-w-[180px] flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold">
-                        {p.name || (
-                          <span className="text-muted-foreground italic">No person yet</span>
-                        )}
-                      </span>
-                      {p.seniority && (
-                        <span className="rounded-full bg-secondary px-2 py-0.5 text-[.62rem] font-bold uppercase tracking-wider text-muted-foreground">
-                          {p.seniority.replace("_", " ")}
-                        </span>
-                      )}
-                      {(discoverSources[p.id] ?? []).map((s) => (
-                        <span
-                          key={s}
-                          className={`rounded-full px-2 py-0.5 text-[.6rem] font-bold uppercase tracking-wider ${
-                            s === "apollo"
-                              ? "bg-[var(--brand-violet)]/15 text-[var(--brand-violet)]"
-                              : s === "google"
-                                ? "bg-[oklch(.7_.18_150)]/15 text-[oklch(.45_.15_150)]"
-                                : "bg-[var(--brand-coral)]/15 text-[var(--brand-coral)]"
-                          }`}
-                        >
-                          {s === "claude" ? "AI" : s}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="text-xs text-muted-foreground">{p.title}</div>
-                  </div>
-
-                  <div className="min-w-[150px] flex-1">
-                    <div className="flex items-center gap-1.5 text-sm font-medium">
-                      <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
-                      {p.company}
-                    </div>
-                    <a
-                      href={`https://${p.website}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-1 text-xs text-primary hover:underline"
-                    >
-                      <Globe className="h-3 w-3" /> {p.website}
-                    </a>
-                  </div>
-
-                  <div className="min-w-[200px] flex-1 space-y-0.5 text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                      {p.emailLocked ? (
-                        <button
-                          onClick={() => revealEmails([p])}
-                          disabled={enrichBusy}
-                          className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-[.7rem] font-semibold text-primary hover:bg-secondary disabled:opacity-50"
-                        >
-                          <Sparkles className="h-3 w-3" /> Reveal
-                        </button>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 truncate">
-                          <span className="truncate">{p.email}</span>
-                          {emailSource[p.id] && (
-                            <span className="shrink-0 rounded-full bg-secondary px-1.5 py-0.5 text-[.6rem] font-semibold uppercase tracking-wide text-muted-foreground">
-                              {emailSource[p.id]}
-                            </span>
-                          )}
-                          {emailSourceUrl[p.id] && (
-                            <a
-                              href={emailSourceUrl[p.id]}
-                              target="_blank"
-                              rel="noreferrer"
-                              title={emailSourceUrl[p.id]}
-                              className="shrink-0 truncate max-w-[10rem] text-[.65rem] text-primary underline underline-offset-2 hover:opacity-80"
-                            >
-                              {prettyHost(emailSourceUrl[p.id])}
-                            </a>
-                          )}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <Phone className="h-3.5 w-3.5" /> {p.phone || "—"}
-                    </div>
-                  </div>
-
-                  {p.linkedin && (
-                    <a
-                      href={p.linkedin}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border text-[#0a66c2] hover:bg-secondary"
-                      aria-label="LinkedIn"
-                    >
-                      <Linkedin className="h-4 w-4" />
-                    </a>
-                  )}
-                  <button
-                    onClick={() => acceptOne(p.id)}
-                    aria-label="Accept"
-                    title="Accept & send to Raw Data"
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border text-[oklch(.55_.15_150)] hover:bg-[oklch(.95_.04_150)]"
-                  >
-                    <Check className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => denyOne(p.id)}
-                    aria-label="Deny / remove"
-                    title="Deny & remove"
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border text-[oklch(.55_.2_25)] hover:bg-[oklch(.95_.04_25)]"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </Panel>
-      )}
-
-      {results.length === 0 && !scrapeBusy && (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border py-16 text-center">
-          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-secondary text-primary">
-            <Search className="h-6 w-6" />
-          </div>
-          <p className="text-sm text-muted-foreground">
-            No results yet. Set a location and seniority, then hit <strong>Scrape leads</strong>.
-          </p>
+      {pushed > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-secondary px-4 py-2.5 text-sm">
+          <CheckSquare className="h-4 w-4 text-[oklch(.6_.15_150)]" />
+          {pushed} added to Raw Data.
+          <button onClick={() => go("raw")} className="font-semibold text-primary hover:underline">
+            Open Raw Data
+          </button>
         </div>
       )}
 
-      {/* Saved searches */}
+      {/* Results + rail */}
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_260px]">
+        <div className="min-w-0">
+          {results.length > 0 ? (
+            <Panel className="!p-0 overflow-hidden">
+              <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
+                <div className="mr-2">
+                  <div className="font-display text-base font-bold">
+                    {results.length} businesses
+                    <span className="ml-2 text-sm font-normal text-muted-foreground">
+                      {withEmail} with email{avgScore !== null ? ` · avg score ${avgScore}` : ""}
+                    </span>
+                  </div>
+                  {scoredList.length > 0 && (
+                    <div
+                      className="mt-1 flex h-1.5 w-56 overflow-hidden rounded-full bg-secondary"
+                      title={`${bands.strong} strong · ${bands.ok} ok · ${bands.weak} weak`}
+                    >
+                      <span
+                        className="bg-[oklch(.62_.17_150)]"
+                        style={{ width: `${(bands.strong / scoredList.length) * 100}%` }}
+                      />
+                      <span
+                        className="bg-[oklch(.78_.15_80)]"
+                        style={{ width: `${(bands.ok / scoredList.length) * 100}%` }}
+                      />
+                      <span
+                        className="bg-[oklch(.8_.02_290)]"
+                        style={{ width: `${(bands.weak / scoredList.length) * 100}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="ml-auto flex flex-wrap items-center gap-1.5">
+                  {scoredCount > 0 && (
+                    <>
+                      <Btn
+                        variant="ghost"
+                        onClick={() => selectTop(0.4)}
+                        title="Select the best-scoring 40%"
+                      >
+                        <Gauge className="h-4 w-4" /> Top 40%
+                      </Btn>
+                      <Btn
+                        variant="ghost"
+                        onClick={() => setSortByScore((v) => !v)}
+                        title="Toggle score ordering"
+                      >
+                        <ArrowDownWideNarrow className="h-4 w-4" />{" "}
+                        {sortByScore ? "By score" : "As found"}
+                      </Btn>
+                    </>
+                  )}
+                  <Btn
+                    variant="ghost"
+                    onClick={() => revealEmails(selectedPeople)}
+                    disabled={enrichBusy || !selectedPeople.length}
+                  >
+                    {enrichBusy ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" /> {enrichProgress.done}/
+                        {enrichProgress.total}
+                      </>
+                    ) : (
+                      <>
+                        <Unlock className="h-4 w-4" /> Reveal
+                      </>
+                    )}
+                  </Btn>
+                  <Btn
+                    variant="ghost"
+                    onClick={() => exportCSV(selectedPeople)}
+                    disabled={!selectedPeople.length}
+                    title="Download CSV"
+                  >
+                    <Download className="h-4 w-4" />
+                  </Btn>
+                  <Btn
+                    variant="danger"
+                    onClick={denySelected}
+                    disabled={!selectedPeople.length}
+                    title="Deny selected"
+                  >
+                    <X className="h-4 w-4" />
+                  </Btn>
+                  <Btn onClick={sendToRaw} disabled={!selectedPeople.length}>
+                    <ArrowRightCircle className="h-4 w-4" /> Accept {selectedPeople.length || ""}
+                  </Btn>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-left text-xs text-muted-foreground">
+                    <tr className="border-b border-border">
+                      <th className="w-10 px-3 py-2">
+                        <button
+                          onClick={() =>
+                            setSelected(
+                              selectedPeople.length === results.length
+                                ? {}
+                                : Object.fromEntries(results.map((p) => [p.id, true])),
+                            )
+                          }
+                          aria-label="Select all"
+                          className="text-primary"
+                        >
+                          {selectedPeople.length === results.length ? (
+                            <CheckSquare className="h-4 w-4" />
+                          ) : (
+                            <Square className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </button>
+                      </th>
+                      <th className="w-28 min-w-[112px] px-2 py-2 font-medium">Score</th>
+                      <th className="min-w-[190px] px-3 py-2 font-medium">Business</th>
+                      <th className="min-w-[150px] px-3 py-2 font-medium">Contact</th>
+                      <th className="min-w-[220px] px-3 py-2 font-medium">Email</th>
+                      <th className="w-20 px-2 py-2" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ordered.map((p) => {
+                      const on = !!selected[p.id];
+                      const sc = scores[p.id];
+                      const open = expanded === p.id;
+                      return (
+                        <Fragment key={p.id}>
+                          <tr
+                            className={`border-b border-border/70 align-top ${on ? "bg-primary/[.04]" : "hover:bg-secondary/40"}`}
+                          >
+                            <td className="px-3 py-2.5">
+                              <button
+                                onClick={() => setSelected((s) => ({ ...s, [p.id]: !on }))}
+                                aria-label="select"
+                                className="text-primary"
+                              >
+                                {on ? (
+                                  <CheckSquare className="h-4 w-4" />
+                                ) : (
+                                  <Square className="h-4 w-4 text-muted-foreground" />
+                                )}
+                              </button>
+                            </td>
+                            <td className="px-2 py-2.5">
+                              {sc ? (
+                                <button
+                                  onClick={() => setExpanded(open ? null : p.id)}
+                                  className="group flex w-full items-center gap-2"
+                                  title="Why this score"
+                                >
+                                  <span className="w-7 text-right font-display text-sm font-bold tabular-nums">
+                                    {sc.score}
+                                  </span>
+                                  <span className="h-1.5 min-w-[44px] flex-1 overflow-hidden rounded-full bg-secondary">
+                                    <span
+                                      className={`block h-full rounded-full ${bandCls(sc.score)}`}
+                                      style={{ width: `${sc.score}%` }}
+                                    />
+                                  </span>
+                                  <ChevronRight
+                                    className={`h-3 w-3 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
+                                  />
+                                </button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <div className="font-semibold">{p.company}</div>
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                                {p.website && (
+                                  <a
+                                    href={`https://${p.website}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-primary hover:underline"
+                                  >
+                                    <Globe className="h-3 w-3" /> {p.website}
+                                  </a>
+                                )}
+                                {typeof p.rating === "number" && (
+                                  <span className="inline-flex items-center gap-0.5">
+                                    <Star className="h-3 w-3 fill-current text-[oklch(.78_.15_80)]" />{" "}
+                                    {p.rating}
+                                    {p.reviews ? ` (${p.reviews})` : ""}
+                                  </span>
+                                )}
+                                {(discoverSources[p.id] ?? []).map((s) => (
+                                  <span
+                                    key={s}
+                                    className="rounded bg-secondary px-1 py-px text-[.6rem] font-semibold uppercase tracking-wide"
+                                  >
+                                    {s === "claude" ? "AI" : s === "google" ? "Maps" : s}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <div
+                                className={`flex items-center gap-1 whitespace-nowrap ${p.name ? "font-medium" : "italic text-muted-foreground"}`}
+                              >
+                                {p.name || "No name yet"}
+                                {p.linkedin && (
+                                  <a
+                                    href={p.linkedin}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-[#0a66c2]"
+                                    aria-label="LinkedIn"
+                                  >
+                                    <Linkedin className="h-3.5 w-3.5" />
+                                  </a>
+                                )}
+                              </div>
+                              <div className="text-xs text-muted-foreground">{p.title}</div>
+                              {p.phone && (
+                                <div className="mt-0.5 inline-flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground">
+                                  <Phone className="h-3 w-3" /> {p.phone}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5">
+                              {p.emailLocked || !p.email ? (
+                                <button
+                                  onClick={() => revealEmails([p])}
+                                  disabled={enrichBusy}
+                                  className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-semibold text-primary hover:bg-secondary disabled:opacity-50"
+                                >
+                                  <Sparkles className="h-3 w-3" /> Reveal
+                                </button>
+                              ) : (
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="break-words font-mono text-xs [overflow-wrap:anywhere]">
+                                    {p.email}
+                                  </span>
+                                  {emailSource[p.id] && (
+                                    <span
+                                      className={`rounded px-1 py-px text-[.6rem] font-semibold uppercase tracking-wide ${
+                                        emailSource[p.id] === "Guess"
+                                          ? "bg-[oklch(.8_.16_80)]/25 text-[oklch(.45_.1_70)]"
+                                          : "bg-secondary text-muted-foreground"
+                                      }`}
+                                      title={emailSourceUrl[p.id] || emailSource[p.id]}
+                                    >
+                                      {emailSource[p.id]}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                            <td className="whitespace-nowrap px-2 py-2.5">
+                              <div className="flex justify-end gap-1">
+                                <button
+                                  onClick={() => acceptOne(p.id)}
+                                  aria-label="Accept"
+                                  title="Accept → Raw Data"
+                                  className="grid h-7 w-7 place-items-center rounded-md border border-border text-[oklch(.55_.15_150)] hover:bg-[oklch(.95_.04_150)]"
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => denyOne(p.id)}
+                                  aria-label="Deny"
+                                  title="Deny & never show again"
+                                  className="grid h-7 w-7 place-items-center rounded-md border border-border text-[oklch(.55_.2_25)] hover:bg-[oklch(.95_.04_25)]"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                          {open && sc && (
+                            <tr className="border-b border-border/70 bg-secondary/30">
+                              <td />
+                              <td colSpan={5} className="px-3 py-2">
+                                <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                  {sc.why.map((w, i) => (
+                                    <li key={i} className="inline-flex items-center gap-1">
+                                      <Info className="h-3 w-3" /> {w}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center justify-between border-t border-border px-4 py-2 text-xs text-muted-foreground">
+                <span>
+                  Score: can we reach them · is it a real business · is there visible room to
+                  improve. Click a score for the reasons.
+                </span>
+                <button
+                  onClick={clearAllResults}
+                  className="inline-flex items-center gap-1 hover:text-foreground"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Clear list
+                </button>
+              </div>
+            </Panel>
+          ) : (
+            !scrapeBusy && (
+              <div className="flex h-full min-h-[280px] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border p-8 text-center">
+                <div className="grid h-12 w-12 place-items-center rounded-2xl bg-secondary text-primary">
+                  <Search className="h-6 w-6" />
+                </div>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  Type a city and a kind of business, then <strong>Find businesses</strong>. Each
+                  result is read from its own website and scored so the best leads sit at the top.
+                </p>
+              </div>
+            )
+          )}
+          {scrapeBusy && results.length === 0 && (
+            <div className="flex min-h-[280px] items-center justify-center gap-2 rounded-2xl border border-dashed border-border text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {aiProgress.total
+                ? `Reading websites ${aiProgress.done}/${aiProgress.total}`
+                : "Asking Google Maps and OpenStreetMap…"}
+            </div>
+          )}
+        </div>
+
+        {/* Rail */}
+        <div className="space-y-4">
+          <div className="overflow-hidden rounded-2xl border border-border bg-secondary">
+            {geo ? (
+              <>
+                <iframe
+                  title="map"
+                  src={mapSrc}
+                  className="h-[200px] w-full border-0"
+                  loading="lazy"
+                />
+                <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+                  <MapPin className="h-3.5 w-3.5 text-primary" />
+                  <span className="truncate">{geo.displayName}</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex h-[200px] flex-col items-center justify-center gap-2 p-4 text-center text-xs text-muted-foreground">
+                <MapPin className="h-6 w-6 opacity-40" />
+                The area you search appears here.
+              </div>
+            )}
+          </div>
+
+          <Panel>
+            <div className="mb-2 text-xs font-semibold text-muted-foreground">This list</div>
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
+              <dt className="text-muted-foreground">Found</dt>
+              <dd className="text-right font-semibold tabular-nums">{results.length}</dd>
+              <dt className="text-muted-foreground">With email</dt>
+              <dd className="text-right font-semibold tabular-nums">{withEmail}</dd>
+              <dt className="text-muted-foreground">Selected</dt>
+              <dd className="text-right font-semibold tabular-nums">{selectedPeople.length}</dd>
+              {Object.entries(sourceTotals).map(([k, v]) => (
+                <Fragment key={k}>
+                  <dt className="text-muted-foreground">
+                    {k === "claude"
+                      ? "Websites read"
+                      : k === "google"
+                        ? "From Google Maps"
+                        : k === "osm"
+                          ? "From OpenStreetMap"
+                          : k}
+                  </dt>
+                  <dd className="text-right tabular-nums">{v}</dd>
+                </Fragment>
+              ))}
+            </dl>
+          </Panel>
+
+          <Panel>
+            <button
+              onClick={() => setRulesOpen((v) => !v)}
+              className="flex w-full items-center justify-between text-left"
+            >
+              <span className="text-xs font-semibold text-muted-foreground">Team rules</span>
+              <ChevronDown
+                className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${rulesOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+            {rulesOpen && (
+              <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-foreground">
+                <li>One person per company — the highest rank only.</li>
+                <li>No 500+ scrapes for now.</li>
+                <li>Only businesses doing $100k+ for now.</li>
+              </ul>
+            )}
+          </Panel>
+
+          <Panel>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs font-semibold text-muted-foreground">Deny memory</div>
+                <div className="text-sm">{history.length} never shown again</div>
+              </div>
+              <Btn variant="ghost" onClick={() => setShowHistory((v) => !v)}>
+                {showHistory ? "Hide" : "Show"}
+              </Btn>
+            </div>
+            {showHistory && (
+              <div className="mt-3 space-y-2">
+                <input
+                  className={inputCls}
+                  placeholder="Search…"
+                  value={historyFilter}
+                  onChange={(e) => setHistoryFilter(e.target.value)}
+                />
+                <div className="max-h-72 space-y-1 overflow-auto">
+                  {history
+                    .filter((h) => {
+                      if (!historyFilter.trim()) return true;
+                      const q = historyFilter.toLowerCase();
+                      const e = h.entry;
+                      return (
+                        e.name.toLowerCase().includes(q) ||
+                        e.company.toLowerCase().includes(q) ||
+                        (e.email ?? "").toLowerCase().includes(q) ||
+                        (e.domain ?? "").toLowerCase().includes(q)
+                      );
+                    })
+                    .slice(0, 200)
+                    .map(({ key, entry }) => (
+                      <div
+                        key={key}
+                        className="flex items-center gap-2 rounded-lg border border-border bg-background px-2 py-1.5 text-xs"
+                      >
+                        <span
+                          className={`shrink-0 rounded px-1.5 py-px text-[.6rem] font-bold uppercase ${
+                            entry.reason === "accepted"
+                              ? "bg-[oklch(.7_.18_150)]/15 text-[oklch(.45_.15_150)]"
+                              : "bg-[oklch(.7_.16_25)]/15 text-[oklch(.5_.18_25)]"
+                          }`}
+                        >
+                          {entry.reason}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">
+                          <span className="font-semibold">
+                            {entry.company || entry.name || "—"}
+                          </span>
+                          <span className="text-muted-foreground">
+                            {" "}
+                            {entry.email || entry.domain || ""}
+                          </span>
+                        </span>
+                        <button
+                          onClick={() => update((prev) => restoreFromDenylist(prev, key))}
+                          className="shrink-0 text-primary hover:underline"
+                        >
+                          restore
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+          </Panel>
+        </div>
+      </div>
+
       <SavedSearchesPanel refreshKey={savedRefresh} />
 
       {showSave && (
@@ -1461,84 +1690,6 @@ export function Scraper({
           }}
         />
       )}
-
-      {/* Deny / accepted memory */}
-      <Panel>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="font-display text-lg font-bold">Deny memory</h3>
-            <p className="text-xs text-muted-foreground">
-              {history.length} contact(s) the scraper will never resurface for this account (denied
-              + accepted are both remembered).
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {showHistory && (
-              <input
-                className={inputCls + " w-60"}
-                placeholder="Search name, company, email…"
-                value={historyFilter}
-                onChange={(e) => setHistoryFilter(e.target.value)}
-              />
-            )}
-            <Btn variant="ghost" onClick={() => setShowHistory((v) => !v)}>
-              {showHistory ? "Hide" : "Show"}
-            </Btn>
-          </div>
-        </div>
-        {showHistory && history.length > 0 && (
-          <div className="mt-3 max-h-80 space-y-1.5 overflow-auto">
-            {history
-              .filter((h) => {
-                if (!historyFilter.trim()) return true;
-                const q = historyFilter.toLowerCase();
-                const e = h.entry;
-                return (
-                  e.name.toLowerCase().includes(q) ||
-                  e.company.toLowerCase().includes(q) ||
-                  (e.email ?? "").toLowerCase().includes(q) ||
-                  (e.domain ?? "").toLowerCase().includes(q)
-                );
-              })
-              .slice(0, 200)
-              .map(({ key, entry }) => (
-                <div
-                  key={key}
-                  className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-background px-3 py-2 text-xs"
-                >
-                  <span
-                    className={`shrink-0 rounded-full px-2 py-0.5 text-[.62rem] font-bold uppercase tracking-wider ${
-                      entry.reason === "accepted"
-                        ? "bg-[oklch(.7_.18_150)]/15 text-[oklch(.45_.15_150)]"
-                        : "bg-[oklch(.7_.16_25)]/15 text-[oklch(.5_.18_25)]"
-                    }`}
-                  >
-                    {entry.reason}
-                  </span>
-                  <span className="min-w-[120px] font-semibold">{entry.name || "—"}</span>
-                  <span className="min-w-[120px] text-muted-foreground">
-                    {entry.company || "—"}
-                  </span>
-                  <span className="min-w-[160px] text-muted-foreground truncate">
-                    {entry.email || entry.domain || "—"}
-                  </span>
-                  <span className="text-muted-foreground">
-                    {new Date(entry.ts).toLocaleDateString()}
-                  </span>
-                  <button
-                    onClick={() => update((prev) => restoreFromDenylist(prev, key))}
-                    className="ml-auto rounded-md border border-border px-2 py-1 font-semibold text-primary hover:bg-secondary"
-                  >
-                    Restore
-                  </button>
-                </div>
-              ))}
-          </div>
-        )}
-        {showHistory && history.length === 0 && (
-          <p className="mt-3 text-sm text-muted-foreground">Nothing here yet.</p>
-        )}
-      </Panel>
     </div>
   );
 }

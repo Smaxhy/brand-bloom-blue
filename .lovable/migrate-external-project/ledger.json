@@ -1,7 +1,7 @@
 {
-  "source_archive": "inspirova-rebuilt-2.zip",
+  "source_archive": "inspirova-admin-engine_1.zip",
   "capabilities": [
-    {"capability":"code","source":"replacement ZIP","outcome":"Applied exact replacement homepage; retained current dependencies, migration tooling and managed Cloud types","status":"verified","next_action":null},
+    {"capability":"code","source":"admin-engine_1 ZIP","outcome":"Applied exact Scraper.tsx and store.ts replacement with new command bar, niche browser, results table and saved scores; homepage and all other admin/server files untouched","status":"verified","next_action":null},
     {"capability":"schema","source":"existing Lovable Cloud and archived SQL migrations","outcome":"Preserved applied schema and Drizzle migrations, including explicit access grants absent from archive SQL; no migration replay","status":"preserved","next_action":null},
     {"capability":"records","source":"existing Lovable Cloud","outcome":"Keep existing records untouched; ZIP contains no record export","status":"preserved","next_action":null},
     {"capability":"auth identities","source":"existing Lovable Cloud","outcome":"Keep existing accounts, sessions, profiles and ownership","status":"preserved","next_action":null},
@@ -12,6 +12,6 @@
     {"capability":"webhooks","source":"unchanged source","outcome":"No replacement differences","status":"preserved","next_action":null},
     {"capability":"schedules","source":"existing outreach dispatcher","outcome":"Preserve current schedule; do not trigger outbound sends","status":"verification_pending","next_action":"Published scheduled dispatch remains unverified"},
     {"capability":"cutover","source":"current custom domains","outcome":"Preview update only","status":"pending","next_action":"Publish only when explicitly requested"},
-    {"capability":"verification","source":"running preview","outcome":"Homepage matches ZIP; calculator selection and quote validation passed; results navigation passed; privacy/reset-password/admin return 200; no browser page errors; build OK","status":"verified","next_action":null}
+    {"capability":"verification","source":"signed-in running preview","outcome":"Verified Data Scraper opens, niche browser filtering and selection, removable keyword and advanced filters; screenshot confirms new layout; no page errors; build OK; both files match ZIP exactly; no provider calls or outbound sends","status":"verified","next_action":null}
   ]
 }
