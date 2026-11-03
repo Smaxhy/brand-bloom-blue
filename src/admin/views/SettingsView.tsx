@@ -35,6 +35,9 @@ import {
   integrationStatus,
 } from "../outreach";
 import { Panel, Field, inputCls, Btn } from "../ui";
+import { useServerFn } from "@tanstack/react-start";
+import { canConfigureIntegrations, saveIntegrationCredentials } from "@/lib/integration-settings.functions";
+import { integrationFields, integrationInputSchema } from "@/lib/integration-settings-schema";
 
 export function SettingsView({
   data,
@@ -570,7 +573,7 @@ const INTEGRATIONS: {
 }[] = [
   {
     key: "db",
-    name: "Server database access (SUPABASE_SERVICE_ROLE_KEY)",
+    name: "Server database access",
     cost: "free",
     need: "required",
     how: "Lovable Cloud provides this automatically; the scheduler and mailbox connection need it.",
@@ -635,6 +638,34 @@ const INTEGRATIONS: {
 
 function IntegrationsPanel() {
   const [st, setSt] = useState<Record<string, boolean> | null>(null);
+  const [allowed, setAllowed] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const checkPermission = useServerFn(canConfigureIntegrations);
+  const saveCredentials = useServerFn(saveIntegrationCredentials);
+  useEffect(() => {
+    void checkPermission().then((r) => setAllowed(r.allowed)).catch(() => setAllowed(false));
+  }, [checkPermission]);
+  async function submitCredentials() {
+    if (busy || !editing) return;
+    const fields = integrationFields[editing] ?? [];
+    if (fields.some((f) => !values[f.name]?.trim())) { setError("Enter all the details for this integration."); return; }
+    const result = integrationInputSchema.safeParse({ values });
+    if (!result.success) { setError("Check your details: remove spaces and enter a valid credential."); return; }
+    setBusy(true);
+    setError("");
+    try {
+      await saveCredentials({ data: result.data });
+      setValues({});
+      setEditing(null);
+      toast.success("Integration details saved securely.");
+      setSt(await integrationStatus());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save. Please try again.");
+    } finally { setBusy(false); }
+  }
   useEffect(() => {
     void integrationStatus()
       .then(setSt)
@@ -649,8 +680,7 @@ function IntegrationsPanel() {
         <div>
           <h3 className="font-display text-lg font-bold">Integrations &amp; keys</h3>
           <p className="text-xs text-muted-foreground">
-            Set these as Worker secrets (Lovable → Settings → Secrets). The free ones do most of the
-            work; paid ones are fallbacks.
+            {allowed ? "Add or replace shared service credentials below. Saved keys are never displayed." : "Shared service credentials are managed by the CEO."}
           </p>
         </div>
       </div>
@@ -679,6 +709,31 @@ function IntegrationsPanel() {
                   <span className="text-xs font-normal text-muted-foreground">{i.cost}</span>
                 </div>
                 <div className="text-xs text-muted-foreground">{i.how}</div>
+                {i.key === "db" || i.key === "cronSecret" ? (
+                  <div className="mt-1 text-xs text-muted-foreground">Managed securely by the site; no entry needed here.</div>
+                ) : allowed && (
+                  <div className="mt-2">
+                    {editing !== i.key ? (
+                      <Btn variant="ghost" onClick={() => { setEditing(i.key); setValues({}); setError(""); }} disabled={busy}>
+                        <Plug className="h-3.5 w-3.5" /> {ok ? "Replace details" : "Add details"}
+                      </Btn>
+                    ) : (
+                      <form className="space-y-3" autoComplete="off" onSubmit={(e) => { e.preventDefault(); void submitCredentials(); }}>
+                        {(integrationFields[i.key] ?? []).map((f) => (
+                          <div key={f.name}>
+                            <label htmlFor={`integration-${f.name}`} className="mb-1 block text-xs font-medium">{f.label}</label>
+                            <input id={`integration-${f.name}`} type="password" autoComplete="new-password" required maxLength={4096} className={inputCls} value={values[f.name] ?? ""} disabled={busy} onChange={(e) => setValues((p) => ({ ...p, [f.name]: e.target.value }))} />
+                          </div>
+                        ))}
+                        {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+                        <div className="flex flex-wrap gap-2">
+                          <Btn type="submit" disabled={busy}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {busy ? "Saving…" : "Save securely"}</Btn>
+                          <Btn variant="ghost" disabled={busy} onClick={() => { setEditing(null); setValues({}); setError(""); }}>Cancel</Btn>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           );

@@ -4,6 +4,7 @@ import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { handleApiRequest } from "./lib/api-proxies";
 import { runDispatch } from "./lib/sequencer";
+import { resolveIntegrationEnv } from "./lib/integration-settings.server";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -77,7 +78,7 @@ export default {
   ) {
     const e = (env ?? {}) as Record<string, string | undefined>;
     ctx.waitUntil(
-      runDispatch(e, { origin: e.PUBLIC_ORIGIN })
+      resolveIntegrationEnv(e).then((configured) => runDispatch(configured, { origin: e.PUBLIC_ORIGIN }))
         .then((r) => console.log("[outreach] dispatch", JSON.stringify(r)))
         .catch((err) => console.error("[outreach] dispatch failed", err)),
     );
@@ -88,7 +89,9 @@ export default {
       // Same-origin API proxies (Apollo scraper, geocoding, GHL) run first.
       const apiResponse = await handleApiRequest(
         request,
-        (env ?? {}) as Record<string, string | undefined>,
+        new URL(request.url).pathname.startsWith("/api/") && new URL(request.url).pathname !== "/api/health"
+          ? await resolveIntegrationEnv((env ?? {}) as Record<string, string | undefined>)
+          : (env ?? {}) as Record<string, string | undefined>,
       );
       if (apiResponse) return apiResponse;
 

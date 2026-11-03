@@ -17,3 +17,7 @@
 # Latest admin archive
 - [x] Apply new scraper layout and persisted scores from inspirova-admin-engine_1.zip without changing homepage, accounts or migrations.
 - [x] Verify scraper controls and preview rendering without sending emails or running paid searches.
+
+# Integration entry
+- [ ] Add secure CEO-only credential entry and use saved credentials in scraper/mailbox requests.
+- [ ] Verify entry controls, validation, authorization and encrypted storage without paid calls or email sends.
