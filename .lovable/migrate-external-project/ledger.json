@@ -4,15 +4,15 @@
     {
       "capability": "code",
       "source": "admin-engine-2 ZIP",
-      "outcome": "Merge new enrichment and concurrency changes; preserve secure credential forms and server credential resolution",
-      "status": "in_progress",
+      "outcome": "Applied new crawler concurrency/cache changes; retained secure Settings credential entry and server resolver; public homepage unchanged",
+      "status": "verified",
       "next_action": null
     },
     {
       "capability": "schema",
       "source": "existing Lovable Cloud and archived SQL migrations",
-      "outcome": "Preserve existing migrations; add server-only domain cache with explicit grants",
-      "status": "pending",
+      "outcome": "Added server-only site_cache; verified RLS enabled, browser and anonymous access denied, server grants present",
+      "status": "verified",
       "next_action": null
     },
     {
@@ -74,16 +74,16 @@
     {
       "capability": "cutover",
       "source": "current custom domains",
-      "outcome": "User requested redeployment",
-      "status": "pending",
-      "next_action": "Verify and publish"
+      "outcome": "Publish requested for inspirovamarketing.com",
+      "status": "deployment_requested",
+      "next_action": "Deployment completion not yet verified"
     },
     {
       "capability": "verification",
       "source": "signed-in running preview",
-      "outcome": "Verify signed-in Settings mailbox button, secure entry and scraper rendering",
-      "status": "pending",
-      "next_action": null
+      "outcome": "Signed-in Settings displays Connect Google mailbox; click opens Google consent, no page errors; build OK; seven safety/credential tests passed",
+      "status": "verified",
+      "next_action": "User must complete Google consent; live scraping, mailbox send and scheduled dispatch remain unverified"
     }
   ]
 }
