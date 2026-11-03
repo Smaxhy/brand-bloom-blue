@@ -10,6 +10,6 @@
 - [ ] Live outreach verification: blocked by provider setup and published schedule verification; do not send test emails.
 
 # Homepage-only reversal
-- [ ] Restore the homepage design from before the editorial redesign.
-- [ ] Preserve the new ZIP's scraper files, migrations, and saved backend data unchanged.
-- [ ] Verify restored homepage rendering, calculator, and navigation.
+- [x] Restore the homepage design from before the editorial redesign.
+- [x] Preserve the new ZIP's scraper files, migrations, and saved backend data unchanged.
+- [x] Verify restored homepage rendering, calculator, and navigation.
