@@ -20,4 +20,4 @@
 
 # Integration entry
 - [x] Add secure administrator credential entry and use saved credentials in scraper/mailbox requests.
-- [ ] Verify entry controls, validation, authorization and encrypted storage without paid calls or email sends.
+- [x] Verify entry controls, validation, authorization and encrypted storage without paid calls or email sends; remove temporary test credentials.
