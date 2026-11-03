@@ -1,0 +1,17 @@
+{
+  "source_archive": "inspirova-rebuilt-2.zip",
+  "capabilities": [
+    {"capability":"code","source":"replacement ZIP","outcome":"Apply replacement homepage; other application source is identical","status":"pending","next_action":"Copy inspected homepage and verify navigation/calculator"},
+    {"capability":"schema","source":"existing Lovable Cloud and archived SQL migrations","outcome":"Preserve previously applied schema; do not replay migrations","status":"preserved","next_action":"Check schema equivalence"},
+    {"capability":"records","source":"existing Lovable Cloud","outcome":"Keep existing records untouched; ZIP contains no record export","status":"preserved","next_action":null},
+    {"capability":"auth identities","source":"existing Lovable Cloud","outcome":"Keep existing accounts, sessions, profiles and ownership","status":"preserved","next_action":null},
+    {"capability":"authorization","source":"unchanged application and existing policies","outcome":"Preserve existing access boundaries","status":"preserved","next_action":null},
+    {"capability":"uploaded file bytes","source":"archive assets","outcome":"Assets already match project","status":"preserved","next_action":null},
+    {"capability":"external providers and secrets","source":"unchanged Gmail, search, enrichment and AI code","outcome":"Preserve existing providers and secure configuration","status":"verification_pending","next_action":"Live Gmail and other provider verification requires configured credentials; no provider calls or sends during replacement"},
+    {"capability":"public endpoints and callbacks","source":"unchanged server and API code","outcome":"Preserve endpoint URLs and OAuth callbacks","status":"preserved","next_action":null},
+    {"capability":"webhooks","source":"unchanged source","outcome":"No replacement differences","status":"preserved","next_action":null},
+    {"capability":"schedules","source":"existing outreach dispatcher","outcome":"Preserve current schedule; do not trigger outbound sends","status":"verification_pending","next_action":"Published scheduled dispatch remains unverified"},
+    {"capability":"cutover","source":"current custom domains","outcome":"Preview update only","status":"pending","next_action":"Publish only when explicitly requested"},
+    {"capability":"verification","source":"running preview","outcome":"Check replacement homepage and existing public routes","status":"pending","next_action":"Browser checks"}
+  ]
+}
