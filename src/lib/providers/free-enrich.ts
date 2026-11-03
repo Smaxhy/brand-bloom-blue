@@ -15,6 +15,8 @@
  * afterwards, on the text we already fetched, to pick the decision-maker.
  */
 
+import { fetchPublicSite } from '../public-site-fetch';
+
 export interface FreeEnrichResult {
   ok: boolean;
   website: string; // final domain after redirects
@@ -215,19 +217,11 @@ async function fetchPage(
   timeoutMs: number,
 ): Promise<{ html: string; finalUrl: string } | null> {
   try {
-    const res = await fetch(url, {
-      headers: {
+    return await fetchPublicSite(url, timeoutMs, {
         "User-Agent": UA,
         Accept: "text/html,application/xhtml+xml,*/*;q=0.8",
         "Accept-Language": "en",
-      },
-      redirect: "follow",
-      signal: AbortSignal.timeout(timeoutMs),
     });
-    if (!res.ok) return null;
-    const ct = res.headers.get("content-type") || "";
-    if (ct && !/html|xml|text/i.test(ct)) return null;
-    return { html: (await res.text()).slice(0, 250_000), finalUrl: res.url || url };
   } catch {
     return null;
   }
