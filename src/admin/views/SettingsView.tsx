@@ -1,6 +1,39 @@
-import { useState } from "react";
-import { Save, RotateCcw, KeyRound, Radar, Globe, Send, CheckCircle2, XCircle, Moon, Sun, Download, FileJson, FileSpreadsheet } from "lucide-react";
-import { type AdminData, type GhlSendDetail, resetData, ghlSendEmail, exportAccountJson, exportAccountCsvs } from "../store";
+import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
+import {
+  Save,
+  RotateCcw,
+  Send,
+  CheckCircle2,
+  XCircle,
+  Moon,
+  Sun,
+  Download,
+  FileJson,
+  FileSpreadsheet,
+  Mail,
+  Plus,
+  Pause,
+  Play,
+  Trash2,
+  Building2,
+  Plug,
+  Loader2,
+  ShieldCheck,
+} from "lucide-react";
+import { type AdminData, resetData, exportAccountJson, exportAccountCsvs } from "../store";
+import {
+  type Mailbox,
+  type OutreachSettings,
+  listMailboxes,
+  updateMailbox,
+  deleteMailbox,
+  connectMailboxUrl,
+  sendTestEmail,
+  getOutreachSettings,
+  saveOutreachSettings,
+  integrationStatus,
+} from "../outreach";
 import { Panel, Field, inputCls, Btn } from "../ui";
 
 export function SettingsView({
@@ -12,9 +45,6 @@ export function SettingsView({
 }) {
   const [s, setS] = useState(data.settings);
   const [saved, setSaved] = useState(false);
-  const [testTo, setTestTo] = useState("");
-  const [testBusy, setTestBusy] = useState(false);
-  const [testResult, setTestResult] = useState<{ ok: boolean; message: string; details: GhlSendDetail[] } | null>(null);
   const dark = s.theme === "dark";
 
   function save() {
@@ -24,30 +54,15 @@ export function SettingsView({
   }
 
   async function reset() {
-    if (confirm("Reset all admin data back to the demo seed? This affects every signed-in device and cannot be undone.")) {
+    if (
+      confirm(
+        "Reset all admin data back to the demo seed? This affects every signed-in device and cannot be undone.",
+      )
+    ) {
       const fresh = await resetData();
       update(() => fresh);
       setS(fresh.settings);
     }
-  }
-
-  async function sendTest() {
-    if (!testTo.trim()) return;
-    setTestBusy(true);
-    setTestResult(null);
-    const res = await ghlSendEmail({
-      apiKey: s.ghlApiKey,
-      companyId: s.ghlCompanyId,
-      locationId: s.ghlLocationId,
-      to: [{ name: "Test", email: testTo.trim() }],
-      subject: "Inspirova GHL test email ✅",
-      body:
-        "This is a test email sent from the Inspirova admin panel via your GoHighLevel integration.\n\nIf you received this in your inbox, your GHL setup is working end-to-end.",
-      fromName: s.fromName,
-      fromEmail: s.fromEmail,
-    });
-    setTestResult(res);
-    setTestBusy(false);
   }
 
   return (
@@ -70,7 +85,9 @@ export function SettingsView({
               update((p) => ({ ...p, settings: next }));
             }}
             className={`flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
-              !dark ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:bg-secondary"
+              !dark
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border bg-background text-muted-foreground hover:bg-secondary"
             }`}
           >
             <Sun className="h-4 w-4" /> Light
@@ -82,7 +99,9 @@ export function SettingsView({
               update((p) => ({ ...p, settings: next }));
             }}
             className={`flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${
-              dark ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:bg-secondary"
+              dark
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border bg-background text-muted-foreground hover:bg-secondary"
             }`}
           >
             <Moon className="h-4 w-4" /> Dark
@@ -90,139 +109,10 @@ export function SettingsView({
         </div>
       </Panel>
 
-      <Panel>
-        <div className="mb-4 flex items-center gap-2">
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-[var(--brand-violet)] to-[var(--brand-coral)] text-white"><KeyRound className="h-4 w-4" /></div>
-          <div>
-            <h3 className="font-display text-lg font-bold">GoHighLevel</h3>
-            <p className="text-xs text-muted-foreground">Connect your GHL location to send live email campaigns.</p>
-          </div>
-        </div>
-        <div className="space-y-3">
-          <Field label="API Key (optional — server already has one configured)"><input className={inputCls} value={s.ghlApiKey} onChange={(e) => setS({ ...s, ghlApiKey: e.target.value })} placeholder="pit-… (leave blank to use server key)" /></Field>
-          <Field label="Company / Agency ID (required for Agency tokens)"><input className={inputCls} value={s.ghlCompanyId} onChange={(e) => setS({ ...s, ghlCompanyId: e.target.value })} placeholder="Needed if your token was created at agency level" /></Field>
-          <Field label="Location ID"><input className={inputCls} value={s.ghlLocationId} onChange={(e) => setS({ ...s, ghlLocationId: e.target.value })} placeholder="e.g. abc123…" /></Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="From name"><input className={inputCls} value={s.fromName} onChange={(e) => setS({ ...s, fromName: e.target.value })} /></Field>
-            <Field label="From email (must be verified inside GHL)"><input className={inputCls} value={s.fromEmail} onChange={(e) => setS({ ...s, fromEmail: e.target.value })} /></Field>
-          </div>
-        </div>
-        <div className="mt-4 flex items-center gap-3">
-          <Btn onClick={save}><Save className="h-4 w-4" /> Save settings</Btn>
-          {saved && <span className="text-sm text-[oklch(.55_.15_150)]">Saved ✓</span>}
-        </div>
-
-        <div className="mt-5 rounded-xl border border-border bg-secondary/40 p-4">
-          <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
-            <Send className="h-4 w-4" /> Send a test email
-          </div>
-          <p className="mb-3 text-xs text-muted-foreground">
-            Sends one real email through GoHighLevel using the settings above. Use your own inbox to confirm it lands. If GHL rejects it, you'll see the exact reason here.
-          </p>
-          <div className="flex gap-2">
-            <input
-              type="email"
-              className={inputCls}
-              value={testTo}
-              onChange={(e) => setTestTo(e.target.value)}
-              placeholder="you@yourdomain.com"
-            />
-            <Btn onClick={sendTest} >
-              {testBusy ? "Sending…" : <><Send className="h-4 w-4" /> Send test</>}
-            </Btn>
-          </div>
-          {testResult && (
-            <div className="mt-3 space-y-2">
-              <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${testResult.ok ? "bg-[oklch(.7_.18_150)]/12 text-[oklch(.45_.15_150)]" : "bg-destructive/10 text-destructive"}`}>
-                {testResult.ok ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-                {testResult.message}
-              </div>
-              {testResult.details.map((d, i) => (
-                <div key={i} className="rounded-lg border border-border bg-background px-3 py-2 text-xs">
-                  <div className="font-semibold">{d.email}</div>
-                  {d.ok ? (
-                    <div className="text-[oklch(.55_.15_150)]">{d.simulated ? "Simulated (no server key)" : `Accepted by GHL (HTTP ${d.status ?? 200})`}</div>
-                  ) : (
-                    <div className="text-destructive">
-                      {d.status ? `HTTP ${d.status} — ` : ""}{d.error || "Unknown error"}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <p className="mt-4 rounded-lg bg-secondary px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-          <strong>What GHL sends are these?</strong> Real transactional emails routed through your GoHighLevel sub-account — same engine as 1-to-1 emails from inside GHL, not bulk marketing blasts. Deliverability depends on your <strong>From email's domain being verified in GHL</strong> (Settings → Email Services → Dedicated Domain). You do <strong>not</strong> need to add DNS records on this site; GHL handles SPF/DKIM on their side.
-        </p>
-      </Panel>
-
-
-      <Panel>
-        <div className="mb-4 flex items-center gap-2">
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-[var(--brand-violet)] to-[var(--brand-coral)] text-white"><Radar className="h-4 w-4" /></div>
-          <div>
-            <h3 className="font-display text-lg font-bold">Data Scraper (Apollo.io)</h3>
-            <p className="text-xs text-muted-foreground">Pull decision-makers by location, with company, website, email & LinkedIn.</p>
-          </div>
-        </div>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          The scraper calls Apollo through a same-origin proxy so your API key never touches the
-          browser. To switch it from <strong>Demo</strong> to <strong>Live</strong>:
-        </p>
-        <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
-          <li>Get a master API key in Apollo: <em>Settings → Integrations → API</em>.</li>
-          <li>
-            Set it as a Worker secret:{" "}
-            <code className="rounded bg-secondary px-1.5 py-0.5 text-xs">wrangler secret put APOLLO_API_KEY</code>
-            {" "}— or add <code className="rounded bg-secondary px-1.5 py-0.5 text-xs">APOLLO_API_KEY=…</code> to a{" "}
-            <code className="rounded bg-secondary px-1.5 py-0.5 text-xs">.dev.vars</code> file for local dev.
-          </li>
-          <li>Redeploy. The scraper detects the key and starts returning live results.</li>
-        </ol>
-        <p className="mt-3 rounded-lg bg-secondary px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-          The map uses free OpenStreetMap geocoding (no key). Pulling records draws from your
-          monthly <strong>export credits</strong> (≈2,000 on Professional); revealing emails uses
-          email credits (unlimited under fair use); revealing phones uses <strong>mobile credits</strong>
-          (≈100/mo on Professional), so use phones sparingly. EU contacts' personal emails may stay
-          hidden under GDPR. Keep outreach to B2B legitimate-interest contacts with an easy opt-out.
-        </p>
-      </Panel>
-
-      <Panel>
-        <div className="mb-4 flex items-center gap-2">
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-[var(--brand-coral)] to-[var(--brand-violet)] text-white"><Globe className="h-4 w-4" /></div>
-          <div>
-            <h3 className="font-display text-lg font-bold">More sources (web search)</h3>
-            <p className="text-xs text-muted-foreground">Widen email coverage beyond Apollo.</p>
-          </div>
-        </div>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          Reveal waterfalls across sources so you get the widest coverage: <strong>Apollo</strong> →
-          <strong> Hunter.io</strong> → <strong>Google</strong>. Each extra source is optional — add
-          its key as a Worker secret (same way you set the Apollo key) and redeploy.
-        </p>
-        <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-          <li className="rounded-lg bg-secondary px-3 py-2.5">
-            <strong>Hunter.io</strong> — searches the public web (78M+ domains) for emails at a
-            company's domain. Secret:{" "}
-            <code className="rounded bg-background px-1.5 py-0.5 text-xs">HUNTER_API_KEY</code>{" "}
-            (free key at hunter.io → API).
-          </li>
-          <li className="rounded-lg bg-secondary px-3 py-2.5">
-            <strong>Google</strong> — searches the whole web for a contact's email via{" "}
-            <strong>SerpAPI</strong> (real Google results). Secret:{" "}
-            <code className="rounded bg-background px-1.5 py-0.5 text-xs">SERPAPI_API_KEY</code>{" "}
-            (get a key at serpapi.com).
-          </li>
-        </ul>
-        <p className="mt-3 rounded-lg bg-secondary px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-          Google results are public web snippets, so email matches are best-effort and should be
-          verified before bulk outreach. Keep all outreach to B2B legitimate-interest contacts with
-          an easy opt-out (GDPR).
-        </p>
-      </Panel>
+      <MailboxesPanel />
+      <SenderIdentityPanel />
+      <IntegrationsPanel />
+      <TwoFactorPanel />
 
       <Panel>
         <h3 className="font-display text-lg font-bold">Access</h3>
@@ -233,14 +123,20 @@ export function SettingsView({
 
       <Panel>
         <div className="mb-4 flex items-center gap-2">
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-[var(--brand-violet)] to-[var(--brand-coral)] text-white"><Download className="h-4 w-4" aria-hidden="true" /></div>
+          <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-[var(--brand-violet)] to-[var(--brand-coral)] text-white">
+            <Download className="h-4 w-4" aria-hidden="true" />
+          </div>
           <div>
             <h3 className="font-display text-lg font-bold">Export your account data</h3>
-            <p className="text-xs text-muted-foreground">Download everything in your account, ready to import into any future CRM.</p>
+            <p className="text-xs text-muted-foreground">
+              Download everything in your account, ready to import into any future CRM.
+            </p>
           </div>
         </div>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          You own your data. Grab a full JSON snapshot for a perfect archive, or per-table CSVs that most CRMs (HubSpot, Pipedrive, Salesforce, GHL, Zoho…) can import directly. Includes clients, deals, leads, tasks, transactions, campaigns, templates and ad scans.
+          You own your data. Grab a full JSON snapshot for a perfect archive, or per-table CSVs that
+          most CRMs (HubSpot, Pipedrive, Salesforce, GHL, Zoho…) can import directly. Includes
+          clients, deals, leads, tasks, transactions, campaigns, templates and ad scans.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Btn onClick={() => exportAccountJson(data, "account")}>
@@ -251,15 +147,642 @@ export function SettingsView({
           </Btn>
         </div>
         <p className="mt-3 rounded-lg bg-secondary px-3 py-2.5 text-[.7rem] leading-relaxed text-muted-foreground">
-          The JSON file is a full, machine-readable copy of your account. The CSV bundle exports one file per table so you can drop each one into your next CRM's import flow.
+          The JSON file is a full, machine-readable copy of your account. The CSV bundle exports one
+          file per table so you can drop each one into your next CRM's import flow.
         </p>
       </Panel>
 
       <Panel>
         <h3 className="font-display text-lg font-bold">Data</h3>
-        <p className="mt-1 mb-3 text-sm text-muted-foreground">All admin data is stored per account in the backend. Reset only affects the signed-in account.</p>
-        <Btn variant="danger" onClick={reset}><RotateCcw className="h-4 w-4" aria-hidden="true" /> Reset all data</Btn>
+        <p className="mt-1 mb-3 text-sm text-muted-foreground">
+          All admin data is stored per account in the backend. Reset only affects the signed-in
+          account.
+        </p>
+        <Btn variant="danger" onClick={reset}>
+          <RotateCcw className="h-4 w-4" aria-hidden="true" /> Reset all data
+        </Btn>
       </Panel>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------ mailboxes */
+const TIMEZONES = [
+  "America/Denver",
+  "America/Chicago",
+  "America/New_York",
+  "America/Los_Angeles",
+  "America/Phoenix",
+  "Europe/Brussels",
+  "Europe/Amsterdam",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Berlin",
+];
+const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+function MailboxesPanel() {
+  const [rows, setRows] = useState<Mailbox[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+  const [testTo, setTestTo] = useState("");
+  const [testBusy, setTestBusy] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{
+    ok: boolean;
+    error?: string;
+    preview?: { subject: string; text: string };
+  } | null>(null);
+  const [connecting, setConnecting] = useState(false);
+
+  const load = useCallback(
+    () =>
+      listMailboxes()
+        .then(setRows)
+        .then(() => setErr(null))
+        .catch((e) => setErr((e as Error).message)),
+    [],
+  );
+  useEffect(() => {
+    void load();
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("mailbox") === "connected") {
+      toast.success(
+        `Connected ${q.get("email") ?? "mailbox"} — set its daily cap and hours below.`,
+      );
+      history.replaceState(null, "", window.location.pathname);
+    } else if (q.get("mailbox") === "error") {
+      toast.error(`Could not connect mailbox: ${q.get("reason") ?? "unknown error"}`);
+      history.replaceState(null, "", window.location.pathname);
+    }
+  }, [load]);
+
+  async function connect() {
+    setConnecting(true);
+    try {
+      window.location.href = await connectMailboxUrl();
+    } catch (e) {
+      toast.error((e as Error).message);
+      setConnecting(false);
+    }
+  }
+  async function patch(id: string, p: Partial<Mailbox>) {
+    setRows((r) => r.map((m) => (m.id === id ? { ...m, ...p } : m)));
+    try {
+      await updateMailbox(id, p);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+  async function test(m: Mailbox) {
+    if (!testTo.includes("@")) return toast.error("Enter the address to send the test to.");
+    setTestBusy(m.id);
+    setTestResult(null);
+    const r = await sendTestEmail(m.id, testTo.trim(), "US");
+    setTestResult(r);
+    setTestBusy(null);
+    if (r.ok) toast.success(`Test sent from ${m.email}`);
+  }
+
+  return (
+    <Panel>
+      <div className="mb-4 flex items-center gap-2">
+        <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-[var(--brand-violet)] to-[var(--brand-coral)] text-white">
+          <Mail className="h-4 w-4" />
+        </div>
+        <div className="flex-1">
+          <h3 className="font-display text-lg font-bold">Sending mailboxes</h3>
+          <p className="text-xs text-muted-foreground">
+            Google Workspace accounts that outreach goes out from. Start each new mailbox at 10–15 a
+            day and raise it weekly.
+          </p>
+        </div>
+        <Btn onClick={() => void connect()} disabled={connecting}>
+          {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}{" "}
+          Connect Google mailbox
+        </Btn>
+      </div>
+      {err && (
+        <p className="mb-3 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {err}
+        </p>
+      )}
+      {!rows.length && !err && (
+        <p className="rounded-lg bg-secondary px-3 py-2.5 text-sm text-muted-foreground">
+          No mailboxes yet. Use a <strong>secondary domain</strong> (e.g. getinspirova.com) with
+          SPF, DKIM and DMARC set up in Google Workspace, so your main domain's reputation is never
+          at risk.
+        </p>
+      )}
+      <div className="space-y-3">
+        {rows.map((m) => (
+          <div key={m.id} className="rounded-xl border border-border p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold">{m.email}</div>
+                <div className="text-xs text-muted-foreground">
+                  {m.last_sync_at
+                    ? `Inbox checked ${new Date(m.last_sync_at).toLocaleString()}`
+                    : "Inbox not checked yet"}
+                </div>
+                {m.last_error && (
+                  <div className="mt-0.5 text-xs text-destructive">{m.last_error}</div>
+                )}
+              </div>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[.65rem] font-semibold uppercase ${m.status === "active" ? "bg-[oklch(.7_.18_150)]/15 text-[oklch(.4_.12_150)]" : m.status === "error" ? "bg-destructive/10 text-destructive" : "bg-secondary text-muted-foreground"}`}
+              >
+                {m.status}
+              </span>
+              <button
+                aria-label={m.status === "active" ? "Pause mailbox" : "Resume mailbox"}
+                onClick={() =>
+                  void patch(m.id, {
+                    status: m.status === "active" ? "paused" : "active",
+                    last_error: null,
+                  })
+                }
+                className="grid h-9 w-9 place-items-center rounded-lg border border-border hover:bg-secondary"
+              >
+                {m.status === "active" ? (
+                  <Pause className="h-4 w-4" />
+                ) : (
+                  <Play className="h-4 w-4" />
+                )}
+              </button>
+              <button
+                aria-label="Disconnect mailbox"
+                onClick={() => {
+                  if (
+                    confirm(
+                      `Disconnect ${m.email}? Queued emails assigned to it will move to the next free mailbox.`,
+                    )
+                  )
+                    void deleteMailbox(m.id).then(load);
+                }}
+                className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted-foreground hover:bg-secondary"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_1fr]">
+              <Field label="From name">
+                <input
+                  className={inputCls}
+                  value={m.display_name}
+                  onChange={(e) =>
+                    setRows((r) =>
+                      r.map((x) => (x.id === m.id ? { ...x, display_name: e.target.value } : x)),
+                    )
+                  }
+                  onBlur={(e) => void patch(m.id, { display_name: e.target.value })}
+                />
+              </Field>
+              <Field label="Daily cap">
+                <input
+                  type="number"
+                  min={1}
+                  max={300}
+                  className={inputCls}
+                  value={m.daily_cap}
+                  onChange={(e) =>
+                    void patch(m.id, { daily_cap: Math.max(1, Number(e.target.value)) })
+                  }
+                />
+              </Field>
+              <Field label="Timezone">
+                <select
+                  className={inputCls}
+                  value={m.timezone}
+                  onChange={(e) => void patch(m.id, { timezone: e.target.value })}
+                >
+                  {[m.timezone, ...TIMEZONES.filter((t) => t !== m.timezone)].map((t) => (
+                    <option key={t}>{t}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            <div className="mt-3 flex flex-wrap items-end gap-3">
+              <Field label="Send between">
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={0}
+                    max={23}
+                    className={inputCls + " w-16"}
+                    value={m.window_start}
+                    onChange={(e) => void patch(m.id, { window_start: Number(e.target.value) })}
+                  />
+                  <span className="text-xs text-muted-foreground">and</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={24}
+                    className={inputCls + " w-16"}
+                    value={m.window_end}
+                    onChange={(e) => void patch(m.id, { window_end: Number(e.target.value) })}
+                  />
+                  <span className="text-xs text-muted-foreground">o'clock</span>
+                </div>
+              </Field>
+              <Field label="Days">
+                <div className="flex gap-1">
+                  {DAYS.map((d, i) => {
+                    const on = m.send_days.includes(i);
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() =>
+                          void patch(m.id, {
+                            send_days: on
+                              ? m.send_days.filter((x) => x !== i)
+                              : [...m.send_days, i].sort(),
+                          })
+                        }
+                        className={`h-9 w-9 rounded-lg border text-xs font-semibold ${on ? "border-transparent bg-[var(--brand-violet)] text-white" : "border-border text-muted-foreground"}`}
+                      >
+                        {d}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Field>
+            </div>
+            <div className="mt-3">
+              <Field label="Signature (added under every email)">
+                <textarea
+                  className={inputCls + " min-h-[64px]"}
+                  value={m.signature}
+                  onChange={(e) =>
+                    setRows((r) =>
+                      r.map((x) => (x.id === m.id ? { ...x, signature: e.target.value } : x)),
+                    )
+                  }
+                  onBlur={(e) => void patch(m.id, { signature: e.target.value })}
+                  placeholder={"Sam Peeters\nInspirova Marketing · +32 …"}
+                />
+              </Field>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+              <input
+                type="email"
+                className={inputCls + " max-w-xs"}
+                placeholder="you@yourdomain.com"
+                value={testTo}
+                onChange={(e) => setTestTo(e.target.value)}
+              />
+              <Btn variant="ghost" onClick={() => void test(m)} disabled={testBusy === m.id}>
+                {testBusy === m.id ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}{" "}
+                Send test from this mailbox
+              </Btn>
+            </div>
+          </div>
+        ))}
+      </div>
+      {testResult && (
+        <div
+          className={`mt-3 flex items-start gap-2 rounded-lg px-3 py-2 text-sm ${testResult.ok ? "bg-[oklch(.7_.18_150)]/12 text-[oklch(.45_.15_150)]" : "bg-destructive/10 text-destructive"}`}
+        >
+          {testResult.ok ? (
+            <CheckCircle2 className="mt-0.5 h-4 w-4" />
+          ) : (
+            <XCircle className="mt-0.5 h-4 w-4" />
+          )}
+          <div>
+            {testResult.ok
+              ? "Sent. Check the inbox (and spam) — the footer shows exactly what prospects will see."
+              : testResult.error}
+          </div>
+        </div>
+      )}
+      <p className="mt-4 rounded-lg bg-secondary px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+        <strong>One-time setup in Google Cloud:</strong> enable the Gmail API, set the OAuth consent
+        screen to <em>Internal</em>, create a Web OAuth client with redirect URI{" "}
+        <code>
+          {typeof window !== "undefined" ? window.location.origin : ""}/api/google/oauth/callback
+        </code>
+        , then add <code>GOOGLE_OAUTH_CLIENT_ID</code> and <code>GOOGLE_OAUTH_CLIENT_SECRET</code>{" "}
+        as secrets. Emails go out every 10 minutes within each mailbox's hours, follow-ups reply in
+        the same thread, and replies or bounces stop the sequence automatically.
+      </p>
+    </Panel>
+  );
+}
+
+/* ------------------------------------------------------- sender identity */
+function SenderIdentityPanel() {
+  const [s, setS] = useState<OutreachSettings | null>(null);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    void getOutreachSettings()
+      .then(setS)
+      .catch(() => setS(null));
+  }, []);
+  if (!s) return null;
+  async function save() {
+    try {
+      await saveOutreachSettings(s!);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1800);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+  return (
+    <Panel>
+      <div className="mb-4 flex items-center gap-2">
+        <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-[var(--brand-violet)] to-[var(--brand-coral)] text-white">
+          <Building2 className="h-4 w-4" />
+        </div>
+        <div>
+          <h3 className="font-display text-lg font-bold">Sender identity &amp; legal footer</h3>
+          <p className="text-xs text-muted-foreground">
+            Required by CAN-SPAM (US) and GDPR (EU). Added automatically under every outreach email.
+          </p>
+        </div>
+      </div>
+      <div className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Company name">
+            <input
+              className={inputCls}
+              value={s.company_name}
+              onChange={(e) => setS({ ...s, company_name: e.target.value })}
+            />
+          </Field>
+          <Field label="Website">
+            <input
+              className={inputCls}
+              value={s.website}
+              onChange={(e) => setS({ ...s, website: e.target.value })}
+              placeholder="inspirovamarketing.com"
+            />
+          </Field>
+        </div>
+        <Field label="Physical postal address (legally required in the US)">
+          <input
+            className={inputCls}
+            value={s.postal_address}
+            onChange={(e) => setS({ ...s, postal_address: e.target.value })}
+            placeholder="Street, City, State/Postcode, Country"
+          />
+        </Field>
+        <Field label="Notice for US leads">
+          <textarea
+            className={inputCls + " min-h-[60px]"}
+            value={s.us_notice}
+            onChange={(e) => setS({ ...s, us_notice: e.target.value })}
+          />
+        </Field>
+        <Field label="Notice for EU leads (says where you got their details + how to object)">
+          <textarea
+            className={inputCls + " min-h-[72px]"}
+            value={s.eu_notice}
+            onChange={(e) => setS({ ...s, eu_notice: e.target.value })}
+          />
+        </Field>
+      </div>
+      <div className="mt-4 flex items-center gap-3">
+        <Btn onClick={() => void save()}>
+          <Save className="h-4 w-4" /> Save
+        </Btn>
+        {saved && <span className="text-sm text-[oklch(.55_.15_150)]">Saved ✓</span>}
+        {!s.postal_address && (
+          <span className="text-xs text-destructive">
+            Add a postal address before sending to US leads.
+          </span>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+/* ---------------------------------------------------------- integrations */
+const INTEGRATIONS: {
+  key: string;
+  name: string;
+  cost: string;
+  need: "required" | "recommended" | "optional";
+  how: string;
+}[] = [
+  {
+    key: "db",
+    name: "Server database access (SUPABASE_SERVICE_ROLE_KEY)",
+    cost: "free",
+    need: "required",
+    how: "Lovable Cloud provides this automatically; the scheduler and mailbox connection need it.",
+  },
+  {
+    key: "oauth",
+    name: "Google OAuth client (GOOGLE_OAUTH_CLIENT_ID / _SECRET)",
+    cost: "free",
+    need: "required",
+    how: "Google Cloud → OAuth consent screen (Internal) → Credentials → Web client.",
+  },
+  {
+    key: "cronSecret",
+    name: "CRON_SECRET",
+    cost: "free",
+    need: "required",
+    how: "Any long random string. Protects the scheduler route and signs the mailbox sign-in.",
+  },
+  {
+    key: "places",
+    name: "Google Places API (GOOGLE_PLACES_API_KEY)",
+    cost: "free tier ≈ 20,000 businesses/mo",
+    need: "recommended",
+    how: 'Google Cloud → enable "Places API (New)" → API key restricted to it. Billing must be attached.',
+  },
+  {
+    key: "anthropic",
+    name: "Anthropic (ANTHROPIC_API_KEY)",
+    cost: "≈ ¢ per website",
+    need: "recommended",
+    how: "Claude Haiku reads each site to name the decision-maker.",
+  },
+  {
+    key: "serper",
+    name: "Serper.dev (SERPER_API_KEY)",
+    cost: "2,500 free, then $1 / 1,000",
+    need: "optional",
+    how: "Cheap Google / Maps backup and owner lookups.",
+  },
+  {
+    key: "reoon",
+    name: "Reoon verifier (REOON_API_KEY)",
+    cost: "20 free/day, then $1.19 / 1,000",
+    need: "optional",
+    how: "Verifies guessed addresses before they enter a sequence.",
+  },
+  {
+    key: "apollo",
+    name: "Apollo.io (APOLLO_API_KEY)",
+    cost: "paid credits",
+    need: "optional",
+    how: "Only used when 'paid fallback' is switched on in the scraper.",
+  },
+  {
+    key: "hunter",
+    name: "Hunter.io (HUNTER_API_KEY)",
+    cost: "paid credits",
+    need: "optional",
+    how: "Same — paid fallback only.",
+  },
+];
+
+function IntegrationsPanel() {
+  const [st, setSt] = useState<Record<string, boolean> | null>(null);
+  useEffect(() => {
+    void integrationStatus()
+      .then(setSt)
+      .catch(() => setSt({}));
+  }, []);
+  return (
+    <Panel>
+      <div className="mb-4 flex items-center gap-2">
+        <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-[var(--brand-violet)] to-[var(--brand-coral)] text-white">
+          <Plug className="h-4 w-4" />
+        </div>
+        <div>
+          <h3 className="font-display text-lg font-bold">Integrations &amp; keys</h3>
+          <p className="text-xs text-muted-foreground">
+            Set these as Worker secrets (Lovable → Settings → Secrets). The free ones do most of the
+            work; paid ones are fallbacks.
+          </p>
+        </div>
+      </div>
+      <div className="divide-y divide-border">
+        {INTEGRATIONS.map((i) => {
+          const ok = st?.[i.key];
+          return (
+            <div key={i.key} className="flex items-start gap-3 py-2.5">
+              {st === null ? (
+                <span className="mt-1 h-3 w-3 rounded-full bg-secondary" />
+              ) : ok ? (
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[oklch(.55_.15_150)]" />
+              ) : (
+                <XCircle
+                  className={`mt-0.5 h-4 w-4 shrink-0 ${i.need === "required" ? "text-destructive" : "text-muted-foreground"}`}
+                />
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                  {i.name}
+                  <span
+                    className={`rounded-full px-1.5 py-0.5 text-[.6rem] font-semibold uppercase ${i.need === "required" ? "bg-destructive/10 text-destructive" : i.need === "recommended" ? "bg-[var(--brand-violet)]/12 text-[var(--brand-violet)]" : "bg-secondary text-muted-foreground"}`}
+                  >
+                    {i.need}
+                  </span>
+                  <span className="text-xs font-normal text-muted-foreground">{i.cost}</span>
+                </div>
+                <div className="text-xs text-muted-foreground">{i.how}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+}
+
+
+/* ------------------------------------------------------------------- 2FA */
+function TwoFactorPanel() {
+  const [factors, setFactors] = useState<{ id: string; friendly_name?: string; status: string }[] | null>(null);
+  const [enroll, setEnroll] = useState<{ id: string; qr: string; secret: string } | null>(null);
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    const { supabase } = await import("@/integrations/supabase/client");
+    const { data } = await supabase.auth.mfa.listFactors();
+    setFactors((data?.totp ?? []) as { id: string; friendly_name?: string; status: string }[]);
+  }, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function start() {
+    setBusy(true);
+    try {
+      const { supabase } = await import("@/integrations/supabase/client");
+      // Clean up abandoned enrolments first
+      for (const f of factors ?? []) if (f.status !== "verified") await supabase.auth.mfa.unenroll({ factorId: f.id });
+      const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp", friendlyName: "Authenticator app" });
+      if (error || !data) throw error ?? new Error("Could not start enrolment");
+      setEnroll({ id: data.id, qr: data.totp.qr_code, secret: data.totp.secret });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function confirm() {
+    if (!enroll || code.length < 6) return;
+    setBusy(true);
+    try {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: enroll.id, code });
+      if (error) throw error;
+      toast.success("Two-factor authentication is on. You'll be asked for a code at every sign-in.");
+      setEnroll(null);
+      setCode("");
+      await load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function disable(id: string) {
+    if (!window.confirm("Turn off two-factor authentication for this account?")) return;
+    const { supabase } = await import("@/integrations/supabase/client");
+    const { error } = await supabase.auth.mfa.unenroll({ factorId: id });
+    if (error) toast.error(error.message);
+    else {
+      toast.success("Two-factor authentication turned off.");
+      await load();
+    }
+  }
+
+  const active = (factors ?? []).filter((f) => f.status === "verified");
+  return (
+    <Panel>
+      <div className="mb-4 flex items-center gap-2">
+        <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-[var(--brand-violet)] to-[var(--brand-coral)] text-white"><ShieldCheck className="h-4 w-4" /></div>
+        <div className="flex-1">
+          <h3 className="font-display text-lg font-bold">Two-factor authentication</h3>
+          <p className="text-xs text-muted-foreground">Protects the mailboxes and lead data behind a code from your phone. Each team member sets up their own.</p>
+        </div>
+        {active.length > 0 ? (
+          <span className="rounded-full bg-[oklch(.7_.18_150)]/15 px-2.5 py-1 text-xs font-semibold text-[oklch(.4_.12_150)]">On</span>
+        ) : (
+          <Btn onClick={() => void start()} disabled={busy || !!enroll}>Turn on</Btn>
+        )}
+      </div>
+      {active.map((f) => (
+        <div key={f.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+          <span>{f.friendly_name || "Authenticator app"}</span>
+          <Btn variant="ghost" onClick={() => void disable(f.id)}>Turn off</Btn>
+        </div>
+      ))}
+      {enroll && (
+        <div className="mt-2 grid gap-4 sm:grid-cols-[160px_1fr]">
+          <img src={enroll.qr} alt="QR code for your authenticator app" className="h-40 w-40 rounded-lg border border-border bg-white p-2" />
+          <div className="space-y-2 text-sm">
+            <p>Scan with Google Authenticator, 1Password or Authy, then enter the 6-digit code.</p>
+            <p className="text-xs text-muted-foreground">Can't scan? Key: <code className="rounded bg-secondary px-1">{enroll.secret}</code></p>
+            <div className="flex gap-2">
+              <input className={inputCls + " max-w-[160px] text-center tracking-[.3em]"} inputMode="numeric" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="123456" />
+              <Btn onClick={() => void confirm()} disabled={busy || code.length < 6}>Confirm</Btn>
+              <Btn variant="ghost" onClick={() => setEnroll(null)}>Cancel</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+    </Panel>
   );
 }

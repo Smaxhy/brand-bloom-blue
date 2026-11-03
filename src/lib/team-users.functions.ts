@@ -22,9 +22,12 @@ async function assertCeo(supabase: any, userId: string) {
 export const createTeamUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { name: string; password: string; role: "admin" | "user" }) => {
-    if (!NAME_RE.test(input.name)) throw new Error("Name must be 3-40 chars (letters, digits, . _ -)");
-    if (typeof input.password !== "string" || input.password.length < 6) throw new Error("Password must be at least 6 characters");
-    if (input.role !== "admin" && input.role !== "user") throw new Error("Role must be admin or user");
+    if (!NAME_RE.test(input.name))
+      throw new Error("Name must be 3-40 chars (letters, digits, . _ -)");
+    if (typeof input.password !== "string" || input.password.length < 6)
+      throw new Error("Password must be at least 6 characters");
+    if (input.role !== "admin" && input.role !== "user")
+      throw new Error("Role must be admin or user");
     return input;
   })
   .handler(async ({ data, context }) => {
@@ -34,7 +37,8 @@ export const createTeamUser = createServerFn({ method: "POST" })
     const email = nameToEmail(data.name);
     const { data: list, error: listErr } = await supabaseAdmin.auth.admin.listUsers();
     if (listErr) throw new Error(listErr.message);
-    if (list.users.some((u) => u.email === email)) throw new Error("That username is already taken");
+    if (list.users.some((u) => u.email === email))
+      throw new Error("That username is already taken");
 
     const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
       email,
@@ -58,7 +62,9 @@ export const listTeamUsers = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: list, error } = await supabaseAdmin.auth.admin.listUsers();
     if (error) throw new Error(error.message);
-    const { data: roles, error: rErr } = await supabaseAdmin.from("user_roles").select("user_id, role");
+    const { data: roles, error: rErr } = await supabaseAdmin
+      .from("user_roles")
+      .select("user_id, role");
     if (rErr) throw new Error(rErr.message);
     const byUser = new Map<string, string[]>();
     for (const r of roles ?? []) {
@@ -79,7 +85,8 @@ export const listTeamUsers = createServerFn({ method: "GET" })
 export const deleteTeamUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { userId: string }) => {
-    if (typeof input.userId !== "string" || input.userId.length < 8) throw new Error("Invalid user id");
+    if (typeof input.userId !== "string" || input.userId.length < 8)
+      throw new Error("Invalid user id");
     return input;
   })
   .handler(async ({ data, context }) => {

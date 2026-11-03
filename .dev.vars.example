@@ -12,3 +12,23 @@ APOLLO_API_KEY=
 # GoHighLevel private integration token (optional) — powers live email sending.
 # Without it, the Email / GHL tab simulates sends.
 GHL_API_KEY=
+
+# ---- New (cheap) stack ------------------------------------------------------
+# Google Cloud → Places API (New). Free monthly allowance covers normal volume.
+GOOGLE_PLACES_API_KEY=
+# serper.dev — cheap Google search / Maps backup (2,500 free credits).
+SERPER_API_KEY=
+# Anthropic — Claude Haiku reads websites for the decision-maker (fractions of a cent).
+ANTHROPIC_API_KEY=
+# Google OAuth client (same Cloud project, consent screen = Internal) for connecting
+# Workspace mailboxes. Redirect URI: https://<domain>/api/google/oauth/callback
+GOOGLE_OAUTH_CLIENT_ID=
+GOOGLE_OAUTH_CLIENT_SECRET=
+# Long random string. Protects /api/cron/dispatch and signs OAuth state.
+CRON_SECRET=
+# Public origin used in unsubscribe links sent by the cron job.
+PUBLIC_ORIGIN=https://inspirovamarketing.com
+# Optional: Reoon email verification for guessed addresses ($1.19 / 1,000).
+REOON_API_KEY=
+# Required server-side for cron + OAuth (Lovable Cloud injects this automatically).
+SUPABASE_SERVICE_ROLE_KEY=

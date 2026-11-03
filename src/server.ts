@@ -3,6 +3,7 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { handleApiRequest } from "./lib/api-proxies";
+import { runDispatch } from "./lib/sequencer";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -13,7 +14,7 @@ let serverEntryPromise: Promise<ServerEntry> | undefined;
 async function getServerEntry(): Promise<ServerEntry> {
   if (!serverEntryPromise) {
     serverEntryPromise = import("@tanstack/react-start/server-entry").then(
-      (m) => ((m as { default?: ServerEntry }).default ?? (m as unknown as ServerEntry)),
+      (m) => (m as { default?: ServerEntry }).default ?? (m as unknown as ServerEntry),
     );
   }
   return serverEntryPromise;
@@ -68,10 +69,27 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
 }
 
 export default {
+  /** Cloudflare Cron Trigger (see wrangler.jsonc) — sends due outreach steps and syncs inboxes. */
+  async scheduled(
+    _event: unknown,
+    env: unknown,
+    ctx: { waitUntil: (p: Promise<unknown>) => void },
+  ) {
+    const e = (env ?? {}) as Record<string, string | undefined>;
+    ctx.waitUntil(
+      runDispatch(e, { origin: e.PUBLIC_ORIGIN })
+        .then((r) => console.log("[outreach] dispatch", JSON.stringify(r)))
+        .catch((err) => console.error("[outreach] dispatch failed", err)),
+    );
+  },
+
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
       // Same-origin API proxies (Apollo scraper, geocoding, GHL) run first.
-      const apiResponse = await handleApiRequest(request, (env ?? {}) as Record<string, string | undefined>);
+      const apiResponse = await handleApiRequest(
+        request,
+        (env ?? {}) as Record<string, string | undefined>,
+      );
       if (apiResponse) return apiResponse;
 
       const handler = await getServerEntry();

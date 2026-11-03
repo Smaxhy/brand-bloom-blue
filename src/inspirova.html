@@ -576,5 +576,99 @@ header{position:sticky;top:0;z-index:50;background:var(--background);border-bott
 
 
 </script>
+<!-- ============ MOTION LAYER (progressive; no-JS and reduced-motion get the static page) ============ -->
+<style>
+  /* Hero: one orchestrated entrance on load */
+  html.js-motion .hero .edition,html.js-motion .hero h1,html.js-motion .hero .statement,html.js-motion .hero p.sub,html.js-motion .hero-cta,html.js-motion .hero-evidence{opacity:0;transform:translateY(18px);animation:in-rise .9s cubic-bezier(.2,.7,.2,1) forwards}
+  html.js-motion .hero h1{animation-delay:.08s}html.js-motion .hero .statement{animation-delay:.18s}html.js-motion .hero p.sub{animation-delay:.28s}html.js-motion .hero-cta{animation-delay:.38s}html.js-motion .hero-evidence{animation-delay:.52s}
+  @keyframes in-rise{to{opacity:1;transform:none}}
+  /* Headline underline that draws itself */
+  .hero h1{position:relative;display:inline-block}
+  html.js-motion .hero h1::after{content:"";position:absolute;left:0;bottom:-6px;height:3px;width:100%;background:var(--primary);transform:scaleX(0);transform-origin:left;animation:draw .8s cubic-bezier(.2,.7,.2,1) .7s forwards}
+  @keyframes draw{to{transform:scaleX(1)}}
+  /* Scroll reveal */
+  html.js-motion .rv{opacity:0;transform:translateY(22px);transition:opacity .75s cubic-bezier(.2,.7,.2,1),transform .75s cubic-bezier(.2,.7,.2,1);transition-delay:var(--d,0ms)}
+  html.js-motion .rv.in{opacity:1;transform:none}
+  /* Rule lines grow in with their row */
+  html.js-motion .fcard,html.js-motion .step,html.js-motion .pcard{border-top-color:transparent;background-image:linear-gradient(var(--editorial-rule,var(--border)),var(--editorial-rule,var(--border)));background-repeat:no-repeat;background-size:0 1px;background-position:0 0;transition:background-size .9s cubic-bezier(.2,.7,.2,1) .15s,opacity .75s,transform .75s}
+  html.js-motion .pcard{background-image:linear-gradient(var(--border),var(--border))}
+  html.js-motion .rv.in.fcard,html.js-motion .rv.in.step,html.js-motion .rv.in.pcard{background-size:100% 1px}
+  /* Hover: content lifts slightly, numbers tint */
+  .fcard,.pcard,.step{transition:transform .35s cubic-bezier(.2,.7,.2,1)}
+  .fcard:hover,.pcard:hover{transform:translateX(6px)}
+  .fcard h3,.pcard h3{transition:color .25s}.fcard:hover h3,.pcard:hover h3{color:var(--primary)}
+  .pstat{transition:transform .35s cubic-bezier(.2,.7,.2,1)}.pstat:hover{transform:translateY(-3px)}
+  .btn{transition:background .2s,color .2s,transform .2s,box-shadow .25s}.btn:hover{transform:translateY(-1px);box-shadow:0 10px 24px -14px rgba(0,0,0,.45)}
+  .bundle{transition:border-color .2s,transform .25s,box-shadow .25s}.bundle:hover{transform:translateY(-2px);box-shadow:0 12px 28px -18px rgba(0,0,0,.4)}
+  /* Header settles into a shadow once scrolled */
+  header{transition:box-shadow .3s,background-color .3s}
+  header.scrolled{box-shadow:0 12px 30px -20px rgba(0,0,0,.35)}
+  /* Scroll progress hairline along the very top */
+  .progress{position:fixed;top:0;left:0;height:2px;width:100%;transform:scaleX(0);transform-origin:left;background:var(--primary);z-index:60;pointer-events:none}
+  /* Count-up numbers keep width stable while animating */
+  .pstat-num,.hero-evidence strong{font-variant-numeric:tabular-nums}
+  @media(prefers-reduced-motion:reduce){html.js-motion .rv,html.js-motion .hero .edition,html.js-motion .hero h1,html.js-motion .hero .statement,html.js-motion .hero p.sub,html.js-motion .hero-cta,html.js-motion .hero-evidence{opacity:1;transform:none;animation:none}html.js-motion .fcard,html.js-motion .step,html.js-motion .pcard{background-size:100% 1px}.fcard:hover,.pcard:hover,.pstat:hover,.btn:hover,.bundle:hover{transform:none}}
+</style>
+<div class="progress" id="scrollProgress" aria-hidden="true"></div>
+<script>
+  (function(){
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document.documentElement.classList.add("js-motion");
+
+    /* header shadow + progress hairline */
+    var header=document.querySelector("header"), bar=document.getElementById("scrollProgress"), raf=0;
+    function onScroll(){
+      raf=0;
+      var y=window.scrollY||document.documentElement.scrollTop;
+      if(header) header.classList.toggle("scrolled", y>8);
+      if(bar){ var max=document.documentElement.scrollHeight-window.innerHeight; bar.style.transform="scaleX("+(max>0?Math.min(1,y/max):0)+")"; }
+    }
+    window.addEventListener("scroll",function(){ if(!raf) raf=requestAnimationFrame(onScroll); },{passive:true});
+    onScroll();
+
+    /* scroll reveal — mark targets, observe once */
+    var sel=".feat h2,.feat .btn,.fcard,.proof-head,.pstat,.pcard,.pbadge,.proof-cta,.how-head,.step,.pricing-head,.calc-card,footer .foot-grid";
+    var targets=Array.prototype.slice.call(document.querySelectorAll(sel));
+    targets.forEach(function(el){ el.classList.add("rv"); });
+    function stagger(el){
+      var parent=el.parentElement; if(!parent) return 0;
+      var sibs=Array.prototype.filter.call(parent.children,function(c){return c.classList.contains("rv");});
+      var i=sibs.indexOf(el); return i>0?Math.min(i,5)*90:0;
+    }
+    if(!("IntersectionObserver" in window) || reduce){ targets.forEach(function(el){ el.classList.add("in"); }); }
+    else{
+      var io=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+          if(!e.isIntersecting) return;
+          e.target.style.setProperty("--d", stagger(e.target)+"ms");
+          e.target.classList.add("in"); io.unobserve(e.target);
+        });
+      },{threshold:.12,rootMargin:"0px 0px -6% 0px"});
+      targets.forEach(function(el){ io.observe(el); });
+    }
+
+    /* count-up for the big numbers ($1,037,785 · $1.03M+ · 28x · 4,056 · 30+) */
+    function countUp(el){
+      var raw=el.textContent.trim();
+      var m=raw.match(/^([^\d]*)([\d,]+(?:\.\d+)?)(.*)$/); if(!m) return;
+      var prefix=m[1], num=m[2], suffix=m[3];
+      var decimals=(num.split(".")[1]||"").length, target=parseFloat(num.replace(/,/g,"")); if(!isFinite(target)) return;
+      var useCommas=num.indexOf(",")>-1, start=performance.now(), dur=1400;
+      function fmt(v){ var f=v.toFixed(decimals); return useCommas? f.replace(/\B(?=(\d{3})+(?!\d))/g,","): f; }
+      function tick(t){
+        var k=Math.min(1,(t-start)/dur), e=1-Math.pow(1-k,3);
+        el.textContent=prefix+fmt(target*e)+suffix;
+        if(k<1) requestAnimationFrame(tick); else el.textContent=raw;
+      }
+      requestAnimationFrame(tick);
+    }
+    var nums=Array.prototype.slice.call(document.querySelectorAll(".pstat-num, .hero-evidence strong"));
+    if(reduce || !("IntersectionObserver" in window)) return;
+    var io2=new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ if(e.isIntersecting){ countUp(e.target); io2.unobserve(e.target); } });
+    },{threshold:.6});
+    nums.forEach(function(n){ io2.observe(n); });
+  })();
+</script>
 </body>
 </html>
