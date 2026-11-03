@@ -680,7 +680,7 @@ function IntegrationsPanel() {
         <div>
           <h3 className="font-display text-lg font-bold">Integrations &amp; keys</h3>
           <p className="text-xs text-muted-foreground">
-            {allowed ? "Add or replace shared service credentials below. Saved keys are never displayed." : "Shared service credentials are managed by the CEO."}
+            {allowed ? "Add or replace shared service credentials below. Saved keys are never displayed." : "Shared service credentials are managed by administrators."}
           </p>
         </div>
       </div>

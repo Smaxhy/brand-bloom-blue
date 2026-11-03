@@ -19,5 +19,5 @@
 - [x] Verify scraper controls and preview rendering without sending emails or running paid searches.
 
 # Integration entry
-- [ ] Add secure CEO-only credential entry and use saved credentials in scraper/mailbox requests.
+- [x] Add secure administrator credential entry and use saved credentials in scraper/mailbox requests.
 - [ ] Verify entry controls, validation, authorization and encrypted storage without paid calls or email sends.

@@ -5,7 +5,7 @@ import { integrationInputSchema } from "./integration-settings-schema";
 export const canConfigureIntegrations = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await context.supabase.from("user_roles").select("role").eq("user_id", context.userId).eq("role", "ceo").maybeSingle();
+    const { data, error } = await context.supabase.from("user_roles").select("role").eq("user_id", context.userId).in("role", ["admin", "ceo"]).limit(1).maybeSingle();
     return { allowed: !error && !!data };
   });
 
@@ -13,8 +13,8 @@ export const saveIntegrationCredentials = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => integrationInputSchema.parse(input))
   .handler(async ({ data, context }) => {
-    const { data: role, error: roleError } = await context.supabase.from("user_roles").select("role").eq("user_id", context.userId).eq("role", "ceo").maybeSingle();
-    if (roleError || !role) throw new Error("Only the CEO can update shared integrations.");
+    const { data: role, error: roleError } = await context.supabase.from("user_roles").select("role").eq("user_id", context.userId).in("role", ["admin", "ceo"]).limit(1).maybeSingle();
+    if (roleError || !role) throw new Error("Only administrators can update shared integrations.");
     const { data: permitted, error: limitError } = await context.supabase.rpc("check_rate_limit", { _key: `integration-settings:${context.userId}`, _max: 10, _window_seconds: 60 });
     if (limitError || !permitted) throw new Error("Please wait a minute before updating integrations again.");
     const { encryptCredential } = await import("./integration-settings.server");
