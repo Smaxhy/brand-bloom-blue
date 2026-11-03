@@ -109,6 +109,7 @@ export interface ScraperState {
   emailSource: Record<string, string>;
   emailSourceUrl: Record<string, string>;
   discoverSources: Record<string, ScrapeSource[]>;
+  scores?: Record<string, { score: number; why: string[] }>;
   updatedAt: number;
 }
 
@@ -298,6 +299,10 @@ function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData
           discoverSources: ((scraper as Partial<ScraperState>).discoverSources ?? {}) as Record<
             string,
             ScrapeSource[]
+          >,
+          scores: ((scraper as Partial<ScraperState>).scores ?? {}) as Record<
+            string,
+            { score: number; why: string[] }
           >,
           updatedAt: Number((scraper as Partial<ScraperState>).updatedAt ?? Date.now()),
         }
