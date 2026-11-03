@@ -2,3 +2,4 @@
 - Keep the public homepage inside its existing HTML document and iframe navigation bridge; this preserves its calculator and quote interactions.
 - Scope public editorial theme tokens to public pages so redesigns do not alter account-side CRM appearance.
 - When importing replacement archives, retain generated Cloud clients/types and existing migration tooling; archive copies may be stale and must not replace managed configuration or replay applied migrations.
+- Shared outreach integration credentials are admin/CEO-managed through authenticated server functions and encrypted in a server-only table; API requests and scheduled jobs resolve them without exposing stored values to browsers.
