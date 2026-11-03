@@ -21,3 +21,7 @@
 # Integration entry
 - [x] Add secure administrator credential entry and use saved credentials in scraper/mailbox requests.
 - [x] Verify entry controls, validation, authorization and encrypted storage without paid calls or email sends; remove temporary test credentials.
+# Mailbox archive update
+- [ ] Apply archive changes while retaining secure integration setup and existing data.
+- [ ] Add restricted enrichment cache and verify Settings mailbox controls.
+- [ ] Publish the verified update; report live provider blockers.
