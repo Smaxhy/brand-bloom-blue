@@ -15,6 +15,8 @@
  * afterwards, on the text we already fetched, to pick the decision-maker.
  */
 
+import { fetchPublicSite } from '../public-site-fetch';
+
 export interface FreeEnrichResult {
   ok: boolean;
   website: string; // final domain after redirects
@@ -44,12 +46,39 @@ export interface SiteSignals {
   socialCount: number;
 }
 
-export function readSignals(pages: { path: string; html: string }[], finalUrl: string): SiteSignals {
+export function readSignals(
+  pages: { path: string; html: string }[],
+  finalUrl: string,
+): SiteSignals {
   const all = pages.map((p) => p.html).join("\n");
   const has = (re: RegExp) => re.test(all);
-  const years = Array.from(all.matchAll(/(?:©|&copy;|copyright)\s*(?:\d{4}\s*[-–]\s*)?((?:19|20)\d{2})/gi)).map((m) => Number(m[1]));
-  const booking = /calendly\.com/i.test(all) ? "calendly" : /housecallpro|housecall-pro/i.test(all) ? "housecallpro" : /getjobber|clienthub\.app/i.test(all) ? "jobber" : /servicetitan/i.test(all) ? "servicetitan" : /acuityscheduling/i.test(all) ? "acuity" : /squareup\.com\/appointments|square\.site/i.test(all) ? "square" : "";
-  const builder = /wixstatic|wix\.com|_wix/i.test(all) ? "wix" : /squarespace/i.test(all) ? "squarespace" : /godaddy|secureserver/i.test(all) ? "godaddy" : /weebly/i.test(all) ? "weebly" : /wp-content|wp-includes/i.test(all) ? "wordpress" : "";
+  const years = Array.from(
+    all.matchAll(/(?:©|&copy;|copyright)\s*(?:\d{4}\s*[-–]\s*)?((?:19|20)\d{2})/gi),
+  ).map((m) => Number(m[1]));
+  const booking = /calendly\.com/i.test(all)
+    ? "calendly"
+    : /housecallpro|housecall-pro/i.test(all)
+      ? "housecallpro"
+      : /getjobber|clienthub\.app/i.test(all)
+        ? "jobber"
+        : /servicetitan/i.test(all)
+          ? "servicetitan"
+          : /acuityscheduling/i.test(all)
+            ? "acuity"
+            : /squareup\.com\/appointments|square\.site/i.test(all)
+              ? "square"
+              : "";
+  const builder = /wixstatic|wix\.com|_wix/i.test(all)
+    ? "wix"
+    : /squarespace/i.test(all)
+      ? "squarespace"
+      : /godaddy|secureserver/i.test(all)
+        ? "godaddy"
+        : /weebly/i.test(all)
+          ? "weebly"
+          : /wp-content|wp-includes/i.test(all)
+            ? "wordpress"
+            : "";
   return {
     https: /^https:/i.test(finalUrl),
     pageCount: pages.length,
@@ -86,13 +115,17 @@ export interface ScoreInput {
 export function scoreLead(i: ScoreInput): { score: number; reasons: string[] } {
   let s = 0;
   const why: string[] = [];
-  const add = (n: number, r: string) => { s += n; why.push(`${n > 0 ? "+" : ""}${n} ${r}`); };
+  const add = (n: number, r: string) => {
+    s += n;
+    why.push(`${n > 0 ? "+" : ""}${n} ${r}`);
+  };
 
   // Reachability (max 45)
   if (i.email && !i.emailGuessed) add(25, "published email");
   else if (i.email && i.emailGuessed && i.mx) add(12, "guessed email, mail server OK");
   else if (!i.email) add(-10, "no email");
-  if (i.email && !/^(info|office|contact|hello|admin|sales|support|team|mail)@/i.test(i.email)) add(10, "personal address");
+  if (i.email && !/^(info|office|contact|hello|admin|sales|support|team|mail)@/i.test(i.email))
+    add(10, "personal address");
   if (i.name) add(10, "decision-maker named");
   if (i.phone) add(5, "phone on file");
   if (i.mx === false) add(-30, "domain has no mail server");
@@ -105,14 +138,16 @@ export function scoreLead(i: ScoreInput): { score: number; reasons: string[] } {
   else if (i.reviews !== undefined) add(-5, "under 5 reviews");
   if ((i.rating ?? 0) >= 4.5) add(5, `rating ${i.rating}`);
   else if (i.rating && i.rating < 3.8) add(-5, `rating ${i.rating}`);
-  if (i.website) add(5, "has website"); else add(-15, "no website");
+  if (i.website) add(5, "has website");
+  else add(-15, "no website");
 
   // Room to improve = reason to buy (max 30)
   const g = i.signals ?? {};
   if (i.website && !g.metaPixel && !g.googleAds) add(10, "no ad tracking (not running ads)");
   else if (g.metaPixel || g.googleAds) add(4, "already advertising (has budget)");
   if (i.website && !g.booking) add(5, "no online booking");
-  if (g.copyrightYear && g.copyrightYear <= new Date().getFullYear() - 3) add(8, `site dated ${g.copyrightYear}`);
+  if (g.copyrightYear && g.copyrightYear <= new Date().getFullYear() - 3)
+    add(8, `site dated ${g.copyrightYear}`);
   if (g.builder && /wix|godaddy|weebly/i.test(g.builder)) add(5, `${g.builder} site`);
   if (i.website && g.https === false) add(4, "no HTTPS");
   if (i.website && !g.reviewsWidget && !g.chat) add(3, "no reviews/chat widget");
@@ -124,14 +159,19 @@ export function scoreLead(i: ScoreInput): { score: number; reasons: string[] } {
 const PAGES = [
   "",
   "/contact",
-  "/contact-us",
   "/about",
+  "/contact-us",
   "/about-us",
   "/team",
   "/our-team",
   "/meet-the-team",
   "/staff",
 ];
+// Tiered crawl: these first; the rest only if they didn't surface an owner + email.
+const TIER1 = ["/contact", "/about"];
+const TIER2 = ["/contact-us", "/about-us", "/team", "/our-team", "/meet-the-team", "/staff"];
+const OWNER_HINT_RE =
+  /\b(owner|founder|ceo|president|principal|proprietor|managing director|zaakvoerder|eigenaar|oprichter|g[ée]rant|fondateur|inhaber|geschäftsführer)\b/i;
 const UA = "Mozilla/5.0 (compatible; Inspirova-Research/2.0; +https://inspirovamarketing.com)";
 
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
@@ -177,19 +217,11 @@ async function fetchPage(
   timeoutMs: number,
 ): Promise<{ html: string; finalUrl: string } | null> {
   try {
-    const res = await fetch(url, {
-      headers: {
+    return await fetchPublicSite(url, timeoutMs, {
         "User-Agent": UA,
         Accept: "text/html,application/xhtml+xml,*/*;q=0.8",
         "Accept-Language": "en",
-      },
-      redirect: "follow",
-      signal: AbortSignal.timeout(timeoutMs),
     });
-    if (!res.ok) return null;
-    const ct = res.headers.get("content-type") || "";
-    if (ct && !/html|xml|text/i.test(ct)) return null;
-    return { html: (await res.text()).slice(0, 250_000), finalUrl: res.url || url };
   } catch {
     return null;
   }
@@ -303,6 +335,8 @@ export async function freeEnrich(input: {
   website: string;
   ownerName?: string;
   maxPages?: number;
+  /** Fetch /contact + /about first and the deeper pages only when needed. */
+  tiered?: boolean;
 }): Promise<FreeEnrichResult> {
   const domain = cleanDomain(input.website);
   const empty: FreeEnrichResult = {
@@ -315,7 +349,19 @@ export async function freeEnrich(input: {
     names: [],
     mx: null,
     pages: [],
-    signals: { https: false, pageCount: 0, metaPixel: false, googleAds: false, gtm: false, booking: "", chat: false, builder: "", copyrightYear: null, reviewsWidget: false, socialCount: 0 },
+    signals: {
+      https: false,
+      pageCount: 0,
+      metaPixel: false,
+      googleAds: false,
+      gtm: false,
+      booking: "",
+      chat: false,
+      builder: "",
+      copyrightYear: null,
+      reviewsWidget: false,
+      socialCount: 0,
+    },
   };
   if (!domain) return { ...empty, error: "no website" };
 
@@ -323,21 +369,36 @@ export async function freeEnrich(input: {
   const maxPages = Math.min(input.maxPages ?? PAGES.length, PAGES.length);
 
   // Homepage first (follows redirects → canonical domain), then the rest in parallel.
-  const home = (await fetchPage(base, 12000)) ?? (await fetchPage(`http://${domain}`, 12000));
+  const home = (await fetchPage(base, 8000)) ?? (await fetchPage(`http://${domain}`, 6000));
   if (!home) return { ...empty, error: "site unreachable" };
   const finalDomain = cleanDomain(home.finalUrl) || domain;
   const root = `https://${finalDomain}`;
 
-  const extras = await Promise.all(
-    PAGES.slice(1, maxPages).map(async (p) => {
-      const r = await fetchPage(root + p, 7000);
-      return r ? { path: p, html: r.html } : null;
-    }),
-  );
-  const pages = [
-    { path: "/", html: home.html },
-    ...extras.filter((x): x is { path: string; html: string } => !!x),
-  ];
+  const grab = (paths: string[], ms: number) =>
+    Promise.all(
+      paths.map(async (p) => {
+        const r = await fetchPage(root + p, ms);
+        return r ? { path: p, html: r.html } : null;
+      }),
+    );
+  const notNull = (x: { path: string; html: string } | null): x is { path: string; html: string } =>
+    !!x;
+
+  let extras: { path: string; html: string }[];
+  if (input.tiered) {
+    extras = (await grab(TIER1, 5000)).filter(notNull);
+    const seen = [home.html, ...extras.map((e) => e.html)].join("\n");
+    const ownEmailRe = new RegExp(
+      `[a-z0-9._%+-]+@(?:www\\.)?${finalDomain.replace(/\./g, "\\.")}`,
+      "i",
+    );
+    const haveEmail = /mailto:/i.test(seen) || ownEmailRe.test(seen);
+    const havePerson = OWNER_HINT_RE.test(seen) || /"@type"\s*:\s*"Person"/i.test(seen);
+    if (!haveEmail || !havePerson) extras.push(...(await grab(TIER2, 5000)).filter(notNull));
+  } else {
+    extras = (await grab(PAGES.slice(1, maxPages), 7000)).filter(notNull);
+  }
+  const pages = [{ path: "/", html: home.html }, ...extras];
 
   const mxPromise = hasMx(finalDomain);
 
@@ -440,7 +501,9 @@ export async function freeEnrich(input: {
     )
     .slice(0, 3);
 
-  signals.socialCount = [socials.linkedin, socials.facebook, socials.instagram].filter(Boolean).length;
+  signals.socialCount = [socials.linkedin, socials.facebook, socials.instagram].filter(
+    Boolean,
+  ).length;
 
   return {
     ok: true,

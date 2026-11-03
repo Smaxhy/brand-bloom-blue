@@ -633,6 +633,24 @@ export type Database = {
         }
         Relationships: []
       }
+      site_cache: {
+        Row: {
+          data: Json
+          domain: string
+          fetched_at: string
+        }
+        Insert: {
+          data: Json
+          domain: string
+          fetched_at?: string
+        }
+        Update: {
+          data?: Json
+          domain?: string
+          fetched_at?: string
+        }
+        Relationships: []
+      }
       suppressions: {
         Row: {
           created_at: string

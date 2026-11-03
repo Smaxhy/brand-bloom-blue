@@ -3,3 +3,5 @@
 - Scope public editorial theme tokens to public pages so redesigns do not alter account-side CRM appearance.
 - When importing replacement archives, retain generated Cloud clients/types and existing migration tooling; archive copies may be stale and must not replace managed configuration or replay applied migrations.
 - Shared outreach integration credentials are admin/CEO-managed through authenticated server functions and encrypted in a server-only table; API requests and scheduled jobs resolve them without exposing stored values to browsers.
+- Scraper and scheduled searches share server-only domain enrichment caching; public website extracts are cached without browser grants to reduce repeated crawling.
+- Website enrichment uses a public-destination fetch guard on every redirect, with DNS checks and bounded reads, to prevent crawling internal endpoints.

@@ -17,6 +17,7 @@
 import { getApiUser, hasCronSecret, unauthorized } from "./api-auth";
 import { placesTextSearch } from "./providers/places";
 import { overpassBusinesses } from "./providers/osm";
+import { enrichSite, enrichMany } from "./enrich-site";
 import { freeEnrich, hasMx, scoreLead, type SiteSignals } from "./providers/free-enrich";
 import { handleOutreachRoute } from "./outreach-routes";
 import { Db } from "./db";
@@ -59,7 +60,10 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   // Rate limits per signed-in user (cron and public routes are exempt).
   // Expensive routes: 30/min. Everything else: 120/min.
   if (user && Db.available(env)) {
-    const heavy = /^\/api\/(discover|enrich|apollo|claude|scrape-site|outreach\/(enroll|test-send|verify|search))/.test(path);
+    const heavy =
+      /^\/api\/(discover|enrich|apollo|claude|scrape-site|outreach\/(enroll|test-send|verify|search))/.test(
+        path,
+      );
     try {
       const ok = await new Db(env).rpc<boolean>("check_rate_limit", {
         _key: `${heavy ? "heavy" : "api"}:${user.id}`,
@@ -67,10 +71,16 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         _window_seconds: 60,
       });
       if (ok === false) {
-        return new Response(JSON.stringify({ error: "rate_limited", message: "Too many requests — wait a minute and try again." }), {
-          status: 429,
-          headers: { ...JSON_HEADERS, "Retry-After": "60" },
-        });
+        return new Response(
+          JSON.stringify({
+            error: "rate_limited",
+            message: "Too many requests — wait a minute and try again.",
+          }),
+          {
+            status: 429,
+            headers: { ...JSON_HEADERS, "Retry-After": "60" },
+          },
+        );
       }
     } catch {
       /* limiter unavailable (migration not applied yet) — allow */
@@ -373,57 +383,37 @@ async function enrich(request: Request, env: Env): Promise<Response> {
   }));
   const byId = new Map(results.map((r) => [r.id, r]));
 
-  // 0) FREE pass — read each company's own website (3 at a time).
-  const CONC = 3;
-  for (let i = 0; i < people.length; i += CONC) {
-    await Promise.all(
-      people.slice(i, i + CONC).map(async (p) => {
-        const r = byId.get(p.id);
-        if (!r || !r.website) return;
-        const fe = await freeEnrich({ website: r.website, ownerName: p.name });
-        if (!fe.ok) return;
-        r.website = fe.website || r.website;
-        r.mx = fe.mx;
-        r.signals = fe.signals;
-        if (fe.socials.linkedin && !r.linkedin) r.linkedin = fe.socials.linkedin;
-        if (!r.phone && fe.phones[0]) r.phone = fe.phones[0];
-        // Claude picks the decision-maker from the text we already have.
-        type Ex = {
-          ownerName?: string;
-          ownerTitle?: string;
-          email?: string;
-          linkedin?: string;
-          phone?: string;
-        };
-        let ex: Ex | null = null;
-        if (payload.useClaude !== false && secret(env, "ANTHROPIC_API_KEY") && fe.text) {
-          const hint = fe.names.length
-            ? `People found on the site: ${fe.names.map((n) => `${n.name}${n.title ? ` (${n.title})` : ""}`).join("; ")}`
-            : undefined;
-          ex = (await runClaudeExtract(env, {
-            company: p.organizationName || "",
-            website: r.website,
-            text: fe.text,
-            hint,
-          })) as Ex | null;
-        }
-        const owner = ex?.ownerName || fe.names[0]?.name || "";
-        if (owner && !p.name) r.name = owner;
-        if (ex?.ownerTitle) r.title = ex.ownerTitle;
-        if (ex?.linkedin && !r.linkedin) r.linkedin = ex.linkedin;
-        if (ex?.phone && !r.phone) r.phone = ex.phone;
-        // Best published email: Claude's pick if it's on the site, else top-ranked site email.
-        const site = fe.emails.filter((e) => e.source === "site");
-        const claudeEmail = (ex?.email || "").toLowerCase();
-        const pick = (claudeEmail && site.find((e) => e.email === claudeEmail)) || site[0];
-        if (pick && fe.mx !== false) {
-          r.email = pick.email;
-          r.source = "Website";
-          r.sourceUrl = `https://${fe.website}${pick.page && pick.page !== "/" ? pick.page : ""}`;
-        }
-      }),
-    );
-  }
+  // 0) FREE pass — read each company's own website. Cached per domain for 30 days,
+  //    tiered crawl, Claude only when the pages didn't already name owner + email.
+  const cacheDb = Db.available(env) ? new Db(env) : null;
+  await enrichMany(people, 6, async (p) => {
+    const r = byId.get(p.id);
+    if (!r || !r.website) return;
+    const prof = await enrichSite(env, {
+      website: r.website,
+      company: p.organizationName || "",
+      city: (p as { city?: string }).city || "",
+      ownerName: p.name,
+      useClaude: payload.useClaude !== false,
+      db: cacheDb,
+    });
+    if (!prof) return;
+    r.website = prof.website || r.website;
+    r.mx = prof.mx;
+    r.signals = prof.signals;
+    if (prof.linkedin && !r.linkedin) r.linkedin = prof.linkedin;
+    if (!r.phone && prof.phone) r.phone = prof.phone;
+    if (prof.name && !p.name) r.name = prof.name;
+    if (prof.title) r.title = prof.title;
+    if (prof.email && !prof.emailGuessed) {
+      r.email = prof.email;
+      r.source = "Website";
+      r.sourceUrl = `https://${prof.website}${prof.emailPage && prof.emailPage !== "/" ? prof.emailPage : ""}`;
+    } else if (prof.email && prof.emailGuessed) {
+      // keep as a guess candidate; the later pattern step will flag it
+      (r as { _guess?: string })._guess = prof.email;
+    }
+  });
 
   // 1) Apollo enrichment (paid, opt-in): emails + websites + phones, one batch call.
   if (apolloKey) {
@@ -526,6 +516,13 @@ async function enrich(request: Request, env: Env): Promise<Response> {
   //    UI shows it as a guess and sequences can verify/skip it.
   for (const r of results) {
     if (r.email || !r.website) continue;
+    const pre = (r as { _guess?: string })._guess;
+    if (pre) {
+      r.email = pre;
+      r.source = "Guess";
+      r.guessed = true;
+      continue;
+    }
     const mx = r.mx ?? (await hasMx(r.website));
     r.mx = mx;
     if (mx !== true) continue;
@@ -1052,11 +1049,17 @@ export interface DiscoverResult {
 /** Provider waterfall shared by the UI route and scheduled saved searches. */
 export async function discoverCore(f: DiscoverFilters, env: Env): Promise<DiscoverResult> {
   const wanted = Math.min(Math.max(f.perPage ?? 25, 1), 200);
-  const keywords = (f.industry ?? "").split(",").map((k) => k.trim()).filter(Boolean).slice(0, 6);
+  const keywords = (f.industry ?? "")
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean)
+    .slice(0, 6);
   const queries = keywords.length ? keywords : ["business"];
   const location = (f.location ?? "").trim();
   const city = location.split(",")[0] || "";
-  const want = f.providers?.length ? f.providers : (["places", "serper", "serpapi", "osm"] as DiscoverProvider[]);
+  const want = f.providers?.length
+    ? f.providers
+    : (["places", "serper", "serpapi", "osm"] as DiscoverProvider[]);
 
   const placesKey = secret(env, "GOOGLE_PLACES_API_KEY");
   const serperKey = secret(env, "SERPER_API_KEY");
@@ -1066,9 +1069,19 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
   const used: Record<string, number> = {};
   const errors: string[] = [];
   const perQuery = Math.ceil(wanted / queries.length);
+  const bbox = f.bbox;
+  const osmPromise =
+    want.includes("osm") && bbox
+      ? Promise.all(
+          queries.map((kw) =>
+            overpassBusinesses({ keyword: kw, bbox, city, max: wanted, timeoutSec: 12 }),
+          ),
+        )
+      : Promise.resolve([] as Awaited<ReturnType<typeof overpassBusinesses>>[]);
 
   const add = (b: DiscoveredBusiness, provider: string) => {
-    const k = cleanDomain(b.website) || `${b.company.toLowerCase()}|${(b.phone || "").replace(/\D/g, "")}`;
+    const k =
+      cleanDomain(b.website) || `${b.company.toLowerCase()}|${(b.phone || "").replace(/\D/g, "")}`;
     if (!k || byKey.has(k)) return false;
     byKey.set(k, { ...b, provider });
     used[provider] = (used[provider] ?? 0) + 1;
@@ -1082,7 +1095,10 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
         keyword: kw,
         location,
         max: Math.min(perQuery, 60),
-        bias: typeof f.lat === "number" && typeof f.lng === "number" ? { lat: f.lat, lng: f.lng } : undefined,
+        bias:
+          typeof f.lat === "number" && typeof f.lng === "number"
+            ? { lat: f.lat, lng: f.lng }
+            : undefined,
       });
       if (r.error) errors.push(r.error);
       for (const b of r.businesses) {
@@ -1101,13 +1117,43 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
           headers: { "X-API-KEY": serperKey, "Content-Type": "application/json" },
           body: JSON.stringify({ q: location ? `${kw} in ${location}` : kw, num: 20 }),
         });
-        if (!res.ok) { errors.push(`Serper ${res.status}`); continue; }
-        const d = (await res.json()) as { places?: Array<{ title?: string; address?: string; phoneNumber?: string; website?: string; category?: string; rating?: number; ratingCount?: number; cid?: string }> };
+        if (!res.ok) {
+          errors.push(`Serper ${res.status}`);
+          continue;
+        }
+        const d = (await res.json()) as {
+          places?: Array<{
+            title?: string;
+            address?: string;
+            phoneNumber?: string;
+            website?: string;
+            category?: string;
+            rating?: number;
+            ratingCount?: number;
+            cid?: string;
+          }>;
+        };
         for (const r of d.places ?? []) {
-          add({ id: r.cid || `${(r.title || "").toLowerCase()}|${cleanDomain(r.website || "")}`, company: r.title || "", website: cleanDomain(r.website || ""), phone: r.phoneNumber || "", address: r.address || "", city, industry: r.category || kw, rating: r.rating, reviews: r.ratingCount, source: "Google Maps" }, "serper");
+          add(
+            {
+              id: r.cid || `${(r.title || "").toLowerCase()}|${cleanDomain(r.website || "")}`,
+              company: r.title || "",
+              website: cleanDomain(r.website || ""),
+              phone: r.phoneNumber || "",
+              address: r.address || "",
+              city,
+              industry: r.category || kw,
+              rating: r.rating,
+              reviews: r.ratingCount,
+              source: "Google Maps",
+            },
+            "serper",
+          );
           if (byKey.size >= wanted) break;
         }
-      } catch (e) { errors.push((e as Error).message); }
+      } catch (e) {
+        errors.push((e as Error).message);
+      }
     }
   }
 
@@ -1121,28 +1167,66 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
         u.searchParams.set("type", "search");
         u.searchParams.set("api_key", serpapiKey);
         const res = await fetch(u.toString());
-        if (!res.ok) { errors.push(`SerpApi ${res.status}`); continue; }
-        const d = (await res.json()) as { local_results?: Array<{ place_id?: string; title?: string; website?: string; phone?: string; address?: string; type?: string; rating?: number; reviews?: number }> };
+        if (!res.ok) {
+          errors.push(`SerpApi ${res.status}`);
+          continue;
+        }
+        const d = (await res.json()) as {
+          local_results?: Array<{
+            place_id?: string;
+            title?: string;
+            website?: string;
+            phone?: string;
+            address?: string;
+            type?: string;
+            rating?: number;
+            reviews?: number;
+          }>;
+        };
         for (const r of d.local_results ?? []) {
-          add({ id: r.place_id || `${(r.title || "").toLowerCase()}|${cleanDomain(r.website)}`, company: r.title || "", website: cleanDomain(r.website || ""), phone: r.phone || "", address: r.address || "", city, industry: r.type || kw, rating: r.rating, reviews: r.reviews, source: "Google Maps" }, "serpapi");
+          add(
+            {
+              id: r.place_id || `${(r.title || "").toLowerCase()}|${cleanDomain(r.website)}`,
+              company: r.title || "",
+              website: cleanDomain(r.website || ""),
+              phone: r.phone || "",
+              address: r.address || "",
+              city,
+              industry: r.type || kw,
+              rating: r.rating,
+              reviews: r.reviews,
+              source: "Google Maps",
+            },
+            "serpapi",
+          );
           if (byKey.size >= wanted) break;
         }
-      } catch (e) { errors.push((e as Error).message); }
+      } catch (e) {
+        errors.push((e as Error).message);
+      }
     }
   }
 
   if (byKey.size < wanted && want.includes("osm") && f.bbox) {
-    for (const kw of queries) {
+    // OSM was started at the top so its latency overlaps the Places calls.
+    const osmResults = await osmPromise;
+    for (const r of osmResults) {
       if (byKey.size >= wanted) break;
-      const r = await overpassBusinesses({ keyword: kw, bbox: f.bbox, city, max: wanted - byKey.size });
       if (r.error) errors.push(r.error);
-      for (const b of r.businesses) add({ ...b, source: "Google" }, "osm");
+      for (const b of r.businesses) {
+        add({ ...b, source: "Google" }, "osm");
+        if (byKey.size >= wanted) break;
+      }
     }
   }
 
   const businesses = Array.from(byKey.values()).slice(0, wanted);
   const available = { places: !!placesKey, serper: !!serperKey, serpapi: !!serpapiKey, osm: true };
-  const reason = businesses.length ? undefined : !placesKey && !serperKey && !serpapiKey && !f.bbox ? "missing_key" : "no_results";
+  const reason = businesses.length
+    ? undefined
+    : !placesKey && !serperKey && !serpapiKey && !f.bbox
+      ? "missing_key"
+      : "no_results";
   return { businesses, used, available, errors, reason };
 }
 
@@ -1179,7 +1263,15 @@ async function enrichFree(request: Request, env: Env): Promise<Response> {
   void _t;
   const ex = (extracted ?? {}) as { ownerName?: string; email?: string };
   const best = r.emails.find((e) => e.source === "site") ?? r.emails[0];
-  const sc = scoreLead({ website: r.website, name: ex.ownerName || r.names[0]?.name || "", email: ex.email || best?.email || "", emailGuessed: best?.source === "guess" && !ex.email, mx: r.mx, phone: r.phones[0] || "", signals: r.signals });
+  const sc = scoreLead({
+    website: r.website,
+    name: ex.ownerName || r.names[0]?.name || "",
+    email: ex.email || best?.email || "",
+    emailGuessed: best?.source === "guess" && !ex.email,
+    mx: r.mx,
+    phone: r.phones[0] || "",
+    signals: r.signals,
+  });
   return json({ ...rest, extracted, score: sc.score, scoreReasons: sc.reasons });
 }
 

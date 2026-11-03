@@ -48,7 +48,10 @@ export async function overpassBusinesses(opts: {
   bbox: [number, number, number, number];
   city: string;
   max: number;
+  /** Overpass server-side timeout; the fetch gives it 5 s more. Default 25. */
+  timeoutSec?: number;
 }): Promise<{ businesses: PlaceBusiness[]; error?: string }> {
+  const tsec = Math.max(5, Math.min(opts.timeoutSec ?? 25, 60));
   const [s, n, w, e] = opts.bbox;
   // Clamp absurdly large boxes (country-level geocodes) to ~60 km around the centre.
   const latC = (s + n) / 2;
@@ -58,7 +61,7 @@ export async function overpassBusinesses(opts: {
   const re = kwRegex(opts.keyword);
 
   const query = `
-[out:json][timeout:25];
+[out:json][timeout:${tsec}];
 (
   nwr["name"]["name"~"${re}",i](${box});
   nwr["name"]["shop"~"${re}",i](${box});
@@ -80,7 +83,7 @@ out center tags ${Math.min(opts.max * 3, 300)};`;
           "User-Agent": "Inspirova-Admin/1.0 (lead research; admin@inspirova.com)",
         },
         body: "data=" + encodeURIComponent(query),
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout((tsec + 5) * 1000),
       });
       if (!res.ok) {
         lastErr = `Overpass ${res.status}`;

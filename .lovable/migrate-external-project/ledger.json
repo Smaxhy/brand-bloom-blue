@@ -1,17 +1,89 @@
 {
-  "source_archive": "inspirova-admin-engine_1.zip",
+  "source_archive": "inspirova-admin-engine-2.zip",
   "capabilities": [
-    {"capability":"code","source":"admin-engine_1 ZIP","outcome":"Applied exact Scraper.tsx and store.ts replacement with new command bar, niche browser, results table and saved scores; homepage and all other admin/server files untouched","status":"verified","next_action":null},
-    {"capability":"schema","source":"existing Lovable Cloud and archived SQL migrations","outcome":"Preserved applied schema and Drizzle migrations, including explicit access grants absent from archive SQL; no migration replay","status":"preserved","next_action":null},
-    {"capability":"records","source":"existing Lovable Cloud","outcome":"Keep existing records untouched; ZIP contains no record export","status":"preserved","next_action":null},
-    {"capability":"auth identities","source":"existing Lovable Cloud","outcome":"Keep existing accounts, sessions, profiles and ownership","status":"preserved","next_action":null},
-    {"capability":"authorization","source":"unchanged application and existing policies","outcome":"Preserve existing access boundaries","status":"preserved","next_action":null},
-    {"capability":"uploaded file bytes","source":"archive assets","outcome":"Assets already match project","status":"preserved","next_action":null},
-    {"capability":"external providers and secrets","source":"unchanged Gmail, search, enrichment and AI code","outcome":"Preserve existing providers and secure configuration","status":"verification_pending","next_action":"Live Gmail and other provider verification requires configured credentials; no provider calls or sends during replacement"},
-    {"capability":"public endpoints and callbacks","source":"unchanged server and API code","outcome":"Preserve endpoint URLs and OAuth callbacks","status":"preserved","next_action":null},
-    {"capability":"webhooks","source":"unchanged source","outcome":"No replacement differences","status":"preserved","next_action":null},
-    {"capability":"schedules","source":"existing outreach dispatcher","outcome":"Preserve current schedule; do not trigger outbound sends","status":"verification_pending","next_action":"Published scheduled dispatch remains unverified"},
-    {"capability":"cutover","source":"current custom domains","outcome":"Preview update only","status":"pending","next_action":"Publish only when explicitly requested"},
-    {"capability":"verification","source":"signed-in running preview","outcome":"Verified Data Scraper opens, niche browser filtering and selection, removable keyword and advanced filters; screenshot confirms new layout; no page errors; build OK; both files match ZIP exactly; no provider calls or outbound sends","status":"verified","next_action":null}
+    {
+      "capability": "code",
+      "source": "admin-engine-2 ZIP",
+      "outcome": "Merge new enrichment and concurrency changes; preserve secure credential forms and server credential resolution",
+      "status": "in_progress",
+      "next_action": null
+    },
+    {
+      "capability": "schema",
+      "source": "existing Lovable Cloud and archived SQL migrations",
+      "outcome": "Preserve existing migrations; add server-only domain cache with explicit grants",
+      "status": "pending",
+      "next_action": null
+    },
+    {
+      "capability": "records",
+      "source": "existing Lovable Cloud",
+      "outcome": "Keep existing records untouched; ZIP contains no record export",
+      "status": "preserved",
+      "next_action": null
+    },
+    {
+      "capability": "auth identities",
+      "source": "existing Lovable Cloud",
+      "outcome": "Keep existing accounts, sessions, profiles and ownership",
+      "status": "preserved",
+      "next_action": null
+    },
+    {
+      "capability": "authorization",
+      "source": "unchanged application and existing policies",
+      "outcome": "Preserve existing access boundaries",
+      "status": "preserved",
+      "next_action": null
+    },
+    {
+      "capability": "uploaded file bytes",
+      "source": "archive assets",
+      "outcome": "Assets already match project",
+      "status": "preserved",
+      "next_action": null
+    },
+    {
+      "capability": "external providers and secrets",
+      "source": "unchanged Gmail, search, enrichment and AI code",
+      "outcome": "Preserve existing providers and secure configuration",
+      "status": "verification_pending",
+      "next_action": "Live Gmail and other provider verification requires configured credentials; no provider calls or sends during replacement"
+    },
+    {
+      "capability": "public endpoints and callbacks",
+      "source": "unchanged server and API code",
+      "outcome": "Preserve endpoint URLs and OAuth callbacks",
+      "status": "preserved",
+      "next_action": null
+    },
+    {
+      "capability": "webhooks",
+      "source": "unchanged source",
+      "outcome": "No replacement differences",
+      "status": "preserved",
+      "next_action": null
+    },
+    {
+      "capability": "schedules",
+      "source": "existing outreach dispatcher",
+      "outcome": "Preserve current schedule; do not trigger outbound sends",
+      "status": "verification_pending",
+      "next_action": "Published scheduled dispatch remains unverified"
+    },
+    {
+      "capability": "cutover",
+      "source": "current custom domains",
+      "outcome": "User requested redeployment",
+      "status": "pending",
+      "next_action": "Verify and publish"
+    },
+    {
+      "capability": "verification",
+      "source": "signed-in running preview",
+      "outcome": "Verify signed-in Settings mailbox button, secure entry and scraper rendering",
+      "status": "pending",
+      "next_action": null
+    }
   ]
 }
