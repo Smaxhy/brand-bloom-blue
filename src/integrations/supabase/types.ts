@@ -50,6 +50,7 @@ export type Database = {
           thread_id: string | null
           unsub_token: string
           updated_at: string
+          variant: string
         }
         Insert: {
           completed_at?: string | null
@@ -68,6 +69,7 @@ export type Database = {
           thread_id?: string | null
           unsub_token?: string
           updated_at?: string
+          variant?: string
         }
         Update: {
           completed_at?: string | null
@@ -86,6 +88,7 @@ export type Database = {
           thread_id?: string | null
           unsub_token?: string
           updated_at?: string
+          variant?: string
         }
         Relationships: [
           {
@@ -132,6 +135,9 @@ export type Database = {
           place_id: string | null
           raw_id: string | null
           region: string
+          score: number
+          score_reasons: string[]
+          signals: Json
           source: string
           status: string
           updated_at: string
@@ -157,6 +163,9 @@ export type Database = {
           place_id?: string | null
           raw_id?: string | null
           region?: string
+          score?: number
+          score_reasons?: string[]
+          signals?: Json
           source?: string
           status?: string
           updated_at?: string
@@ -182,6 +191,9 @@ export type Database = {
           place_id?: string | null
           raw_id?: string | null
           region?: string
+          score?: number
+          score_reasons?: string[]
+          signals?: Json
           source?: string
           status?: string
           updated_at?: string
@@ -283,12 +295,17 @@ export type Database = {
       }
       messages: {
         Row: {
+          body_text: string | null
           direction: string
+          draft_reply: string | null
           enrollment_id: string | null
           error: string | null
+          from_header: string | null
           gmail_message_id: string | null
           gmail_thread_id: string | null
+          handled_at: string | null
           id: string
+          intent: string | null
           kind: string
           lead_id: string | null
           mailbox_id: string | null
@@ -298,14 +315,20 @@ export type Database = {
           status: string
           step_position: number | null
           subject: string
+          variant: string | null
         }
         Insert: {
+          body_text?: string | null
           direction: string
+          draft_reply?: string | null
           enrollment_id?: string | null
           error?: string | null
+          from_header?: string | null
           gmail_message_id?: string | null
           gmail_thread_id?: string | null
+          handled_at?: string | null
           id?: string
+          intent?: string | null
           kind?: string
           lead_id?: string | null
           mailbox_id?: string | null
@@ -315,14 +338,20 @@ export type Database = {
           status?: string
           step_position?: number | null
           subject?: string
+          variant?: string | null
         }
         Update: {
+          body_text?: string | null
           direction?: string
+          draft_reply?: string | null
           enrollment_id?: string | null
           error?: string | null
+          from_header?: string | null
           gmail_message_id?: string | null
           gmail_thread_id?: string | null
+          handled_at?: string | null
           id?: string
+          intent?: string | null
           kind?: string
           lead_id?: string | null
           mailbox_id?: string | null
@@ -332,6 +361,7 @@ export type Database = {
           status?: string
           step_position?: number | null
           subject?: string
+          variant?: string | null
         }
         Relationships: [
           {
@@ -387,6 +417,121 @@ export type Database = {
         }
         Relationships: []
       }
+      rate_limits: {
+        Row: {
+          count: number
+          key: string
+          window_start: string
+        }
+        Insert: {
+          count?: number
+          key: string
+          window_start: string
+        }
+        Update: {
+          count?: number
+          key?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
+      saved_searches: {
+        Row: {
+          auto_enroll_sequence_id: string | null
+          created_at: string
+          created_by: string | null
+          geo: Json | null
+          id: string
+          industry: string
+          last_result: Json
+          last_run_at: string | null
+          location: string
+          min_score: number
+          name: string
+          next_run_at: string | null
+          per_page: number
+          providers: string[]
+          region: string
+          schedule: string
+          updated_at: string
+        }
+        Insert: {
+          auto_enroll_sequence_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          geo?: Json | null
+          id?: string
+          industry?: string
+          last_result?: Json
+          last_run_at?: string | null
+          location: string
+          min_score?: number
+          name: string
+          next_run_at?: string | null
+          per_page?: number
+          providers?: string[]
+          region?: string
+          schedule?: string
+          updated_at?: string
+        }
+        Update: {
+          auto_enroll_sequence_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          geo?: Json | null
+          id?: string
+          industry?: string
+          last_result?: Json
+          last_run_at?: string | null
+          location?: string
+          min_score?: number
+          name?: string
+          next_run_at?: string | null
+          per_page?: number
+          providers?: string[]
+          region?: string
+          schedule?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_searches_auto_enroll_sequence_id_fkey"
+            columns: ["auto_enroll_sequence_id"]
+            isOneToOne: false
+            referencedRelation: "sequences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      search_seen: {
+        Row: {
+          company: string
+          created_at: string
+          key: string
+          search_id: string
+        }
+        Insert: {
+          company?: string
+          created_at?: string
+          key: string
+          search_id: string
+        }
+        Update: {
+          company?: string
+          created_at?: string
+          key?: string
+          search_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "search_seen_search_id_fkey"
+            columns: ["search_id"]
+            isOneToOne: false
+            referencedRelation: "saved_searches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sequence_steps: {
         Row: {
           body: string
@@ -395,6 +540,7 @@ export type Database = {
           position: number
           sequence_id: string
           subject: string
+          subject_b: string
         }
         Insert: {
           body?: string
@@ -403,6 +549,7 @@ export type Database = {
           position: number
           sequence_id: string
           subject?: string
+          subject_b?: string
         }
         Update: {
           body?: string
@@ -411,6 +558,7 @@ export type Database = {
           position?: number
           sequence_id?: string
           subject?: string
+          subject_b?: string
         }
         Relationships: [
           {
@@ -517,6 +665,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_rate_limit: {
+        Args: { _key: string; _max: number; _window_seconds: number }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
