@@ -15,5 +15,5 @@
 - [x] Verify restored homepage rendering, calculator, and navigation.
 
 # Latest admin archive
-- [ ] Apply new scraper layout and persisted scores from inspirova-admin-engine_1.zip without changing homepage, accounts or migrations.
-- [ ] Verify scraper controls and preview rendering without sending emails or running paid searches.
+- [x] Apply new scraper layout and persisted scores from inspirova-admin-engine_1.zip without changing homepage, accounts or migrations.
+- [x] Verify scraper controls and preview rendering without sending emails or running paid searches.
