@@ -43,6 +43,13 @@
       "when": 1793823251072,
       "tag": "0005_ghl_channel",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793826099226,
+      "tag": "0006_saved_search_filters",
+      "breakpoints": true
     }
   ]
 }
