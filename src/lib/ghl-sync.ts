@@ -113,7 +113,7 @@ export async function syncGhlMailbox(
         })
         .catch(() => {});
       if (auto) continue;
-      const stop = intent === "not_interested" || wantsToStop(`${subject} ${bodyText}`);
+      const stop = intent === "not_interested" || wantsToStop(subject) || wantsToStop(bodyText);
       if (stop && lead?.email) {
         await db
           .upsert(

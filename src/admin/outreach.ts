@@ -37,6 +37,10 @@ export interface OutreachSettings {
   website: string;
   eu_notice: string;
   us_notice: string;
+  footer_style?: "sentence" | "block" | null;
+  plain_text?: boolean | null;
+  optout_line_us?: string | null;
+  optout_line_eu?: string | null;
 }
 
 export interface Sequence {

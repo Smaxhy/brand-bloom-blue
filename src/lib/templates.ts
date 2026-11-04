@@ -79,16 +79,30 @@ export function renderStep(input: {
   const body = fill(step.body, vars).trim();
   const signature = fill(mailbox.signature, vars).trim();
 
+  const sentenceStyle = (settings.footer_style || "sentence") !== "block";
+  const plain = settings.plain_text !== false;
   const notice = lead.region === "EU" ? settings.eu_notice : settings.us_notice;
-  const footerLines = [
-    notice,
-    [settings.company_name, settings.postal_address].filter(Boolean).join(" · "),
-    `Unsubscribe: ${input.unsubscribeUrl}`,
-  ].filter(Boolean);
+  const optout =
+    (lead.region === "EU" ? settings.optout_line_eu : settings.optout_line_us) ||
+    "If this isn't relevant, just reply \"no\" and I won't write again.";
+  const addressLine = [settings.company_name, settings.postal_address].filter(Boolean).join(", ");
 
-  const text = [body, "", signature, "", "--", ...footerLines]
+  // Sentence style: reads like a person wrote it. The reply-"no" is a working opt-out
+  // (the inbox sync suppresses on it) and the address satisfies CAN-SPAM. The
+  // one-click unsubscribe still travels in the List-Unsubscribe header on Gmail.
+  const footerLines = sentenceStyle
+    ? [`${optout}${addressLine ? ` ${addressLine}.` : ""}`]
+    : [notice, addressLine, `Unsubscribe: ${input.unsubscribeUrl}`].filter(Boolean);
+
+  const text = (
+    sentenceStyle
+      ? [body, "", signature, "", ...footerLines]
+      : [body, "", signature, "", "--", ...footerLines]
+  )
     .filter((l, i, a) => !(l === "" && a[i - 1] === ""))
     .join("\n");
+
+  if (plain) return { subject, text, html: "" };
 
   const para = (s: string) =>
     esc(s)
@@ -100,11 +114,15 @@ export function renderStep(input: {
 <div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1f2328;max-width:620px;padding:4px 0">
 ${para(body)}
 ${signature ? `<div style="margin-top:18px;color:#1f2328">${esc(signature).replace(/\n/g, "<br>")}</div>` : ""}
-<div style="margin-top:28px;padding-top:12px;border-top:1px solid #e6e8eb;font-size:12px;line-height:1.5;color:#6b7280">
+${
+  sentenceStyle
+    ? `<p style="margin:18px 0 0;color:#1f2328">${esc(footerLines[0])}</p>`
+    : `<div style="margin-top:28px;padding-top:12px;border-top:1px solid #e6e8eb;font-size:12px;line-height:1.5;color:#6b7280">
 ${esc(notice)}<br>
-${esc([settings.company_name, settings.postal_address].filter(Boolean).join(" · "))}<br>
+${esc(addressLine)}<br>
 <a href="${esc(input.unsubscribeUrl)}" style="color:#6b7280">Unsubscribe</a>
-</div></div></body></html>`;
+</div>`
+}</div></body></html>`;
 
   return { subject, text, html };
 }

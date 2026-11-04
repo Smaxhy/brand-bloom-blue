@@ -84,6 +84,13 @@
       "outcome": "Signed-in Data Scraper verified new universal filters (title, team size, revenue, distance, rating, reviews) and hidden-by-filters toggle; Settings retained secure credential entry and Google/GoHighLevel connect controls; no runtime errors; build OK; seven safety/credential tests passed",
       "status": "verified",
       "next_action": "User must complete Google consent; live scraping, mailbox send and scheduled dispatch remain unverified"
+    },
+    {
+      "capability": "plain-footer-update",
+      "source": "inspirova-admin-engine_6.zip",
+      "outcome": "Applied plain-text/sentence opt-out footer (migration + templates + gmail/sequencer/ghl + settings UI); skipped server.ts, free-enrich.ts, SettingsView credential regressions",
+      "status": "verified",
+      "next_action": "none"
     }
   ]
 }
