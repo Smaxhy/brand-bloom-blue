@@ -426,7 +426,7 @@ const SAMPLE_STEPS: SequenceStep[] = [
     position: 0,
     delay_days: 0,
     subject: "{{company}} — quick idea",
-    body: "Hi {{first_name}},\n\nI came across {{company}} while looking at {{industry|local}} businesses in {{city}} and had a couple of ideas for getting you more jobs this season without raising your ad spend.\n\nWorth a 10-minute call this week?",
+    body: "Hi {{first_name|there}},\n\nI came across {{company}} while looking at {{industry|local}} businesses in {{city}}. {{pitch|I had a couple of ideas for getting you more jobs this season without raising your ad spend.}}\n\nWorth a 10-minute call this week?",
   },
   {
     position: 1,
@@ -794,8 +794,11 @@ function Sequences({
             <p className="text-xs text-muted-foreground">
               Variables: <code>{"{{first_name}}"}</code> <code>{"{{company}}"}</code>{" "}
               <code>{"{{city}}"}</code> <code>{"{{industry}}"}</code> <code>{"{{website}}"}</code>{" "}
-              <code>{"{{sender_name}}"}</code>. Fallbacks: <code>{"{{first_name|there}}"}</code>.
-              The legal footer and unsubscribe link are added automatically.
+              <code>{"{{sender_name}}"}</code> <code>{"{{pitch}}"}</code> <code>{"{{gap}}"}</code>.
+              Fallbacks: <code>{"{{first_name|there}}"}</code>. <code>{"{{pitch}}"}</code> is the
+              one-line angle the AI wrote for that business when it was scanned;{" "}
+              <code>{"{{gap}}"}</code> its biggest gap (e.g. "no online booking"). The legal footer
+              and unsubscribe link are added automatically.
             </p>
             <div className="flex justify-end gap-2">
               <Btn variant="ghost" onClick={() => setEditing(null)}>

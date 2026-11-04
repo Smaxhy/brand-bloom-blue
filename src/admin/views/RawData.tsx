@@ -77,6 +77,7 @@ export function RawData({
         emailGuessed: r.emailSource ? r.emailSource === "Guess" : /guess/i.test(r.source || ""),
         score: r.score,
         scoreReasons: r.scoreWhy,
+        ai: r.ai ?? null,
         phone: r.phone,
         linkedin: r.linkedin,
         city: r.city,

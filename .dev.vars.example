@@ -26,8 +26,13 @@ GOOGLE_OAUTH_CLIENT_ID=
 GOOGLE_OAUTH_CLIENT_SECRET=
 # Long random string. Protects /api/cron/dispatch and signs OAuth state.
 CRON_SECRET=
+# Public booking link (Cal.com, Calendly, Google appointment page). Used by every
+# "Book a call" button on the public pages. Leave empty to fall back to the quote form.
+BOOKING_URL=
 # Public origin used in unsubscribe links sent by the cron job.
 PUBLIC_ORIGIN=https://inspirovamarketing.com
+# Optional: Apify bulk Google Maps scraping (hundreds per search). apify.com → Settings → Integrations → API token.
+APIFY_TOKEN=
 # Optional: Reoon email verification for guessed addresses ($1.19 / 1,000).
 REOON_API_KEY=
 # Required server-side for cron + OAuth (Lovable Cloud injects this automatically).

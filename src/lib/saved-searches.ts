@@ -45,7 +45,8 @@ export interface SearchRunResult {
   sample: { company: string; email: string; score: number }[];
 }
 
-const MAX_ENRICH_PER_RUN = 30;
+// With the 30-day site cache and 6-wide concurrency this fits comfortably in one cron tick.
+const MAX_ENRICH_PER_RUN = 60;
 
 function cleanDomain(s: string | undefined): string {
   if (!s) return "";
@@ -78,6 +79,7 @@ export async function runSavedSearch(env: Env, db: Db, ss: SavedSearch): Promise
     lat: ss.geo?.lat,
     lng: ss.geo?.lng,
     bbox: ss.geo?.bbox,
+    apifyWait: true,
   };
   const disc = await discoverCore(filters, env);
   out.errors.push(...disc.errors);
@@ -129,7 +131,10 @@ export async function runSavedSearch(env: Env, db: Db, ss: SavedSearch): Promise
     const prof = await enrichSite(env, {
       website,
       company: b.company,
+      industry: b.industry || ss.industry,
       city: b.city || ss.location,
+      rating: b.rating,
+      reviews: b.reviews,
       db,
     });
     if (prof) {
@@ -162,6 +167,7 @@ export async function runSavedSearch(env: Env, db: Db, ss: SavedSearch): Promise
         mx,
         phone,
         signals,
+        aiNeed: prof?.ai?.need ?? null,
       });
       if (email) out.with_email++;
 
@@ -188,7 +194,7 @@ export async function runSavedSearch(env: Env, db: Db, ss: SavedSearch): Promise
               status: "new",
               score: sc.score,
               score_reasons: sc.reasons,
-              signals: signals ?? {},
+              signals: { ...(signals ?? {}), ai: prof?.ai ?? undefined },
               created_by: ss.created_by,
             },
             "email",
@@ -210,7 +216,7 @@ export async function runSavedSearch(env: Env, db: Db, ss: SavedSearch): Promise
             status: "new",
             score: sc.score,
             score_reasons: sc.reasons,
-            signals: signals ?? {},
+            signals: { ...(signals ?? {}), ai: prof?.ai ?? undefined },
             created_by: ss.created_by,
           });
 
@@ -271,8 +277,7 @@ export async function runDueSavedSearches(
       const next = new Date(
         Date.now() + (ss.schedule === "daily" ? 1 : 7) * 86_400_000,
       ).toISOString();
-      if (!ss.next_run_at) continue;
-      await db.update("saved_searches", `id=eq.${ss.id}&next_run_at=eq.${enc(ss.next_run_at)}`, {
+      await db.update("saved_searches", `id=eq.${ss.id}&next_run_at=eq.${enc(ss.next_run_at!)}`, {
         next_run_at: next,
       });
       const r = await runSavedSearch(env, db, ss);

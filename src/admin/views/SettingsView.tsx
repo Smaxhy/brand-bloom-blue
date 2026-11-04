@@ -35,9 +35,6 @@ import {
   integrationStatus,
 } from "../outreach";
 import { Panel, Field, inputCls, Btn } from "../ui";
-import { useServerFn } from "@tanstack/react-start";
-import { canConfigureIntegrations, saveIntegrationCredentials } from "@/lib/integration-settings.functions";
-import { integrationFields, integrationInputSchema } from "@/lib/integration-settings-schema";
 
 export function SettingsView({
   data,
@@ -573,7 +570,7 @@ const INTEGRATIONS: {
 }[] = [
   {
     key: "db",
-    name: "Server database access",
+    name: "Server database access (SUPABASE_SERVICE_ROLE_KEY)",
     cost: "free",
     need: "required",
     how: "Lovable Cloud provides this automatically; the scheduler and mailbox connection need it.",
@@ -607,6 +604,13 @@ const INTEGRATIONS: {
     how: "Claude Haiku reads each site to name the decision-maker.",
   },
   {
+    key: "apify",
+    name: "Apify (APIFY_TOKEN)",
+    cost: "$5 free credit / mo, then ≈ $0.50–4 per 1,000 places",
+    need: "optional",
+    how: "Bulk Google Maps walk: hundreds of businesses per search instead of Google's 60. Turn on 'Apify bulk' in the scraper.",
+  },
+  {
     key: "serper",
     name: "Serper.dev (SERPER_API_KEY)",
     cost: "2,500 free, then $1 / 1,000",
@@ -638,34 +642,6 @@ const INTEGRATIONS: {
 
 function IntegrationsPanel() {
   const [st, setSt] = useState<Record<string, boolean> | null>(null);
-  const [allowed, setAllowed] = useState(false);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [values, setValues] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const checkPermission = useServerFn(canConfigureIntegrations);
-  const saveCredentials = useServerFn(saveIntegrationCredentials);
-  useEffect(() => {
-    void checkPermission().then((r) => setAllowed(r.allowed)).catch(() => setAllowed(false));
-  }, [checkPermission]);
-  async function submitCredentials() {
-    if (busy || !editing) return;
-    const fields = integrationFields[editing] ?? [];
-    if (fields.some((f) => !values[f.name]?.trim())) { setError("Enter all the details for this integration."); return; }
-    const result = integrationInputSchema.safeParse({ values });
-    if (!result.success) { setError("Check your details: remove spaces and enter a valid credential."); return; }
-    setBusy(true);
-    setError("");
-    try {
-      await saveCredentials({ data: result.data });
-      setValues({});
-      setEditing(null);
-      toast.success("Integration details saved securely.");
-      setSt(await integrationStatus());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save. Please try again.");
-    } finally { setBusy(false); }
-  }
   useEffect(() => {
     void integrationStatus()
       .then(setSt)
@@ -680,7 +656,8 @@ function IntegrationsPanel() {
         <div>
           <h3 className="font-display text-lg font-bold">Integrations &amp; keys</h3>
           <p className="text-xs text-muted-foreground">
-            {allowed ? "Add or replace shared service credentials below. Saved keys are never displayed." : "Shared service credentials are managed by administrators."}
+            Set these as Worker secrets (Lovable → Settings → Secrets). The free ones do most of the
+            work; paid ones are fallbacks.
           </p>
         </div>
       </div>
@@ -709,31 +686,6 @@ function IntegrationsPanel() {
                   <span className="text-xs font-normal text-muted-foreground">{i.cost}</span>
                 </div>
                 <div className="text-xs text-muted-foreground">{i.how}</div>
-                {i.key === "db" || i.key === "cronSecret" ? (
-                  <div className="mt-1 text-xs text-muted-foreground">Managed securely by the site; no entry needed here.</div>
-                ) : allowed && (
-                  <div className="mt-2">
-                    {editing !== i.key ? (
-                      <Btn variant="ghost" onClick={() => { setEditing(i.key); setValues({}); setError(""); }} disabled={busy}>
-                        <Plug className="h-3.5 w-3.5" /> {ok ? "Replace details" : "Add details"}
-                      </Btn>
-                    ) : (
-                      <form className="space-y-3" autoComplete="off" onSubmit={(e) => { e.preventDefault(); void submitCredentials(); }}>
-                        {(integrationFields[i.key] ?? []).map((f) => (
-                          <div key={f.name}>
-                            <label htmlFor={`integration-${f.name}`} className="mb-1 block text-xs font-medium">{f.label}</label>
-                            <input id={`integration-${f.name}`} type="password" autoComplete="new-password" required maxLength={4096} className={inputCls} value={values[f.name] ?? ""} disabled={busy} onChange={(e) => setValues((p) => ({ ...p, [f.name]: e.target.value }))} />
-                          </div>
-                        ))}
-                        {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
-                        <div className="flex flex-wrap gap-2">
-                          <Btn type="submit" disabled={busy}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {busy ? "Saving…" : "Save securely"}</Btn>
-                          <Btn variant="ghost" disabled={busy} onClick={() => { setEditing(null); setValues({}); setError(""); }}>Cancel</Btn>
-                        </div>
-                      </form>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
           );
@@ -743,10 +695,11 @@ function IntegrationsPanel() {
   );
 }
 
-
 /* ------------------------------------------------------------------- 2FA */
 function TwoFactorPanel() {
-  const [factors, setFactors] = useState<{ id: string; friendly_name?: string; status: string }[] | null>(null);
+  const [factors, setFactors] = useState<
+    { id: string; friendly_name?: string; status: string }[] | null
+  >(null);
   const [enroll, setEnroll] = useState<{ id: string; qr: string; secret: string } | null>(null);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -765,8 +718,12 @@ function TwoFactorPanel() {
     try {
       const { supabase } = await import("@/integrations/supabase/client");
       // Clean up abandoned enrolments first
-      for (const f of factors ?? []) if (f.status !== "verified") await supabase.auth.mfa.unenroll({ factorId: f.id });
-      const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp", friendlyName: "Authenticator app" });
+      for (const f of factors ?? [])
+        if (f.status !== "verified") await supabase.auth.mfa.unenroll({ factorId: f.id });
+      const { data, error } = await supabase.auth.mfa.enroll({
+        factorType: "totp",
+        friendlyName: "Authenticator app",
+      });
       if (error || !data) throw error ?? new Error("Could not start enrolment");
       setEnroll({ id: data.id, qr: data.totp.qr_code, secret: data.totp.secret });
     } catch (e) {
@@ -782,7 +739,9 @@ function TwoFactorPanel() {
       const { supabase } = await import("@/integrations/supabase/client");
       const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: enroll.id, code });
       if (error) throw error;
-      toast.success("Two-factor authentication is on. You'll be asked for a code at every sign-in.");
+      toast.success(
+        "Two-factor authentication is on. You'll be asked for a code at every sign-in.",
+      );
       setEnroll(null);
       setCode("");
       await load();
@@ -807,33 +766,63 @@ function TwoFactorPanel() {
   return (
     <Panel>
       <div className="mb-4 flex items-center gap-2">
-        <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-[var(--brand-violet)] to-[var(--brand-coral)] text-white"><ShieldCheck className="h-4 w-4" /></div>
+        <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-[var(--brand-violet)] to-[var(--brand-coral)] text-white">
+          <ShieldCheck className="h-4 w-4" />
+        </div>
         <div className="flex-1">
           <h3 className="font-display text-lg font-bold">Two-factor authentication</h3>
-          <p className="text-xs text-muted-foreground">Protects the mailboxes and lead data behind a code from your phone. Each team member sets up their own.</p>
+          <p className="text-xs text-muted-foreground">
+            Protects the mailboxes and lead data behind a code from your phone. Each team member
+            sets up their own.
+          </p>
         </div>
         {active.length > 0 ? (
-          <span className="rounded-full bg-[oklch(.7_.18_150)]/15 px-2.5 py-1 text-xs font-semibold text-[oklch(.4_.12_150)]">On</span>
+          <span className="rounded-full bg-[oklch(.7_.18_150)]/15 px-2.5 py-1 text-xs font-semibold text-[oklch(.4_.12_150)]">
+            On
+          </span>
         ) : (
-          <Btn onClick={() => void start()} disabled={busy || !!enroll}>Turn on</Btn>
+          <Btn onClick={() => void start()} disabled={busy || !!enroll}>
+            Turn on
+          </Btn>
         )}
       </div>
       {active.map((f) => (
-        <div key={f.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+        <div
+          key={f.id}
+          className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
+        >
           <span>{f.friendly_name || "Authenticator app"}</span>
-          <Btn variant="ghost" onClick={() => void disable(f.id)}>Turn off</Btn>
+          <Btn variant="ghost" onClick={() => void disable(f.id)}>
+            Turn off
+          </Btn>
         </div>
       ))}
       {enroll && (
         <div className="mt-2 grid gap-4 sm:grid-cols-[160px_1fr]">
-          <img src={enroll.qr} alt="QR code for your authenticator app" className="h-40 w-40 rounded-lg border border-border bg-white p-2" />
+          <img
+            src={enroll.qr}
+            alt="QR code for your authenticator app"
+            className="h-40 w-40 rounded-lg border border-border bg-white p-2"
+          />
           <div className="space-y-2 text-sm">
             <p>Scan with Google Authenticator, 1Password or Authy, then enter the 6-digit code.</p>
-            <p className="text-xs text-muted-foreground">Can't scan? Key: <code className="rounded bg-secondary px-1">{enroll.secret}</code></p>
+            <p className="text-xs text-muted-foreground">
+              Can't scan? Key: <code className="rounded bg-secondary px-1">{enroll.secret}</code>
+            </p>
             <div className="flex gap-2">
-              <input className={inputCls + " max-w-[160px] text-center tracking-[.3em]"} inputMode="numeric" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="123456" />
-              <Btn onClick={() => void confirm()} disabled={busy || code.length < 6}>Confirm</Btn>
-              <Btn variant="ghost" onClick={() => setEnroll(null)}>Cancel</Btn>
+              <input
+                className={inputCls + " max-w-[160px] text-center tracking-[.3em]"}
+                inputMode="numeric"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="123456"
+              />
+              <Btn onClick={() => void confirm()} disabled={busy || code.length < 6}>
+                Confirm
+              </Btn>
+              <Btn variant="ghost" onClick={() => setEnroll(null)}>
+                Cancel
+              </Btn>
             </div>
           </div>
         </div>

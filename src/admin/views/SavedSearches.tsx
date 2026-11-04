@@ -81,9 +81,9 @@ export function SaveSearchModal({
       .catch(() => setSeqs([]));
   }, []);
 
-  const providers = (["google", "osm"] as ScrapeSource[])
+  const providers = (["google", "osm", "apify"] as ScrapeSource[])
     .filter((k) => sources[k])
-    .flatMap((k) => (k === "google" ? ["places", "serper"] : ["osm"]));
+    .flatMap((k) => (k === "google" ? ["places", "serper"] : k === "osm" ? ["osm"] : ["apify"]));
 
   async function save() {
     if (!name.trim()) return;

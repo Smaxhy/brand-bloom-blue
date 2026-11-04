@@ -62,6 +62,8 @@ export interface Lead {
   city: string;
   region: "US" | "EU";
   industry: string;
+  score?: number | null;
+  signals?: { ai?: { need?: number; reasons?: string[]; pitch?: string; gap?: string } } | null;
 }
 
 export interface Sequence {
