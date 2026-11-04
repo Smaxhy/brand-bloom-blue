@@ -1,4 +1,5 @@
 /**
+import { fetchPublicSite } from '../public-site-fetch';
  * Free enrichment — everything we can learn about a business without paying
  * anyone, from its own website:
  *
@@ -222,19 +223,11 @@ async function fetchPage(
   timeoutMs: number,
 ): Promise<{ html: string; finalUrl: string } | null> {
   try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": UA,
-        Accept: "text/html,application/xhtml+xml,*/*;q=0.8",
-        "Accept-Language": "en",
-      },
-      redirect: "follow",
-      signal: AbortSignal.timeout(timeoutMs),
+    return await fetchPublicSite(url, timeoutMs, {
+      "User-Agent": UA,
+      Accept: "text/html,application/xhtml+xml,*/*;q=0.8",
+      "Accept-Language": "en",
     });
-    if (!res.ok) return null;
-    const ct = res.headers.get("content-type") || "";
-    if (ct && !/html|xml|text/i.test(ct)) return null;
-    return { html: (await res.text()).slice(0, 250_000), finalUrl: res.url || url };
   } catch {
     return null;
   }

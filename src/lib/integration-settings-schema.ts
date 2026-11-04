@@ -7,6 +7,7 @@ export const integrationFields: Record<string, { name: string; label: string }[]
   serper: [{ name: "SERPER_API_KEY", label: "Serper API key" }],
   reoon: [{ name: "REOON_API_KEY", label: "Reoon API key" }],
   apollo: [{ name: "APOLLO_API_KEY", label: "Apollo API key" }],
+  apify: [{ name: "APIFY_TOKEN", label: "Apify API token" }],
   hunter: [{ name: "HUNTER_API_KEY", label: "Hunter API key" }],
 };
 const allowed = new Set(Object.values(integrationFields).flat().map((f) => f.name));
