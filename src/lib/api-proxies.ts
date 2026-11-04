@@ -17,7 +17,15 @@
 import { getApiUser, hasCronSecret, unauthorized } from "./api-auth";
 import { placesTextSearch } from "./providers/places";
 import { overpassBusinesses } from "./providers/osm";
+import {
+  apifyAvailable,
+  apifyStart,
+  apifyRunStatus,
+  apifyItems,
+  apifyRunAndWait,
+} from "./providers/apify";
 import { enrichSite, enrichMany } from "./enrich-site";
+import { publicCheck, publicConfig } from "./public-check";
 import { freeEnrich, hasMx, scoreLead, type SiteSignals } from "./providers/free-enrich";
 import { handleOutreachRoute } from "./outreach-routes";
 import { Db } from "./db";
@@ -48,7 +56,13 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   // costs money or acts on your behalf, so it needs a signed-in admin — or the
   // cron secret for scheduled jobs.
   const isPublic =
-    path === "/api/health" || path === "/api/unsub" || path === "/api/google/oauth/callback";
+    path === "/api/health" ||
+    path === "/api/unsub" ||
+    path === "/api/google/oauth/callback" ||
+    path === "/api/public/check" ||
+    path === "/api/public/config";
+  if (path === "/api/public/check") return publicCheck(request, env);
+  if (path === "/api/public/config") return publicConfig(env);
   let user = null as Awaited<ReturnType<typeof getApiUser>>;
   if (!isPublic) {
     user = await getApiUser(request, env);
@@ -94,6 +108,8 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   if (path === "/api/enrich/free") return enrichFree(request, env);
   if (path === "/api/verify-domain") return verifyDomain(url);
   if (path === "/api/diag") return diag(env);
+  if (path === "/api/discover/apify/start") return apifyStartRoute(request, env);
+  if (path === "/api/discover/apify/status") return apifyStatusRoute(request, env);
   if (path === "/api/apollo/search") return apolloSearch(request, env);
   if (path === "/api/enrich") return enrich(request, env);
   if (path === "/api/hunter/domain") return hunterDomain(url, env);
@@ -120,6 +136,7 @@ async function diag(env: Env): Promise<Response> {
     serpapiKeyPresent: !!secret(env, "SERPAPI_API_KEY"),
     ghlKeyPresent: !!secret(env, "GHL_API_KEY"),
     placesKeyPresent: !!secret(env, "GOOGLE_PLACES_API_KEY"),
+    apifyKeyPresent: apifyAvailable(env),
     serperKeyPresent: !!secret(env, "SERPER_API_KEY"),
     anthropicKeyPresent: !!secret(env, "ANTHROPIC_API_KEY"),
   };
@@ -380,6 +397,13 @@ async function enrich(request: Request, env: Env): Promise<Response> {
     score: 0,
     scoreReasons: [] as string[],
     signals: null as SiteSignals | null,
+    ai: null as {
+      need: number;
+      reasons: string[];
+      pitch: string;
+      gap: string;
+      siteQuality: string;
+    } | null,
   }));
   const byId = new Map(results.map((r) => [r.id, r]));
 
@@ -392,12 +416,16 @@ async function enrich(request: Request, env: Env): Promise<Response> {
     const prof = await enrichSite(env, {
       website: r.website,
       company: p.organizationName || "",
+      industry: (p as { industry?: string }).industry || "",
       city: (p as { city?: string }).city || "",
+      rating: p.rating,
+      reviews: p.reviews,
       ownerName: p.name,
       useClaude: payload.useClaude !== false,
       db: cacheDb,
     });
     if (!prof) return;
+    r.ai = prof.ai;
     r.website = prof.website || r.website;
     r.mx = prof.mx;
     r.signals = prof.signals;
@@ -551,9 +579,12 @@ async function enrich(request: Request, env: Env): Promise<Response> {
       mx: r.mx,
       phone: r.phone || p?.phone || "",
       signals: r.signals,
+      aiNeed: r.ai?.need ?? null,
     });
     r.score = sc.score;
-    r.scoreReasons = sc.reasons;
+    r.scoreReasons = r.ai?.reasons?.length
+      ? [...sc.reasons, ...r.ai.reasons.map((x) => `• ${x}`)]
+      : sc.reasons;
   }
 
   return json({ demo: false, results });
@@ -1013,7 +1044,7 @@ async function ghlSend(request: Request, env: Env): Promise<Response> {
 /*   OpenStreetMap         → free, patchier coverage                         */
 /* --------------------------------------------------------------------- */
 
-type DiscoverProvider = "places" | "serper" | "serpapi" | "osm";
+type DiscoverProvider = "places" | "serper" | "serpapi" | "osm" | "apify";
 
 export interface DiscoverFilters {
   location?: string;
@@ -1024,6 +1055,50 @@ export interface DiscoverFilters {
   lat?: number;
   lng?: number;
   bbox?: [number, number, number, number];
+  /** Run Apify synchronously inside discoverCore (cron). The browser polls instead. */
+  apifyWait?: boolean;
+}
+
+async function apifyStartRoute(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") return json({ error: "POST only" }, 405);
+  if (!apifyAvailable(env)) return json({ ok: false, error: "APIFY_TOKEN is not set" }, 400);
+  const f = (await request.json().catch(() => ({}))) as DiscoverFilters;
+  const queries = (f.industry || "")
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean);
+  const location = (f.location || "").trim();
+  if (!location) return json({ ok: false, error: "location required" }, 400);
+  const r = await apifyStart(env, {
+    queries: queries.length ? queries : ["business"],
+    location,
+    max: Math.max(20, Math.min(f.perPage || 100, 1000)),
+  });
+  if ("error" in r) return json({ ok: false, error: r.error }, 502);
+  return json({ ok: true, runId: r.run.id, datasetId: r.run.defaultDatasetId });
+}
+
+async function apifyStatusRoute(request: Request, env: Env): Promise<Response> {
+  const u = new URL(request.url);
+  const runId = u.searchParams.get("run") || "";
+  const datasetId = u.searchParams.get("dataset") || "";
+  if (!runId || !datasetId) return json({ ok: false, error: "run and dataset required" }, 400);
+  const st = await apifyRunStatus(env, runId);
+  const status = st?.status || "UNKNOWN";
+  const finished = ["SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"].includes(status);
+  if (!finished) return json({ ok: true, status, done: false });
+  const businesses = await apifyItems(
+    env,
+    datasetId,
+    u.searchParams.get("city") || "",
+    u.searchParams.get("industry") || "",
+  );
+  return json({
+    ok: true,
+    status,
+    done: true,
+    businesses: businesses.map((b) => ({ ...b, source: "Google Maps" })),
+  });
 }
 
 async function discoverBusinesses(request: Request, env: Env): Promise<Response> {
@@ -1069,12 +1144,11 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
   const used: Record<string, number> = {};
   const errors: string[] = [];
   const perQuery = Math.ceil(wanted / queries.length);
-  const bbox = f.bbox;
   const osmPromise =
-    want.includes("osm") && bbox
+    want.includes("osm") && f.bbox
       ? Promise.all(
           queries.map((kw) =>
-            overpassBusinesses({ keyword: kw, bbox, city, max: wanted, timeoutSec: 12 }),
+            overpassBusinesses({ keyword: kw, bbox: f.bbox!, city, max: wanted, timeoutSec: 12 }),
           ),
         )
       : Promise.resolve([] as Awaited<ReturnType<typeof overpassBusinesses>>[]);
@@ -1220,8 +1294,25 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
     }
   }
 
+  // Bulk: Apify walks the map for hundreds per query. Only in "wait" mode (cron /
+  // saved searches); the browser starts a run and polls via /api/discover/apify/*.
+  if (want.includes("apify") && apifyAvailable(env) && f.apifyWait) {
+    const r = await apifyRunAndWait(env, { queries, location: f.location || city, max: wanted });
+    if (r.error) errors.push(r.error);
+    for (const b of r.businesses) {
+      add({ ...b, source: "Google Maps" }, "apify");
+      if (byKey.size >= wanted) break;
+    }
+  }
+
   const businesses = Array.from(byKey.values()).slice(0, wanted);
-  const available = { places: !!placesKey, serper: !!serperKey, serpapi: !!serpapiKey, osm: true };
+  const available = {
+    places: !!placesKey,
+    serper: !!serperKey,
+    serpapi: !!serpapiKey,
+    osm: true,
+    apify: apifyAvailable(env),
+  };
   const reason = businesses.length
     ? undefined
     : !placesKey && !serperKey && !serpapiKey && !f.bbox

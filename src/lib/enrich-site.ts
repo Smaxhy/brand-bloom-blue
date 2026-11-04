@@ -57,6 +57,8 @@ export interface SiteProfile {
   emailGuessed: boolean;
   emailPage: string;
   names: { name: string; title: string }[];
+  /** AI marketing-need rating (0–100), reasons, pitch angle. Null when no ANTHROPIC_API_KEY. */
+  ai: { need: number; reasons: string[]; pitch: string; gap: string; siteQuality: string } | null;
   cached: boolean;
   ms: number;
 }
@@ -64,7 +66,10 @@ export interface SiteProfile {
 export interface EnrichSiteOpts {
   website: string;
   company?: string;
+  industry?: string;
   city?: string;
+  rating?: number;
+  reviews?: number;
   ownerName?: string;
   useClaude?: boolean;
   db?: Db | null;
@@ -111,58 +116,131 @@ async function writeCache(
 
 /* ----------------------------------------------------------------- claude */
 
-async function claudeOwner(
+export interface AiAssessment {
+  ownerName?: string;
+  ownerTitle?: string;
+  email?: string;
+  /** 0–100: how much this business needs marketing help (reason to buy). */
+  need: number;
+  reasons: string[];
+  /** One sentence: the angle to open the email with. */
+  pitch: string;
+  /** The single most visible gap, in 2–6 words, for {{gap}} in templates. */
+  gap: string;
+  siteQuality: "none" | "poor" | "dated" | "ok" | "strong";
+}
+
+function signalsSummary(
+  sig: SiteSignals | null | undefined,
+  rating?: number,
+  reviews?: number,
+): string {
+  if (!sig) return "No website could be read.";
+  const bits = [
+    `https: ${sig.https ? "yes" : "no"}`,
+    `pages read: ${sig.pageCount}`,
+    `Meta pixel: ${sig.metaPixel ? "yes" : "no"}`,
+    `Google Ads tag: ${sig.googleAds ? "yes" : "no"}`,
+    `Tag Manager: ${sig.gtm ? "yes" : "no"}`,
+    `online booking: ${sig.booking || "none"}`,
+    `chat widget: ${sig.chat ? "yes" : "no"}`,
+    `site builder: ${sig.builder || "unknown"}`,
+    `copyright year: ${sig.copyrightYear ?? "unknown"}`,
+    `reviews widget: ${sig.reviewsWidget ? "yes" : "no"}`,
+    `social links: ${sig.socialCount}`,
+  ];
+  if (typeof rating === "number") bits.push(`Google rating: ${rating} (${reviews ?? 0} reviews)`);
+  return bits.join(", ");
+}
+
+/**
+ * One Haiku call per site: who runs it, the best email, and how badly they
+ * need marketing help (with the angle to pitch). ~$0.002 per site, cached 30 days.
+ */
+async function claudeAssess(
   env: Env,
-  company: string,
-  website: string,
-  text: string,
-  hint?: string,
-): Promise<{ ownerName?: string; ownerTitle?: string; email?: string } | null> {
+  input: {
+    company: string;
+    industry?: string;
+    city?: string;
+    website: string;
+    text: string;
+    signals: SiteSignals | null;
+    rating?: number;
+    reviews?: number;
+    hint?: string;
+  },
+): Promise<AiAssessment | null> {
   const key = secret(env, "ANTHROPIC_API_KEY");
-  if (!key || !text) return null;
-  const body = JSON.stringify({
-    model: "claude-haiku-4-5",
-    max_tokens: 200,
-    system:
-      'From the website text, extract the single most senior decision-maker (Owner/Founder/CEO > Director > Manager) and the best email on the company\'s own domain. Reply with ONLY JSON: {"ownerName":"","ownerTitle":"","email":""}. Never invent; use "" when unknown.',
-    messages: [
-      {
-        role: "user",
-        content: `Company: ${company}\nWebsite: ${website}\n${hint ? `Hint: ${hint}\n` : ""}\n"""\n${text.slice(0, 9000)}\n"""`,
+  if (!key) return null;
+  const system = `You assess small local businesses for a marketing agency that sells websites, Google/Meta ads, review generation and lead automation. You get the text of the business's website plus technical signals read from it.
+
+Return ONLY a JSON object:
+{
+  "ownerName": "",        // the single most senior decision-maker named on the site (Owner/Founder/CEO > Director > Manager), "" if none
+  "ownerTitle": "",
+  "email": "",            // best email on the company's own domain that appears in the text, "" if none
+  "need": 0,              // 0-100: how much marketing help this business visibly needs. 85+ = no real web presence / dated site / no way to book / no ads / weak reviews. 20- = polished site, booking, ads running, strong reviews.
+  "reasons": ["", "", ""],// 2-4 short concrete observations that justify the number, e.g. "No online booking", "Copyright 2018", "Only 12 reviews", "Wix template"
+  "pitch": "",            // ONE sentence, plain, specific to THIS business, that could open a cold email. Name a concrete gap and the outcome. No hype, no exclamation marks. Max 25 words.
+  "gap": "",              // the single biggest gap in 2-6 words, e.g. "no online booking", "no Google Ads"
+  "siteQuality": "ok"     // one of: none | poor | dated | ok | strong
+}
+Never invent names or emails. Judge need from evidence in the text and signals only.`;
+  const user = `Company: ${input.company}
+Industry: ${input.industry || "unknown"}
+City: ${input.city || "unknown"}
+Website: ${input.website}
+Signals: ${signalsSummary(input.signals, input.rating, input.reviews)}
+${input.hint ? `People found on the site: ${input.hint}\n` : ""}
+Website text:
+"""
+${(input.text || "").slice(0, 9000)}
+"""`;
+  const body = (model: string) =>
+    JSON.stringify({ model, max_tokens: 400, system, messages: [{ role: "user", content: user }] });
+  const call = (model: string) =>
+    fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
       },
-    ],
-  });
+      body: body(model),
+      signal: AbortSignal.timeout(15000),
+    });
   try {
-    const call = () =>
-      fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "x-api-key": key,
-          "anthropic-version": "2023-06-01",
-          "Content-Type": "application/json",
-        },
-        body,
-        signal: AbortSignal.timeout(12000),
-      });
-    let res = await call();
-    if (!res.ok && (res.status === 404 || res.status === 400)) {
-      res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "x-api-key": key,
-          "anthropic-version": "2023-06-01",
-          "Content-Type": "application/json",
-        },
-        body: body.replace('"claude-haiku-4-5"', '"claude-3-5-haiku-latest"'),
-        signal: AbortSignal.timeout(12000),
-      });
-    }
+    let res = await call("claude-haiku-4-5");
+    if (!res.ok && (res.status === 404 || res.status === 400))
+      res = await call("claude-3-5-haiku-latest");
     if (!res.ok) return null;
     const d = (await res.json()) as { content?: { text?: string }[] };
     const m = (d.content?.[0]?.text || "").match(/\{[\s\S]*\}/);
-    return m
-      ? (JSON.parse(m[0]) as { ownerName?: string; ownerTitle?: string; email?: string })
-      : null;
+    if (!m) return null;
+    const j = JSON.parse(m[0]) as Partial<AiAssessment>;
+    const q = ["none", "poor", "dated", "ok", "strong"].includes(String(j.siteQuality))
+      ? (j.siteQuality as AiAssessment["siteQuality"])
+      : "ok";
+    return {
+      ownerName: String(j.ownerName || "").trim(),
+      ownerTitle: String(j.ownerTitle || "").trim(),
+      email: String(j.email || "")
+        .trim()
+        .toLowerCase(),
+      need: Math.max(0, Math.min(100, Math.round(Number(j.need) || 0))),
+      reasons: (Array.isArray(j.reasons) ? j.reasons : [])
+        .map((r) => String(r).trim())
+        .filter(Boolean)
+        .slice(0, 4),
+      pitch: String(j.pitch || "")
+        .trim()
+        .slice(0, 240),
+      gap: String(j.gap || "")
+        .trim()
+        .slice(0, 60),
+      siteQuality: q,
+    };
   } catch {
     return null;
   }
@@ -245,18 +323,37 @@ export async function enrichSite(env: Env, o: EnrichSiteOpts): Promise<SiteProfi
   let linkedin = fe.socials.linkedin || "";
   let pick = ownDomainEmail || siteEmails[0];
 
-  // Claude only when the page itself didn't settle both questions.
-  const settled = !!(name && ownDomainEmail);
-  if (!settled && o.useClaude !== false && fe.text) {
+  // One Claude call: owner + email + marketing-need rating + pitch. Skipped only
+  // when Claude is off or there is no text at all.
+  let ai: SiteProfile["ai"] = null;
+  if (o.useClaude !== false && fe.text) {
     const hint = people.length
-      ? `People found on the site: ${people.map((n) => `${n.name}${n.title ? ` (${n.title})` : ""}`).join("; ")}`
+      ? people.map((n) => `${n.name}${n.title ? ` (${n.title})` : ""}`).join("; ")
       : undefined;
-    const ex = await claudeOwner(env, o.company || "", fe.website, fe.text, hint);
-    if (ex?.ownerName && !o.ownerName) name = ex.ownerName;
-    if (ex?.ownerTitle) title = ex.ownerTitle;
-    const ce = (ex?.email || "").toLowerCase();
-    const cePick = ce && siteEmails.find((e) => e.email === ce);
-    if (cePick) pick = cePick;
+    const ex = await claudeAssess(env, {
+      company: o.company || "",
+      industry: o.industry,
+      city: o.city,
+      website: fe.website,
+      text: fe.text,
+      signals: fe.signals,
+      rating: o.rating,
+      reviews: o.reviews,
+      hint,
+    });
+    if (ex) {
+      if (ex.ownerName && !o.ownerName) name = ex.ownerName;
+      if (ex.ownerTitle) title = ex.ownerTitle;
+      const cePick = ex.email && siteEmails.find((e) => e.email === ex.email);
+      if (cePick) pick = cePick;
+      ai = {
+        need: ex.need,
+        reasons: ex.reasons,
+        pitch: ex.pitch,
+        gap: ex.gap,
+        siteQuality: ex.siteQuality,
+      };
+    }
   }
   if (name && !looksLikePerson(name, o.company || "") && !o.ownerName) name = "";
   if (!name) name = people[0]?.name || "";
@@ -298,10 +395,11 @@ export async function enrichSite(env: Env, o: EnrichSiteOpts): Promise<SiteProfi
     emailGuessed,
     emailPage,
     names: people.map((n) => ({ name: n.name, title: n.title })),
+    ai,
     cached: false,
     ms: Date.now() - t0,
   };
-  await writeCache(o.db, domain, profile);
+  void writeCache(o.db, domain, profile);
   return profile;
 }
 

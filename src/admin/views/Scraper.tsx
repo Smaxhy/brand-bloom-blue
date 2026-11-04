@@ -342,16 +342,31 @@ export function Scraper({
     google: true, // Google Places free tier → Serper → SerpApi
     osm: true, // OpenStreetMap, free
     claude: true, // reads each website (fractions of a cent)
+    apify: false, // bulk Google Maps walk — hundreds per search, a few $ per 1,000
   });
   // Paid reveal sources (Apollo / Hunter / SerpApi) are opt-in per run.
   const [usePaid, setUsePaid] = useState(false);
-  const [scores, setScores] = useState<Record<string, { score: number; why: string[] }>>(
-    saved?.scores ?? {},
-  );
+  const [scores, setScores] = useState<
+    Record<
+      string,
+      {
+        score: number;
+        why: string[];
+        ai?: {
+          need: number;
+          reasons: string[];
+          pitch: string;
+          gap: string;
+          siteQuality?: string;
+        } | null;
+      }
+    >
+  >(saved?.scores ?? {});
   const [sortByScore, setSortByScore] = useState(true);
   const [showSave, setShowSave] = useState(false);
   const [savedRefresh, setSavedRefresh] = useState(0);
   const [aiProgress, setAiProgress] = useState({ done: 0, total: 0 });
+  const [apifySeconds, setApifySeconds] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
   const [historyFilter, setHistoryFilter] = useState("");
   const [aiKeywords, setAiKeywords] = useState<string[]>([]);
@@ -551,6 +566,13 @@ export function Scraper({
         guessed: boolean;
         score?: number;
         scoreReasons?: string[];
+        ai?: {
+          need: number;
+          reasons: string[];
+          pitch: string;
+          gap: string;
+          siteQuality?: string;
+        } | null;
       }
     > = {};
     // Batches of 8, three in flight at once: each batch is its own Worker
@@ -576,7 +598,7 @@ export function Scraper({
           phone: p.phone,
         };
       });
-      const res = await enrichContacts(payload, revealPhone, usePaid).catch(
+      const res = await enrichContacts(payload, revealPhone, usePaid, sources.claude).catch(
         () => [] as Awaited<ReturnType<typeof enrichContacts>>,
       );
       res.forEach((r) => {
@@ -593,6 +615,7 @@ export function Scraper({
             guessed: !!r.guessed,
             score: r.score,
             scoreReasons: r.scoreReasons,
+            ai: r.ai ?? null,
           };
       });
       done += chunk.length;
@@ -631,7 +654,8 @@ export function Scraper({
     setScores((prev) => {
       const next = { ...prev };
       Object.entries(updates).forEach(([id, u]) => {
-        if (typeof u.score === "number") next[id] = { score: u.score, why: u.scoreReasons ?? [] };
+        if (typeof u.score === "number")
+          next[id] = { score: u.score, why: u.scoreReasons ?? [], ai: u.ai ?? null };
       });
       return next;
     });
@@ -674,7 +698,7 @@ export function Scraper({
 
   async function runScrape() {
     if (!filters.location.trim()) return;
-    if (!sources.apollo && !sources.google && !sources.osm) {
+    if (!sources.apollo && !sources.google && !sources.osm && !sources.apify) {
       setBanner({ live: false, text: "Pick at least one discovery source." });
       return;
     }
@@ -695,6 +719,7 @@ export function Scraper({
       geo: g,
       onProgress: (phase, done, total) => {
         if (phase === "ai") setAiProgress({ done, total });
+        if (phase === "apify") setApifySeconds(done);
       },
     });
     setResults(res.people);
@@ -703,6 +728,7 @@ export function Scraper({
     setBanner({ live: res.liveApollo || res.liveGoogle, text: res.message });
     setScrapeBusy(false);
     setAiProgress({ done: 0, total: 0 });
+    setApifySeconds(0);
     // Reveal emails for Apollo-discovered rows that don't yet have one
     const needsReveal = res.people.filter((p) => p.emailLocked || !p.email || !p.website);
     if ((res.liveApollo || res.liveGoogle) && needsReveal.length) {
@@ -745,6 +771,7 @@ export function Scraper({
       reviews: p.reviews,
       score: scores[p.id]?.score,
       scoreWhy: scores[p.id]?.why,
+      ai: scores[p.id]?.ai ?? null,
     }));
     update((prev) => {
       const withDenied = addToDenylist(
@@ -949,11 +976,13 @@ export function Scraper({
               value={filters.perPage}
               onChange={(e) => setFilters({ ...filters, perPage: Number(e.target.value) })}
             >
-              {[25, 50, 100, 200, 500].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
+              {(sources.apify ? [50, 100, 200, 300, 500, 1000] : [25, 50, 100, 200, 500]).map(
+                (n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ),
+              )}
             </select>
           </Field>
 
@@ -965,9 +994,11 @@ export function Scraper({
                 <Radar className="h-4 w-4" />
               )}
               {scrapeBusy
-                ? aiProgress.total
-                  ? `Reading sites ${aiProgress.done}/${aiProgress.total}`
-                  : "Finding…"
+                ? apifySeconds
+                  ? `Apify walking the map… ${apifySeconds}s`
+                  : aiProgress.total
+                    ? `Reading sites ${aiProgress.done}/${aiProgress.total}`
+                    : "Finding…"
                 : "Find businesses"}
             </Btn>
             <Btn
@@ -1063,6 +1094,7 @@ export function Scraper({
               { id: "google", label: "Google Maps" },
               { id: "osm", label: "OpenStreetMap" },
               { id: "claude", label: "Read each website" },
+              { id: "apify", label: "Apify bulk (hundreds per search)" },
               { id: "apollo", label: "Apollo (paid)" },
             ] as { id: ScrapeSource; label: string }[]
           ).map((s) => (
@@ -1416,7 +1448,13 @@ export function Scraper({
                                     key={s}
                                     className="rounded bg-secondary px-1 py-px text-[.6rem] font-semibold uppercase tracking-wide"
                                   >
-                                    {s === "claude" ? "AI" : s === "google" ? "Maps" : s}
+                                    {s === "claude"
+                                      ? "AI"
+                                      : s === "google"
+                                        ? "Maps"
+                                        : s === "apify"
+                                          ? "Bulk"
+                                          : s}
                                   </span>
                                 ))}
                               </div>
@@ -1499,6 +1537,24 @@ export function Scraper({
                             <tr className="border-b border-border/70 bg-secondary/30">
                               <td />
                               <td colSpan={5} className="px-3 py-2">
+                                {sc.ai && (
+                                  <div className="mb-1.5 text-xs">
+                                    <span className="font-semibold text-foreground">
+                                      Needs marketing help: {sc.ai.need}/100
+                                    </span>
+                                    {sc.ai.gap && (
+                                      <span className="text-muted-foreground">
+                                        {" "}
+                                        · biggest gap: {sc.ai.gap}
+                                      </span>
+                                    )}
+                                    {sc.ai.pitch && (
+                                      <div className="mt-0.5 italic text-muted-foreground">
+                                        “{sc.ai.pitch}”
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                                 <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                                   {sc.why.map((w, i) => (
                                     <li key={i} className="inline-flex items-center gap-1">

@@ -44,6 +44,7 @@ export interface RawBusiness {
   reviews?: number;
   score?: number; // 0–100 lead score
   scoreWhy?: string[];
+  ai?: { need: number; reasons: string[]; pitch: string; gap: string; siteQuality?: string } | null;
 }
 
 export interface Client {
@@ -109,7 +110,20 @@ export interface ScraperState {
   emailSource: Record<string, string>;
   emailSourceUrl: Record<string, string>;
   discoverSources: Record<string, ScrapeSource[]>;
-  scores?: Record<string, { score: number; why: string[] }>;
+  scores?: Record<
+    string,
+    {
+      score: number;
+      why: string[];
+      ai?: {
+        need: number;
+        reasons: string[];
+        pitch: string;
+        gap: string;
+        siteQuality?: string;
+      } | null;
+    }
+  >;
   updatedAt: number;
 }
 
@@ -302,7 +316,17 @@ function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData
           >,
           scores: ((scraper as Partial<ScraperState>).scores ?? {}) as Record<
             string,
-            { score: number; why: string[] }
+            {
+              score: number;
+              why: string[];
+              ai?: {
+                need: number;
+                reasons: string[];
+                pitch: string;
+                gap: string;
+                siteQuality?: string;
+              } | null;
+            }
           >,
           updatedAt: Number((scraper as Partial<ScraperState>).updatedAt ?? Date.now()),
         }
@@ -885,6 +909,7 @@ export interface EnrichResult {
   guessed?: boolean; // pattern guess, not a published address
   score?: number;
   scoreReasons?: string[];
+  ai?: { need: number; reasons: string[]; pitch: string; gap: string; siteQuality?: string } | null;
 }
 
 /**
@@ -907,12 +932,13 @@ export async function enrichContacts(
   }[],
   revealPhone = false,
   usePaid = false,
+  useClaude = true,
 ): Promise<EnrichResult[]> {
   try {
     const res = await authFetch("/api/enrich", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ people, revealPhone, usePaid }),
+      body: JSON.stringify({ people, revealPhone, usePaid, useClaude }),
     });
     if (res.ok) {
       const j = (await res.json()) as { results?: EnrichResult[] };
@@ -1078,7 +1104,7 @@ export interface DiscoveredBusiness {
   source: "Google Maps" | "Google";
 }
 
-export type DiscoverProvider = "places" | "serper" | "serpapi" | "osm";
+export type DiscoverProvider = "places" | "serper" | "serpapi" | "osm" | "apify";
 
 export async function businessDiscovery(filters: {
   location: string;
@@ -1198,7 +1224,7 @@ export async function claudeExtractFromSite(input: {
 /* Unified discovery — fan-out across Apollo + Google + Claude              */
 /* ----------------------------------------------------------------------- */
 
-export type ScrapeSource = "apollo" | "google" | "osm" | "claude";
+export type ScrapeSource = "apollo" | "google" | "osm" | "claude" | "apify";
 
 export interface DiscoverOptions {
   sources: Record<ScrapeSource, boolean>;
@@ -1296,6 +1322,71 @@ export async function discoverLeads(
     }
   }
 
+  // Bulk source: Apify walks the map (hundreds per search). Start, then poll.
+  let apifyCount = 0;
+  let apifyNote = "";
+  if (sources.apify) {
+    try {
+      const startRes = await authFetch("/api/discover/apify/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          location: filters.location,
+          industry: filters.industry,
+          perPage: wanted,
+        }),
+      });
+      const st = (await startRes.json()) as {
+        ok: boolean;
+        runId?: string;
+        datasetId?: string;
+        error?: string;
+      };
+      if (!st.ok || !st.runId || !st.datasetId) {
+        apifyNote = `Apify: ${st.error || "could not start"}`;
+      } else {
+        const t0 = Date.now();
+        const MAX_MS = 8 * 60_000;
+        let result: { done: boolean; status: string; businesses?: DiscoveredBusiness[] } = {
+          done: false,
+          status: "RUNNING",
+        };
+        while (Date.now() - t0 < MAX_MS) {
+          opts.onProgress?.("apify", Math.round((Date.now() - t0) / 1000), 0);
+          await new Promise((r) => setTimeout(r, 6000));
+          const q = new URLSearchParams({
+            run: st.runId,
+            dataset: st.datasetId,
+            city: filters.location,
+            industry: kw,
+          });
+          const r = await authFetch(`/api/discover/apify/status?${q}`);
+          result = (await r.json()) as typeof result;
+          if (result.done) break;
+        }
+        for (const b of result.businesses ?? []) {
+          const key = cleanDomain(b.website) || norm(b.company) || b.id;
+          const existing = merged.get(key);
+          if (existing) {
+            if (!existing.phone && b.phone) existing.phone = b.phone;
+            if (!existing.website && b.website) existing.website = b.website;
+            sourcesById[existing.id] = [...(sourcesById[existing.id] ?? []), "apify"];
+          } else {
+            const person = googleToPerson(b, kw);
+            merged.set(key, person);
+            sourcesById[person.id] = ["apify"];
+            apifyCount++;
+          }
+        }
+        apifyNote = result.done
+          ? `Apify: ${apifyCount} new`
+          : `Apify: still running after 8 min — ${apifyCount} so far`;
+      }
+    } catch (e) {
+      apifyNote = `Apify: ${(e as Error).message}`;
+    }
+  }
+
   // Filter denied + low-signal rows
   let skippedDenied = 0;
   let people = Array.from(merged.values()).filter((p) => {
@@ -1310,38 +1401,8 @@ export async function discoverLeads(
   // Cap at requested size before expensive AI step
   people = people.slice(0, wanted);
 
-  // Claude pass — only run for rows that have a website but no person yet,
-  // or whose website looks like a legit business site.
-  if (sources.claude && people.length) {
-    const targets = people.filter((p) => p.website && (!p.name || !p.email));
-    opts.onProgress?.("ai", 0, targets.length);
-    let done = 0;
-    const CONCURRENCY = 4;
-    for (let i = 0; i < targets.length; i += CONCURRENCY) {
-      const batch = targets.slice(i, i + CONCURRENCY);
-      await Promise.all(
-        batch.map(async (p) => {
-          const ex = await claudeExtractFromSite({ company: p.company, website: p.website });
-          done++;
-          opts.onProgress?.("ai", done, targets.length);
-          if (!ex) return;
-          if (ex.ownerName && !p.name) p.name = ex.ownerName;
-          if (ex.ownerTitle && !p.title) p.title = ex.ownerTitle;
-          if (ex.email) {
-            p.email = ex.email;
-            p.emailLocked = false;
-          }
-          if (ex.phone && !p.phone) p.phone = ex.phone;
-          if (ex.linkedin && !p.linkedin) p.linkedin = ex.linkedin;
-          if (ex.industry && !p.industry) p.industry = ex.industry;
-          if (ex.city && !p.city) p.city = ex.city;
-          sourcesById[p.id] = [...(sourcesById[p.id] ?? []), "claude"];
-        }),
-      );
-    }
-    // Drop low-confidence ghosts (no person, no email, no phone) after AI pass
-    people = people.filter((p) => p.company && (p.name || p.email || p.phone));
-  }
+  // Owner/email extraction happens once, in /api/enrich (cached, tiered crawl),
+  // right after discovery — not here. "Read each website" controls that pass.
 
   const bits: string[] = [];
   if (sources.apollo)
@@ -1361,7 +1422,7 @@ export async function discoverLeads(
         : `Local: ${googleRes.reason ?? "off"}`,
     );
   }
-  if (sources.claude) bits.push("Claude: enriched");
+  if (apifyNote) bits.push(apifyNote);
   const message = `${people.length} unique business(es) after merge. ${bits.join(" · ")}${
     skippedDenied ? ` · ${skippedDenied} skipped (denied)` : ""
   }`;

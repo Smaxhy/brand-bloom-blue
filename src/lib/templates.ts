@@ -59,6 +59,9 @@ export function renderStep(input: {
     website: lead.website || lead.domain || "",
     sender_name: mailbox.display_name,
     sender_company: settings.company_name,
+    // From the AI assessment of their website (empty when unknown — use {{pitch|…}} fallbacks).
+    pitch: lead.signals?.ai?.pitch || "",
+    gap: lead.signals?.ai?.gap || "",
   };
 
   // Follow-ups with a blank subject reply in-thread: "Re: <first subject>".

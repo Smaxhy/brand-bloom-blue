@@ -1,3 +1,4 @@
+import { fetchPublicSite } from '../public-site-fetch';
 /**
  * Free enrichment — everything we can learn about a business without paying
  * anyone, from its own website:
@@ -14,8 +15,6 @@
  * Nothing here costs money. Claude (a fraction of a cent per site) only runs
  * afterwards, on the text we already fetched, to pick the decision-maker.
  */
-
-import { fetchPublicSite } from '../public-site-fetch';
 
 export interface FreeEnrichResult {
   ok: boolean;
@@ -105,6 +104,8 @@ export interface ScoreInput {
   mx: boolean | null;
   phone: string;
   signals?: Partial<SiteSignals> | null;
+  /** AI marketing-need rating 0–100; when present it replaces the heuristic "room to improve". */
+  aiNeed?: number | null;
 }
 
 /**
@@ -143,6 +144,11 @@ export function scoreLead(i: ScoreInput): { score: number; reasons: string[] } {
 
   // Room to improve = reason to buy (max 30)
   const g = i.signals ?? {};
+  if (typeof i.aiNeed === "number") {
+    add(Math.round(i.aiNeed * 0.3), `needs marketing help ${i.aiNeed}/100 (AI)`);
+    const score0 = Math.max(0, Math.min(100, Math.round(s)));
+    return { score: score0, reasons: why };
+  }
   if (i.website && !g.metaPixel && !g.googleAds) add(10, "no ad tracking (not running ads)");
   else if (g.metaPixel || g.googleAds) add(4, "already advertising (has budget)");
   if (i.website && !g.booking) add(5, "no online booking");
@@ -218,9 +224,9 @@ async function fetchPage(
 ): Promise<{ html: string; finalUrl: string } | null> {
   try {
     return await fetchPublicSite(url, timeoutMs, {
-        "User-Agent": UA,
-        Accept: "text/html,application/xhtml+xml,*/*;q=0.8",
-        "Accept-Language": "en",
+      "User-Agent": UA,
+      Accept: "text/html,application/xhtml+xml,*/*;q=0.8",
+      "Accept-Language": "en",
     });
   } catch {
     return null;

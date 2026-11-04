@@ -344,6 +344,7 @@ export interface EnrollInput {
   rawId?: string;
   score?: number;
   scoreReasons?: string[];
+  ai?: { need: number; reasons: string[]; pitch: string; gap: string; siteQuality?: string } | null;
 }
 export async function enrollLeads(
   sequenceId: string,

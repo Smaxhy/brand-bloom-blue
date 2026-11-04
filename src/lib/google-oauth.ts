@@ -60,9 +60,16 @@ export async function readState(e: Env, state: string): Promise<{ userId: string
   return { userId };
 }
 
-export function redirectUri(request: Request): string {
-  const u = new URL(request.url);
-  return `${u.origin}/api/google/oauth/callback`;
+/**
+ * Must match an "Authorised redirect URI" on the Google OAuth client exactly.
+ * When PUBLIC_ORIGIN is set we always use it, so the registered URI is one
+ * stable value no matter which URL the admin was opened from (custom domain,
+ * Lovable preview, localhost).
+ */
+export function redirectUri(request: Request, e?: Env): string {
+  const fixed = e ? env(e, "PUBLIC_ORIGIN") : undefined;
+  const origin = (fixed || "").replace(/\/$/, "") || new URL(request.url).origin;
+  return `${origin}/api/google/oauth/callback`;
 }
 
 export function consentUrl(e: Env, request: Request, state: string): string | null {
@@ -70,7 +77,7 @@ export function consentUrl(e: Env, request: Request, state: string): string | nu
   if (!clientId) return null;
   const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   u.searchParams.set("client_id", clientId);
-  u.searchParams.set("redirect_uri", redirectUri(request));
+  u.searchParams.set("redirect_uri", redirectUri(request, e));
   u.searchParams.set("response_type", "code");
   u.searchParams.set("scope", GMAIL_SCOPES);
   u.searchParams.set("access_type", "offline");
@@ -98,7 +105,7 @@ export async function exchangeCode(e: Env, request: Request, code: string): Prom
       code,
       client_id: env(e, "GOOGLE_OAUTH_CLIENT_ID") || "",
       client_secret: env(e, "GOOGLE_OAUTH_CLIENT_SECRET") || "",
-      redirect_uri: redirectUri(request),
+      redirect_uri: redirectUri(request, e),
       grant_type: "authorization_code",
     }),
   });

@@ -78,20 +78,38 @@ export async function handleOutreachRoute(
 /* ------------------------------------------------------------ reply send */
 async function sendReply(request: Request, e: Env): Promise<Response> {
   if (request.method !== "POST") return json({ error: "POST only" }, 405);
-  if (!Db.available(e)) return json({ ok: false, error: "SUPABASE_SERVICE_ROLE_KEY missing on the server." }, 500);
+  if (!Db.available(e))
+    return json({ ok: false, error: "SUPABASE_SERVICE_ROLE_KEY missing on the server." }, 500);
   const body = (await request.json().catch(() => ({}))) as { messageId?: string; text?: string };
-  if (!body.messageId || !body.text?.trim()) return json({ ok: false, error: "messageId and text are required" }, 400);
+  if (!body.messageId || !body.text?.trim())
+    return json({ ok: false, error: "messageId and text are required" }, 400);
   const db = new Db(e);
-  const msg = await db.one<{ id: string; enrollment_id: string | null; lead_id: string | null; mailbox_id: string | null; gmail_thread_id: string | null; rfc_message_id: string | null; subject: string; from_header: string | null }>(
-    "messages",
-    `id=eq.${enc(body.messageId)}&direction=eq.in&select=*`,
-  );
+  const msg = await db.one<{
+    id: string;
+    enrollment_id: string | null;
+    lead_id: string | null;
+    mailbox_id: string | null;
+    gmail_thread_id: string | null;
+    rfc_message_id: string | null;
+    subject: string;
+    from_header: string | null;
+  }>("messages", `id=eq.${enc(body.messageId)}&direction=eq.in&select=*`);
   if (!msg || !msg.mailbox_id) return json({ ok: false, error: "reply not found" }, 404);
   const mb = await db.one<Mailbox>("mailboxes", `id=eq.${msg.mailbox_id}&select=*`);
   const lead = msg.lead_id ? await db.one<Lead>("leads", `id=eq.${msg.lead_id}&select=*`) : null;
-  const toEmail = lead?.email || (msg.from_header || "").match(/<([^>]+)>/)?.[1] || msg.from_header || "";
+  const toEmail =
+    lead?.email || (msg.from_header || "").match(/<([^>]+)>/)?.[1] || msg.from_header || "";
   if (!mb || !toEmail) return json({ ok: false, error: "no mailbox or recipient" }, 400);
-  const settings = (await db.one<OutreachSettings>("outreach_settings", "id=eq.singleton&select=*")) ?? { company_name: "Inspirova Marketing", postal_address: "", website: "", eu_notice: "", us_notice: "" };
+  const settings = (await db.one<OutreachSettings>(
+    "outreach_settings",
+    "id=eq.singleton&select=*",
+  )) ?? {
+    company_name: "Inspirova Marketing",
+    postal_address: "",
+    website: "",
+    eu_notice: "",
+    us_notice: "",
+  };
   const text = `${body.text.trim()}${mb.signature ? `\n\n${mb.signature}` : ""}`;
   const html = `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1f2328;max-width:620px">${text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>")}</div>`;
   const subject = /^re:/i.test(msg.subject) ? msg.subject : `Re: ${msg.subject}`;
@@ -99,10 +117,29 @@ async function sendReply(request: Request, e: Env): Promise<Response> {
     const token = await accessTokenFor(e, db, mb.id);
     const sent = await gmailSend(
       token,
-      { from: { name: mb.display_name || settings.company_name, email: mb.email }, to: { name: lead?.contact_name || "", email: toEmail }, subject, text, html, threadId: msg.gmail_thread_id || undefined, inReplyTo: msg.rfc_message_id || undefined },
+      {
+        from: { name: mb.display_name || settings.company_name, email: mb.email },
+        to: { name: lead?.contact_name || "", email: toEmail },
+        subject,
+        text,
+        html,
+        threadId: msg.gmail_thread_id || undefined,
+        inReplyTo: msg.rfc_message_id || undefined,
+      },
       newMessageId(mb.email.split("@")[1] || "localhost"),
     );
-    await db.insert("messages", { enrollment_id: msg.enrollment_id, lead_id: msg.lead_id, mailbox_id: mb.id, direction: "out", gmail_message_id: sent.id, gmail_thread_id: sent.threadId, subject, snippet: body.text.slice(0, 160), kind: "reply", status: "sent" });
+    await db.insert("messages", {
+      enrollment_id: msg.enrollment_id,
+      lead_id: msg.lead_id,
+      mailbox_id: mb.id,
+      direction: "out",
+      gmail_message_id: sent.id,
+      gmail_thread_id: sent.threadId,
+      subject,
+      snippet: body.text.slice(0, 160),
+      kind: "reply",
+      status: "sent",
+    });
     await db.update("messages", `id=eq.${msg.id}`, { handled_at: new Date().toISOString() });
     return json({ ok: true, id: sent.id });
   } catch (ex) {
@@ -113,15 +150,23 @@ async function sendReply(request: Request, e: Env): Promise<Response> {
 /* ------------------------------------------------------- run saved search */
 async function runSearchNow(request: Request, e: Env): Promise<Response> {
   if (request.method !== "POST") return json({ error: "POST only" }, 405);
-  if (!Db.available(e)) return json({ ok: false, error: "SUPABASE_SERVICE_ROLE_KEY missing on the server." }, 500);
+  if (!Db.available(e))
+    return json({ ok: false, error: "SUPABASE_SERVICE_ROLE_KEY missing on the server." }, 500);
   const body = (await request.json().catch(() => ({}))) as { id?: string };
   if (!body.id) return json({ ok: false, error: "id required" }, 400);
   const db = new Db(e);
   const ss = await db.one<SavedSearch>("saved_searches", `id=eq.${enc(body.id)}&select=*`);
   if (!ss) return json({ ok: false, error: "saved search not found" }, 404);
   const result = await runSavedSearch(e, db, ss);
-  const next = ss.schedule === "off" ? null : new Date(Date.now() + (ss.schedule === "daily" ? 1 : 7) * 86_400_000).toISOString();
-  await db.update("saved_searches", `id=eq.${ss.id}`, { last_run_at: result.ran_at, last_result: result, next_run_at: next });
+  const next =
+    ss.schedule === "off"
+      ? null
+      : new Date(Date.now() + (ss.schedule === "daily" ? 1 : 7) * 86_400_000).toISOString();
+  await db.update("saved_searches", `id=eq.${ss.id}`, {
+    last_run_at: result.ran_at,
+    last_result: result,
+    next_run_at: next,
+  });
   return json({ ok: true, result });
 }
 
@@ -133,6 +178,7 @@ async function status(e: Env): Promise<Response> {
     cronSecret: !!env(e, "CRON_SECRET"),
     places: !!env(e, "GOOGLE_PLACES_API_KEY"),
     serper: !!env(e, "SERPER_API_KEY"),
+    apify: !!env(e, "APIFY_TOKEN"),
     anthropic: !!env(e, "ANTHROPIC_API_KEY"),
     reoon: !!env(e, "REOON_API_KEY"),
     apollo: !!env(e, "APOLLO_API_KEY"),
@@ -304,10 +350,14 @@ interface EnrollLead {
   rawId?: string;
   score?: number;
   scoreReasons?: string[];
+  ai?: { need: number; reasons: string[]; pitch: string; gap: string; siteQuality?: string } | null;
 }
 
 /** Single-address verification: Reoon when configured, else MX only. */
-async function verifyOne(e: Env, email: string): Promise<"valid" | "invalid" | "risky" | "mx_ok" | "unknown"> {
+async function verifyOne(
+  e: Env,
+  email: string,
+): Promise<"valid" | "invalid" | "risky" | "mx_ok" | "unknown"> {
   const key = env(e, "REOON_API_KEY");
   const domain = email.split("@")[1] || "";
   if (key) {
@@ -396,7 +446,10 @@ async function enroll(request: Request, e: Env, user: ApiUser): Promise<Response
     if (l.emailGuessed) {
       verified = await verifyOne(e, email);
       if (verified === "invalid") {
-        result.skipped.push({ email, reason: env(e, "REOON_API_KEY") ? "verifier says invalid" : "domain has no mail server" });
+        result.skipped.push({
+          email,
+          reason: env(e, "REOON_API_KEY") ? "verifier says invalid" : "domain has no mail server",
+        });
         continue;
       }
     }
@@ -422,6 +475,7 @@ async function enroll(request: Request, e: Env, user: ApiUser): Promise<Response
         status: "accepted",
         score: l.score ?? 0,
         score_reasons: l.scoreReasons ?? [],
+        signals: l.ai ? { ai: l.ai } : {},
         created_by: user.id,
       },
       "email",
