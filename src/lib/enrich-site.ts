@@ -58,7 +58,18 @@ export interface SiteProfile {
   emailPage: string;
   names: { name: string; title: string }[];
   /** AI marketing-need rating (0–100), reasons, pitch angle. Null when no ANTHROPIC_API_KEY. */
-  ai: { need: number; reasons: string[]; pitch: string; gap: string; siteQuality: string } | null;
+  ai: {
+    need: number;
+    reasons: string[];
+    pitch: string;
+    gap: string;
+    siteQuality: string;
+    teamSize?: string;
+    revenueBand?: string;
+    locations?: number;
+    sizeConfidence?: string;
+    title?: string;
+  } | null;
   cached: boolean;
   ms: number;
 }
@@ -128,6 +139,13 @@ export interface AiAssessment {
   /** The single most visible gap, in 2–6 words, for {{gap}} in templates. */
   gap: string;
   siteQuality: "none" | "poor" | "dated" | "ok" | "strong";
+  /** Estimated headcount band from the website (team page, locations, careers, fleet…). */
+  teamSize: "1-10" | "11-50" | "51-200" | "200+" | "unknown";
+  /** Estimated annual revenue band (USD), from size, industry and footprint. */
+  revenueBand: "<250k" | "250k-1M" | "1M-5M" | "5M-25M" | "25M+" | "unknown";
+  /** How many physical locations/offices the site mentions (0 = unknown). */
+  locations: number;
+  sizeConfidence: "low" | "medium" | "high";
 }
 
 function signalsSummary(
@@ -184,9 +202,13 @@ Return ONLY a JSON object:
   "reasons": ["", "", ""],// 2-4 short concrete observations that justify the number, e.g. "No online booking", "Copyright 2018", "Only 12 reviews", "Wix template"
   "pitch": "",            // ONE sentence, plain, specific to THIS business, that could open a cold email. Name a concrete gap and the outcome. No hype, no exclamation marks. Max 25 words.
   "gap": "",              // the single biggest gap in 2-6 words, e.g. "no online booking", "no Google Ads"
-  "siteQuality": "ok"     // one of: none | poor | dated | ok | strong
+  "siteQuality": "ok",    // one of: none | poor | dated | ok | strong
+  "teamSize": "unknown",  // estimated headcount: "1-10" | "11-50" | "51-200" | "200+" | "unknown". Evidence: team/leadership page headcount, number of offices or locations, fleet size, careers page, "X employees", years in business, breadth of services.
+  "revenueBand": "unknown", // estimated annual revenue in USD: "<250k" | "250k-1M" | "1M-5M" | "5M-25M" | "25M+" | "unknown". Derive from teamSize, industry norms and footprint; a 30-person HVAC company is 1M-5M, a 3-person studio is <250k.
+  "locations": 0,         // number of physical locations/offices mentioned, 0 if unknown
+  "sizeConfidence": "low" // low | medium | high — how much evidence supported teamSize
 }
-Never invent names or emails. Judge need from evidence in the text and signals only.`;
+Never invent names or emails. Judge need from evidence in the text and signals only. Size and revenue are ESTIMATES — mark sizeConfidence honestly.`;
   const user = `Company: ${input.company}
 Industry: ${input.industry || "unknown"}
 City: ${input.city || "unknown"}
@@ -222,6 +244,15 @@ ${(input.text || "").slice(0, 9000)}
     const q = ["none", "poor", "dated", "ok", "strong"].includes(String(j.siteQuality))
       ? (j.siteQuality as AiAssessment["siteQuality"])
       : "ok";
+    const ts = ["1-10", "11-50", "51-200", "200+"].includes(String(j.teamSize))
+      ? (j.teamSize as AiAssessment["teamSize"])
+      : "unknown";
+    const rb = ["<250k", "250k-1M", "1M-5M", "5M-25M", "25M+"].includes(String(j.revenueBand))
+      ? (j.revenueBand as AiAssessment["revenueBand"])
+      : "unknown";
+    const sc = ["low", "medium", "high"].includes(String(j.sizeConfidence))
+      ? (j.sizeConfidence as AiAssessment["sizeConfidence"])
+      : "low";
     return {
       ownerName: String(j.ownerName || "").trim(),
       ownerTitle: String(j.ownerTitle || "").trim(),
@@ -240,6 +271,10 @@ ${(input.text || "").slice(0, 9000)}
         .trim()
         .slice(0, 60),
       siteQuality: q,
+      teamSize: ts,
+      revenueBand: rb,
+      locations: Math.max(0, Math.min(999, Math.round(Number(j.locations) || 0))),
+      sizeConfidence: sc,
     };
   } catch {
     return null;
@@ -352,6 +387,11 @@ export async function enrichSite(env: Env, o: EnrichSiteOpts): Promise<SiteProfi
         pitch: ex.pitch,
         gap: ex.gap,
         siteQuality: ex.siteQuality,
+        teamSize: ex.teamSize,
+        revenueBand: ex.revenueBand,
+        locations: ex.locations,
+        sizeConfidence: ex.sizeConfidence,
+        title: ex.ownerTitle || title,
       };
     }
   }

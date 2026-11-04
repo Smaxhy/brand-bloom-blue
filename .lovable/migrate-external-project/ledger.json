@@ -1,17 +1,17 @@
 {
-  "source_archive": "inspirova-admin-engine_4.zip",
+  "source_archive": "inspirova-admin-engine_5.zip",
   "capabilities": [
     {
       "capability": "code",
       "source": "admin-engine_4 ZIP",
-      "outcome": "Apply stationary admin hover fix; retain secure credential entry, saved credential resolution, and public website fetch protection instead of archive regressions; all other admin source matches",
+      "outcome": "Applied universal lead filters (radius, rating, reviews, seniority, AI-estimated team size and revenue) across scraper, saved searches and AI assessment; retained secure credential entry, saved credential resolution, and public website fetch protection instead of archive regressions to server.ts, SettingsView.tsx and free-enrich.ts",
       "status": "verified",
       "next_action": null
     },
     {
       "capability": "schema",
       "source": "existing Lovable Cloud and archived SQL migrations",
-      "outcome": "Added server-only site_cache; verified RLS enabled, browser and anonymous access denied, server grants present",
+      "outcome": "Added server-only site_cache and saved_searches.filters column; verified RLS enabled, browser and anonymous access denied, server grants present",
       "status": "verified",
       "next_action": null
     },
@@ -81,7 +81,7 @@
     {
       "capability": "verification",
       "source": "signed-in running preview",
-      "outcome": "Signed-in Settings verified stationary button/panel hover; Google and GoHighLevel connection controls and eight secure credential controls retained; credential form opened/cancelled without saving; no runtime errors; build OK; seven safety/credential tests passed",
+      "outcome": "Signed-in Data Scraper verified new universal filters (title, team size, revenue, distance, rating, reviews) and hidden-by-filters toggle; Settings retained secure credential entry and Google/GoHighLevel connect controls; no runtime errors; build OK; seven safety/credential tests passed",
       "status": "verified",
       "next_action": "User must complete Google consent; live scraping, mailbox send and scheduled dispatch remain unverified"
     }

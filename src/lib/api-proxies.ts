@@ -1057,6 +1057,41 @@ export interface DiscoverFilters {
   bbox?: [number, number, number, number];
   /** Run Apify synchronously inside discoverCore (cron). The browser polls instead. */
   apifyWait?: boolean;
+  /** Universal filters, applied to every source before results are returned. */
+  radiusKm?: number; // keep businesses within this distance of lat/lng
+  minRating?: number; // e.g. 4.0
+  minReviews?: number; // e.g. 10
+  maxReviews?: number; // e.g. 500 — a cheap way to exclude chains
+}
+
+function distanceKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const R = 6371;
+  const dLat = ((bLat - aLat) * Math.PI) / 180;
+  const dLng = ((bLng - aLng) * Math.PI) / 180;
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((aLat * Math.PI) / 180) * Math.cos((bLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+
+/** Universal post-filters. Rows with unknown rating/reviews/coords are kept (we can't judge them). */
+function applyUniversalFilters<
+  T extends { rating?: number; reviews?: number; lat?: number; lng?: number },
+>(list: T[], f: DiscoverFilters): { kept: T[]; dropped: number } {
+  let dropped = 0;
+  const kept = list.filter((b) => {
+    if (f.radiusKm && f.lat != null && f.lng != null && b.lat != null && b.lng != null) {
+      if (distanceKm(f.lat, f.lng, b.lat, b.lng) > f.radiusKm) return (dropped++, false);
+    }
+    if (f.minRating && typeof b.rating === "number" && b.rating < f.minRating)
+      return (dropped++, false);
+    if (f.minReviews && typeof b.reviews === "number" && b.reviews < f.minReviews)
+      return (dropped++, false);
+    if (f.maxReviews && typeof b.reviews === "number" && b.reviews > f.maxReviews)
+      return (dropped++, false);
+    return true;
+  });
+  return { kept, dropped };
 }
 
 async function apifyStartRoute(request: Request, env: Env): Promise<Response> {
@@ -1305,7 +1340,9 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
     }
   }
 
-  const businesses = Array.from(byKey.values()).slice(0, wanted);
+  const filtered = applyUniversalFilters(Array.from(byKey.values()), f);
+  if (filtered.dropped) errors.push(`${filtered.dropped} filtered out (radius / rating / reviews)`);
+  const businesses = filtered.kept.slice(0, wanted);
   const available = {
     places: !!placesKey,
     serper: !!serperKey,
@@ -1393,6 +1430,8 @@ interface DiscoveredBusiness {
   industry: string;
   rating?: number;
   reviews?: number;
+  lat?: number;
+  lng?: number;
   source: "Google Maps" | "Google";
 }
 

@@ -470,6 +470,7 @@ export type Database = {
           auto_enroll_sequence_id: string | null
           created_at: string
           created_by: string | null
+          filters: Json
           geo: Json | null
           id: string
           industry: string
@@ -489,6 +490,7 @@ export type Database = {
           auto_enroll_sequence_id?: string | null
           created_at?: string
           created_by?: string | null
+          filters?: Json
           geo?: Json | null
           id?: string
           industry?: string
@@ -508,6 +510,7 @@ export type Database = {
           auto_enroll_sequence_id?: string | null
           created_at?: string
           created_by?: string | null
+          filters?: Json
           geo?: Json | null
           id?: string
           industry?: string

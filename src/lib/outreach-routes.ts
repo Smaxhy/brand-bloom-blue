@@ -3,6 +3,7 @@
  * Server routes for the outreach engine (mailboxes, enrolling, sending).
  */
 
+import type { LeadAi } from "@/lib/lead-filters";
 import { Db, enc } from "./db";
 import type { ApiUser } from "./api-auth";
 import { makeState, readState, consentUrl, exchangeCode, userEmail } from "./google-oauth";
@@ -398,7 +399,7 @@ interface EnrollLead {
   rawId?: string;
   score?: number;
   scoreReasons?: string[];
-  ai?: { need: number; reasons: string[]; pitch: string; gap: string; siteQuality?: string } | null;
+  ai?: LeadAi | null;
 }
 
 /** Single-address verification: Reoon when configured, else MX only. */
