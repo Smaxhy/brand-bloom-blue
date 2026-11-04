@@ -1,12 +1,12 @@
 {
-  "source_archive": "inspirova-admin-engine-2.zip",
+  "source_archive": "inspirova-admin-engine_4.zip",
   "capabilities": [
     {
       "capability": "code",
-      "source": "admin-engine-2 ZIP",
-      "outcome": "Applied new crawler concurrency/cache changes; retained secure Settings credential entry and server resolver; public homepage unchanged",
-      "status": "verified",
-      "next_action": null
+      "source": "admin-engine_4 ZIP",
+      "outcome": "Apply stationary admin hover fix; retain secure credential entry, saved credential resolution, and public website fetch protection instead of archive regressions; all other admin source matches",
+      "status": "verification_pending",
+      "next_action": "Verify stationary hover behavior and existing Settings controls in signed-in preview"
     },
     {
       "capability": "schema",
