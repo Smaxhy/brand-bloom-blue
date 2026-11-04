@@ -183,6 +183,16 @@ export function isAutoReply(m: GmailHeaderMsg): boolean {
   );
 }
 
+/** Same test as isAutoReply, for channels that only give us subject + body. */
+export function isAutoReplyText(subject: string, body: string): boolean {
+  return (
+    /out of office|automatic reply|auto-reply|autoreply|away from/i.test(subject) ||
+    /^(thank you for your (e-?mail|message)|i am (currently )?out of (the )?office|i'm (currently )?out of (the )?office)/i.test(
+      body.trim(),
+    )
+  );
+}
+
 export function wantsToStop(text: string): boolean {
   return /\b(unsubscribe|remove me|stop (emailing|contacting)|take me off|not interested|opt out|opt-out|do not (email|contact))\b/i.test(
     text,
@@ -194,9 +204,12 @@ export async function gmailGetFull(
   accessToken: string,
   id: string,
 ): Promise<(GmailHeaderMsg & { messageIdHeader: string; text: string }) | null> {
-  const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const res = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
   if (!res.ok) return null;
   type Part = { mimeType?: string; body?: { data?: string }; parts?: Part[] };
   const j = (await res.json()) as {
@@ -207,7 +220,8 @@ export async function gmailGetFull(
     labelIds?: string[];
     payload?: Part & { headers?: { name: string; value: string }[] };
   };
-  const get = (n: string) => j.payload?.headers?.find((h) => h.name.toLowerCase() === n.toLowerCase())?.value ?? "";
+  const get = (n: string) =>
+    j.payload?.headers?.find((h) => h.name.toLowerCase() === n.toLowerCase())?.value ?? "";
   const decode = (b64: string) => {
     try {
       const bin = atob(b64.replace(/-/g, "+").replace(/_/g, "/"));
@@ -226,7 +240,13 @@ export async function gmailGetFull(
     p.parts?.forEach(walk);
   };
   walk(j.payload);
-  let text = plain || html.replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ");
+  let text =
+    plain ||
+    html
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/\s+/g, " ");
   // Trim quoted history ("On … wrote:", "> ")
   text = text.split(/\r?\n(?:On .{0,120}wrote:|-----Original Message-----|From: )/)[0];
   text = text
