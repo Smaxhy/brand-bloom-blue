@@ -226,6 +226,9 @@ export type Database = {
         Row: {
           access_token: string | null
           expires_at: string | null
+          ghl_api_key: string | null
+          ghl_company_id: string | null
+          ghl_location_id: string | null
           mailbox_id: string
           refresh_token: string
           scope: string | null
@@ -234,14 +237,20 @@ export type Database = {
         Insert: {
           access_token?: string | null
           expires_at?: string | null
+          ghl_api_key?: string | null
+          ghl_company_id?: string | null
+          ghl_location_id?: string | null
           mailbox_id: string
-          refresh_token: string
+          refresh_token?: string
           scope?: string | null
           updated_at?: string
         }
         Update: {
           access_token?: string | null
           expires_at?: string | null
+          ghl_api_key?: string | null
+          ghl_company_id?: string | null
+          ghl_location_id?: string | null
           mailbox_id?: string
           refresh_token?: string
           scope?: string | null
