@@ -1,3 +1,4 @@
+import type { LeadAi } from "@/lib/lead-filters";
 /** Inspirova Admin — per-account Lovable Cloud data layer. */
 
 /* ----------------------------------------------------------------------- */
@@ -44,7 +45,7 @@ export interface RawBusiness {
   reviews?: number;
   score?: number; // 0–100 lead score
   scoreWhy?: string[];
-  ai?: { need: number; reasons: string[]; pitch: string; gap: string; siteQuality?: string } | null;
+  ai?: LeadAi | null;
 }
 
 export interface Client {
@@ -115,13 +116,7 @@ export interface ScraperState {
     {
       score: number;
       why: string[];
-      ai?: {
-        need: number;
-        reasons: string[];
-        pitch: string;
-        gap: string;
-        siteQuality?: string;
-      } | null;
+      ai?: LeadAi | null;
     }
   >;
   updatedAt: number;
@@ -319,13 +314,7 @@ function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData
             {
               score: number;
               why: string[];
-              ai?: {
-                need: number;
-                reasons: string[];
-                pitch: string;
-                gap: string;
-                siteQuality?: string;
-              } | null;
+              ai?: LeadAi | null;
             }
           >,
           updatedAt: Number((scraper as Partial<ScraperState>).updatedAt ?? Date.now()),
@@ -699,6 +688,13 @@ export interface ScrapeFilters {
   locationScope?: "person" | "company" | "both"; // match person location, company HQ, or both
   requireEmail?: boolean; // only keep contacts Apollo has an email for
   requirePhone?: boolean; // only keep contacts with a direct phone
+  // Universal filters (every source)
+  radiusKm?: number; // 0 = any
+  minRating?: number; // 0 = any
+  minReviews?: number; // 0 = any
+  maxReviews?: number; // 0 = any
+  teamSizes?: string[]; // AI-estimated bands: "1-10" | "11-50" | "51-200" | "200+"
+  revenueBands?: string[]; // AI-estimated: "<250k" | "250k-1M" | "1M-5M" | "5M-25M" | "25M+"
 }
 
 export interface ScrapedPerson {
@@ -909,7 +905,7 @@ export interface EnrichResult {
   guessed?: boolean; // pattern guess, not a published address
   score?: number;
   scoreReasons?: string[];
-  ai?: { need: number; reasons: string[]; pitch: string; gap: string; siteQuality?: string } | null;
+  ai?: LeadAi | null;
 }
 
 /**
@@ -1112,6 +1108,10 @@ export async function businessDiscovery(filters: {
   perPage: number;
   providers: DiscoverProvider[];
   geo?: GeocodeResult | null;
+  radiusKm?: number;
+  minRating?: number;
+  minReviews?: number;
+  maxReviews?: number;
 }): Promise<{
   live: boolean;
   businesses: DiscoveredBusiness[];
@@ -1132,6 +1132,10 @@ export async function businessDiscovery(filters: {
         lat: filters.geo?.lat,
         lng: filters.geo?.lng,
         bbox: filters.geo?.bbox,
+        radiusKm: filters.radiusKm || undefined,
+        minRating: filters.minRating || undefined,
+        minReviews: filters.minReviews || undefined,
+        maxReviews: filters.maxReviews || undefined,
       }),
     });
     if (res.status === 401) return { live: false, businesses: [], reason: "Not signed in" };
@@ -1280,6 +1284,10 @@ export async function discoverLeads(
           location: filters.location,
           industry: filters.industry,
           perPage: wanted,
+          radiusKm: filters.radiusKm,
+          minRating: filters.minRating,
+          minReviews: filters.minReviews,
+          maxReviews: filters.maxReviews,
           providers: [
             ...(sources.google ? (["places", "serper", "serpapi"] as DiscoverProvider[]) : []),
             ...(sources.osm ? (["osm"] as DiscoverProvider[]) : []),

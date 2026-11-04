@@ -99,6 +99,15 @@ export function SaveSearchModal({
         geo: geo ? { lat: geo.lat, lng: geo.lng, bbox: geo.bbox } : null,
         region,
         min_score: minScore,
+        filters: {
+          radiusKm: filters.radiusKm || undefined,
+          minRating: filters.minRating || undefined,
+          minReviews: filters.minReviews || undefined,
+          maxReviews: filters.maxReviews || undefined,
+          seniorities: filters.seniorities?.length ? filters.seniorities : undefined,
+          teamSizes: filters.teamSizes?.length ? filters.teamSizes : undefined,
+          revenueBands: filters.revenueBands?.length ? filters.revenueBands : undefined,
+        },
         auto_enroll_sequence_id: seqId || null,
         schedule,
       });
@@ -157,6 +166,22 @@ export function SaveSearchModal({
             </select>
           </Field>
         </div>
+        {(() => {
+          const parts: string[] = [];
+          if (filters.radiusKm) parts.push(`within ${filters.radiusKm} km`);
+          if (filters.minRating) parts.push(`${filters.minRating}★+`);
+          if (filters.minReviews) parts.push(`${filters.minReviews}+ reviews`);
+          if (filters.maxReviews) parts.push(`under ${filters.maxReviews} reviews`);
+          if (filters.seniorities?.length) parts.push(`title: ${filters.seniorities.join("/")}`);
+          if (filters.teamSizes?.length) parts.push(`team ${filters.teamSizes.join(", ")}`);
+          if (filters.revenueBands?.length)
+            parts.push(`revenue ${filters.revenueBands.join(", ")}`);
+          return parts.length ? (
+            <p className="rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">
+              Filters saved with this search: {parts.join(" · ")}
+            </p>
+          ) : null;
+        })()}
         <Field label={`Auto-enrol leads scoring at least ${minScore}`}>
           <input
             type="range"

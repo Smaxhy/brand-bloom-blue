@@ -4,6 +4,7 @@
  * anything that needs secrets (OAuth, sending, enrolling, cron) goes through
  * the Worker via authFetch.
  */
+import type { LeadAi } from "@/lib/lead-filters";
 import { authFetch } from "./store";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -143,6 +144,15 @@ export interface SavedSearch {
   geo: { lat?: number; lng?: number; bbox?: [number, number, number, number] } | null;
   region: "US" | "EU";
   min_score: number;
+  filters?: {
+    radiusKm?: number;
+    minRating?: number;
+    minReviews?: number;
+    maxReviews?: number;
+    seniorities?: string[];
+    teamSizes?: string[];
+    revenueBands?: string[];
+  } | null;
   auto_enroll_sequence_id: string | null;
   schedule: "off" | "daily" | "weekly";
   next_run_at: string | null;
@@ -359,7 +369,7 @@ export interface EnrollInput {
   rawId?: string;
   score?: number;
   scoreReasons?: string[];
-  ai?: { need: number; reasons: string[]; pitch: string; gap: string; siteQuality?: string } | null;
+  ai?: LeadAi | null;
 }
 export async function enrollLeads(
   sequenceId: string,
@@ -491,6 +501,7 @@ export async function saveSavedSearch(s: Partial<SavedSearch> & { id?: string })
     geo: s.geo ?? null,
     region: s.region ?? "US",
     min_score: s.min_score ?? 40,
+    filters: s.filters ?? {},
     auto_enroll_sequence_id: s.auto_enroll_sequence_id ?? null,
     schedule: s.schedule ?? "weekly",
   };

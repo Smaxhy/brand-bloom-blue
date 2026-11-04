@@ -12,6 +12,7 @@ import { Db, enc } from "./db";
 import { discoverCore, type DiscoverFilters } from "./api-proxies";
 import { scoreLead } from "./providers/free-enrich";
 import { enrichSite, enrichMany } from "./enrich-site";
+import { leadFilterReason } from "./lead-filters";
 
 type Env = Record<string, string | undefined>;
 const secret = (e: Env, k: string) => e[k] || process.env?.[k];
@@ -26,6 +27,15 @@ export interface SavedSearch {
   geo: { lat?: number; lng?: number; bbox?: [number, number, number, number] } | null;
   region: "US" | "EU";
   min_score: number;
+  filters?: {
+    radiusKm?: number;
+    minRating?: number;
+    minReviews?: number;
+    maxReviews?: number;
+    seniorities?: string[];
+    teamSizes?: string[];
+    revenueBands?: string[];
+  } | null;
   auto_enroll_sequence_id: string | null;
   schedule: "off" | "daily" | "weekly";
   next_run_at: string | null;
@@ -80,6 +90,10 @@ export async function runSavedSearch(env: Env, db: Db, ss: SavedSearch): Promise
     lng: ss.geo?.lng,
     bbox: ss.geo?.bbox,
     apifyWait: true,
+    radiusKm: ss.filters?.radiusKm || undefined,
+    minRating: ss.filters?.minRating || undefined,
+    minReviews: ss.filters?.minReviews || undefined,
+    maxReviews: ss.filters?.maxReviews || undefined,
   };
   const disc = await discoverCore(filters, env);
   out.errors.push(...disc.errors);
@@ -222,7 +236,15 @@ export async function runSavedSearch(env: Env, db: Db, ss: SavedSearch): Promise
 
       if (out.sample.length < 8) out.sample.push({ company: b.company, email, score: sc.score });
 
-      if (seq && email && sc.score >= ss.min_score) {
+      const filteredOut = leadFilterReason(
+        { title, teamSize: prof?.ai?.teamSize, revenueBand: prof?.ai?.revenueBand },
+        {
+          seniorities: ss.filters?.seniorities,
+          teamSizes: ss.filters?.teamSizes,
+          revenueBands: ss.filters?.revenueBands,
+        },
+      );
+      if (seq && email && sc.score >= ss.min_score && !filteredOut) {
         const sup = await db.one(
           "suppressions",
           `or=(email.eq.${enc(email.toLowerCase())},domain.eq.${enc(website)})&select=id`,

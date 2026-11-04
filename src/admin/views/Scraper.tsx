@@ -1,3 +1,4 @@
+import type { LeadAi } from "@/lib/lead-filters";
 import { useState, useEffect, useRef, Fragment } from "react";
 import {
   Radar,
@@ -46,6 +47,7 @@ import {
 } from "../store";
 import { Panel, Field, inputCls, Btn } from "../ui";
 import { SavedSearchesPanel, SaveSearchModal } from "./SavedSearches";
+import { leadFilterReason, TEAM_SIZE_BANDS, REVENUE_BANDS } from "@/lib/lead-filters";
 
 const SIZE_PRESETS: { id: string; label: string }[] = [
   { id: "1,10", label: "1–10" },
@@ -352,13 +354,7 @@ export function Scraper({
       {
         score: number;
         why: string[];
-        ai?: {
-          need: number;
-          reasons: string[];
-          pitch: string;
-          gap: string;
-          siteQuality?: string;
-        } | null;
+        ai?: LeadAi | null;
       }
     >
   >(saved?.scores ?? {});
@@ -377,6 +373,7 @@ export function Scraper({
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [showHidden, setShowHidden] = useState(false);
   const [nicheDraft, setNicheDraft] = useState("");
 
   async function suggestKeywordsWithAI() {
@@ -566,13 +563,7 @@ export function Scraper({
         guessed: boolean;
         score?: number;
         scoreReasons?: string[];
-        ai?: {
-          need: number;
-          reasons: string[];
-          pitch: string;
-          gap: string;
-          siteQuality?: string;
-        } | null;
+        ai?: LeadAi | null;
       }
     > = {};
     // Batches of 8, three in flight at once: each batch is its own Worker
@@ -713,15 +704,25 @@ export function Scraper({
       setGeo(g);
       setGeoBusy(false);
     }
-    const res = await discoverLeads(filters, {
-      sources,
-      denylist,
-      geo: g,
-      onProgress: (phase, done, total) => {
-        if (phase === "ai") setAiProgress({ done, total });
-        if (phase === "apify") setApifySeconds(done);
+    const bandToApollo: Record<string, string> = {
+      "1-10": "1,10",
+      "11-50": "11,50",
+      "51-200": "51,200",
+      "200+": "201,1000000",
+    };
+    const apolloRanges = (filters.teamSizes ?? []).map((b) => bandToApollo[b]).filter(Boolean);
+    const res = await discoverLeads(
+      { ...filters, employeeRanges: apolloRanges },
+      {
+        sources,
+        denylist,
+        geo: g,
+        onProgress: (phase, done, total) => {
+          if (phase === "ai") setAiProgress({ done, total });
+          if (phase === "apify") setApifySeconds(done);
+        },
       },
-    });
+    );
     setResults(res.people);
     setDiscoverSources(res.sources);
     setSelected(Object.fromEntries(res.people.map((p) => [p.id, true])));
@@ -738,7 +739,31 @@ export function Scraper({
 
   const selectedPeople = results.filter((p) => selected[p.id]);
   const scoreOf = (p: ScrapedPerson) => scores[p.id]?.score ?? -1;
-  const ordered = sortByScore ? [...results].sort((a, b) => scoreOf(b) - scoreOf(a)) : results;
+  function toggleIn(key: "teamSizes" | "revenueBands", v: string) {
+    setFilters((f) => {
+      const cur = f[key] ?? [];
+      return { ...f, [key]: cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v] };
+    });
+  }
+  const filterSpec = {
+    seniorities: filters.seniorities,
+    teamSizes: filters.teamSizes,
+    revenueBands: filters.revenueBands,
+  };
+  const hiddenReason = (p: ScrapedPerson): string | null =>
+    leadFilterReason(
+      {
+        title: p.title || scores[p.id]?.ai?.title,
+        teamSize: scores[p.id]?.ai?.teamSize,
+        revenueBand: scores[p.id]?.ai?.revenueBand,
+      },
+      filterSpec,
+    );
+  const visibleResults = showHidden ? results : results.filter((p) => !hiddenReason(p));
+  const hiddenCount = results.length - results.filter((p) => !hiddenReason(p)).length;
+  const ordered = sortByScore
+    ? [...visibleResults].sort((a, b) => scoreOf(b) - scoreOf(a))
+    : visibleResults;
   const scoredCount = results.filter((p) => scores[p.id]).length;
 
   function selectTop(fraction: number) {
@@ -1163,66 +1188,124 @@ export function Scraper({
                 />
               </Field>
             </div>
-            <div className={`space-y-3 ${sources.apollo ? "" : "opacity-50"}`}>
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                Apollo filters
-                {!sources.apollo && (
-                  <span className="font-normal">— turn on the Apollo source to use these</span>
-                )}
+            <div className="space-y-3">
+              <div className="text-xs font-semibold text-muted-foreground">
+                Filters — every source{" "}
+                <span className="font-normal">
+                  (size and revenue are estimated from the website; rows we can't judge stay)
+                </span>
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {SENIORITIES.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => toggleSeniority(s.id)}
-                    className={pill(filters.seniorities.includes(s.id))}
-                    disabled={!sources.apollo}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {SIZE_PRESETS.map((sz) => (
-                  <button
-                    key={sz.id}
-                    onClick={() => toggleEmployeeRange(sz.id)}
-                    className={pill((filters.employeeRanges ?? []).includes(sz.id))}
-                    disabled={!sources.apollo}
-                  >
-                    {sz.label}
-                  </button>
-                ))}
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <select
-                  className={inputCls}
-                  value={filters.minRevenue ?? 0}
-                  disabled={!sources.apollo}
-                  onChange={(e) => setFilters({ ...filters, minRevenue: Number(e.target.value) })}
-                >
-                  {REVENUE_OPTS.map((r) => (
-                    <option key={r.v} value={r.v}>
-                      {r.label}
-                    </option>
+              <div>
+                <span className="mb-1 block text-[.7rem] text-muted-foreground">
+                  Decision-maker title
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {SENIORITIES.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => toggleSeniority(s.id)}
+                      className={pill(filters.seniorities.includes(s.id))}
+                    >
+                      {s.label}
+                    </button>
                   ))}
-                </select>
-                <select
-                  className={inputCls}
-                  value={filters.locationScope ?? "both"}
-                  disabled={!sources.apollo}
-                  onChange={(e) =>
-                    setFilters({
-                      ...filters,
-                      locationScope: e.target.value as "person" | "company" | "both",
-                    })
-                  }
-                >
-                  <option value="both">Person & company HQ</option>
-                  <option value="company">Company HQ only</option>
-                  <option value="person">Person's location only</option>
-                </select>
+                </div>
               </div>
+              <div>
+                <span className="mb-1 block text-[.7rem] text-muted-foreground">
+                  Team size (estimated)
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {TEAM_SIZE_BANDS.map((b) => (
+                    <button
+                      key={b}
+                      onClick={() => toggleIn("teamSizes", b)}
+                      className={pill((filters.teamSizes ?? []).includes(b))}
+                    >
+                      {b}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <span className="mb-1 block text-[.7rem] text-muted-foreground">
+                  Revenue (estimated, USD/yr)
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {REVENUE_BANDS.map((b) => (
+                    <button
+                      key={b}
+                      onClick={() => toggleIn("revenueBands", b)}
+                      className={pill((filters.revenueBands ?? []).includes(b))}
+                    >
+                      {b}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <Field label="Within">
+                  <select
+                    className={inputCls}
+                    value={filters.radiusKm ?? 0}
+                    onChange={(e) => setFilters({ ...filters, radiusKm: Number(e.target.value) })}
+                  >
+                    <option value={0}>Any distance</option>
+                    {[5, 10, 25, 50, 100].map((k) => (
+                      <option key={k} value={k}>
+                        {k} km
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Min rating">
+                  <select
+                    className={inputCls}
+                    value={filters.minRating ?? 0}
+                    onChange={(e) => setFilters({ ...filters, minRating: Number(e.target.value) })}
+                  >
+                    <option value={0}>Any</option>
+                    {[3, 3.5, 4, 4.5].map((r) => (
+                      <option key={r} value={r}>
+                        {r}★ +
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Min reviews">
+                  <select
+                    className={inputCls}
+                    value={filters.minReviews ?? 0}
+                    onChange={(e) => setFilters({ ...filters, minReviews: Number(e.target.value) })}
+                  >
+                    <option value={0}>Any</option>
+                    {[5, 10, 25, 50, 100].map((n) => (
+                      <option key={n} value={n}>
+                        {n}+
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Max reviews (skip chains)">
+                  <select
+                    className={inputCls}
+                    value={filters.maxReviews ?? 0}
+                    onChange={(e) => setFilters({ ...filters, maxReviews: Number(e.target.value) })}
+                  >
+                    <option value={0}>Any</option>
+                    {[100, 250, 500, 1000, 2500].map((n) => (
+                      <option key={n} value={n}>
+                        under {n}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+              {sources.apollo && (
+                <p className="text-[.7rem] text-muted-foreground">
+                  Apollo is on: title and size are also sent to Apollo as its own filters.
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -1266,6 +1349,20 @@ export function Scraper({
                     {results.length} businesses
                     <span className="ml-2 text-sm font-normal text-muted-foreground">
                       {withEmail} with email{avgScore !== null ? ` · avg score ${avgScore}` : ""}
+                      {hiddenCount > 0 && (
+                        <>
+                          {" · "}
+                          <button
+                            onClick={() => setShowHidden((v) => !v)}
+                            className="text-primary hover:underline"
+                            title="Rows whose title, estimated size or revenue contradict your filters"
+                          >
+                            {showHidden
+                              ? `showing ${hiddenCount} filtered`
+                              : `${hiddenCount} hidden by filters`}
+                          </button>
+                        </>
+                      )}
                     </span>
                   </div>
                   {scoredList.length > 0 && (
@@ -1551,6 +1648,23 @@ export function Scraper({
                                     {sc.ai.pitch && (
                                       <div className="mt-0.5 italic text-muted-foreground">
                                         “{sc.ai.pitch}”
+                                      </div>
+                                    )}
+                                    {(sc.ai.teamSize || sc.ai.revenueBand) && (
+                                      <div className="mt-1 text-muted-foreground">
+                                        Estimated: team {sc.ai.teamSize || "?"} · revenue{" "}
+                                        {sc.ai.revenueBand || "?"}
+                                        {sc.ai.locations
+                                          ? ` · ${sc.ai.locations} location${sc.ai.locations === 1 ? "" : "s"}`
+                                          : ""}
+                                        {sc.ai.sizeConfidence
+                                          ? ` (${sc.ai.sizeConfidence} confidence)`
+                                          : ""}
+                                      </div>
+                                    )}
+                                    {hiddenReason(p) && (
+                                      <div className="mt-1 text-[oklch(.5_.18_25)]">
+                                        Hidden by filters: {hiddenReason(p)}
                                       </div>
                                     )}
                                   </div>
