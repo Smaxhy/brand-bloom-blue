@@ -25,3 +25,7 @@
 - [x] Apply archive changes while retaining secure integration setup and existing data.
 - [x] Add restricted enrichment cache and verify Settings mailbox controls.
 - [x] Request publishing of verified update; Google consent completion, live provider/schedule checks and deployment completion remain unverified.
+
+# Updated admin fix
+- [x] Apply stationary button/panel hover fix from inspirova-admin-engine_4.zip while retaining secure settings, crawler protections, homepage and data.
+- [ ] Verify signed-in admin hover behavior and retained mailbox/key controls.

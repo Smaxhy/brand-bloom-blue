@@ -10,7 +10,7 @@ export function Panel({
 }) {
   return (
     <div
-      className={`rounded-2xl border border-border bg-card p-5 shadow-[0_18px_60px_-46px_var(--brand-ink)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_24px_60px_-38px_var(--brand-ink)] ${className}`}
+      className={`rounded-2xl border border-border bg-card p-5 shadow-[0_18px_60px_-46px_var(--brand-ink)] transition-all duration-200 hover:shadow-[0_24px_60px_-38px_var(--brand-ink)] ${className}`}
     >
       {children}
     </div>
@@ -142,7 +142,7 @@ export function Btn({
       onClick={onClick}
       disabled={disabled}
       aria-disabled={disabled}
-      className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none ${styles} ${className}`}
+      className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold transition-all duration-150 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none ${styles} ${className}`}
     >
       {children}
     </button>
