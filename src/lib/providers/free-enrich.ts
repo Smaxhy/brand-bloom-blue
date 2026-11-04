@@ -1,5 +1,5 @@
-/**
 import { fetchPublicSite } from '../public-site-fetch';
+/**
  * Free enrichment — everything we can learn about a business without paying
  * anyone, from its own website:
  *
