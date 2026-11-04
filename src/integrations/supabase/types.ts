@@ -421,7 +421,11 @@ export type Database = {
         Row: {
           company_name: string
           eu_notice: string
+          footer_style: string
           id: string
+          optout_line_eu: string
+          optout_line_us: string
+          plain_text: boolean
           postal_address: string
           updated_at: string
           us_notice: string
@@ -430,7 +434,11 @@ export type Database = {
         Insert: {
           company_name?: string
           eu_notice?: string
+          footer_style?: string
           id?: string
+          optout_line_eu?: string
+          optout_line_us?: string
+          plain_text?: boolean
           postal_address?: string
           updated_at?: string
           us_notice?: string
@@ -439,7 +447,11 @@ export type Database = {
         Update: {
           company_name?: string
           eu_notice?: string
+          footer_style?: string
           id?: string
+          optout_line_eu?: string
+          optout_line_us?: string
+          plain_text?: boolean
           postal_address?: string
           updated_at?: string
           us_notice?: string

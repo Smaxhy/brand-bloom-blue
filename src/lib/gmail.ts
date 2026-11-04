@@ -58,6 +58,17 @@ export function buildMime(m: OutgoingMail, messageId: string): string {
       "List-Unsubscribe-Post: List-Unsubscribe=One-Click",
     );
   }
+  if (!m.html) {
+    // Text-only: a single text/plain part, which is what a person's mail client sends.
+    lines.push(
+      "Content-Type: text/plain; charset=UTF-8",
+      "Content-Transfer-Encoding: 8bit",
+      "",
+      m.text,
+      "",
+    );
+    return lines.join("\r\n");
+  }
   lines.push(
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
     "",
@@ -194,8 +205,21 @@ export function isAutoReplyText(subject: string, body: string): boolean {
 }
 
 export function wantsToStop(text: string): boolean {
-  return /\b(unsubscribe|remove me|stop (emailing|contacting)|take me off|not interested|opt out|opt-out|do not (email|contact))\b/i.test(
-    text,
+  if (
+    /\b(unsubscribe|remove me|stop (emailing|contacting)|take me off|not interested|opt out|opt-out|do not (email|contact)|uitschrijven|niet ge[iï]nteresseerd|geen interesse|désinscrire|pas intéressé)\b/i.test(
+      text,
+    )
+  )
+    return true;
+  // The sentence-style opt-out asks them to reply "no": a bare no/nee/non counts.
+  const first =
+    (text || "")
+      .replace(/^(re|fwd?|aw|antw):\s*/i, "")
+      .split(/\n/)
+      .map((l) => l.trim())
+      .find((l) => l && !/^(re|fwd?):/i.test(l)) || "";
+  return /^(no|nope|nee|neen|non|nein|no thanks|no thank you|nee bedankt|nee dank je)[.!\s]*$/i.test(
+    first,
   );
 }
 

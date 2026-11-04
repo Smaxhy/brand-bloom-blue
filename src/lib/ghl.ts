@@ -135,7 +135,7 @@ export async function ghlSendEmail(
       type: "Email",
       contactId: m.contactId,
       subject: m.subject,
-      html: m.html,
+      html: m.html || undefined,
       message: m.text,
       emailFrom: m.fromName ? `${m.fromName} <${m.fromEmail}>` : m.fromEmail,
       replyMessageId: m.replyToEmailMessageId || undefined,

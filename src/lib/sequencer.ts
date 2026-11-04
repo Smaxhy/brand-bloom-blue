@@ -109,6 +109,12 @@ export interface OutreachSettings {
   website: string;
   eu_notice: string;
   us_notice: string;
+  /** 'sentence' = one plain line after the signature (lands in Primary); 'block' = classic grey footer. */
+  footer_style?: "sentence" | "block" | null;
+  /** Send text-only (no HTML part). Strongly recommended for cold outreach. */
+  plain_text?: boolean | null;
+  optout_line_us?: string | null;
+  optout_line_eu?: string | null;
 }
 
 /** Local time parts for a timezone without any library. */
@@ -548,7 +554,7 @@ async function syncMailbox(
       })
       .catch(() => {});
     if (auto) continue; // out-of-office: keep the sequence going
-    const stop = intent === "not_interested" || wantsToStop(`${m.subject} ${bodyText}`);
+    const stop = intent === "not_interested" || wantsToStop(m.subject) || wantsToStop(bodyText);
     if (stop && lead?.email) {
       await db
         .upsert(
