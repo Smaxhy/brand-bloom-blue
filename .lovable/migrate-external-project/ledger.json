@@ -5,8 +5,8 @@
       "capability": "code",
       "source": "admin-engine_4 ZIP",
       "outcome": "Apply stationary admin hover fix; retain secure credential entry, saved credential resolution, and public website fetch protection instead of archive regressions; all other admin source matches",
-      "status": "verification_pending",
-      "next_action": "Verify stationary hover behavior and existing Settings controls in signed-in preview"
+      "status": "verified",
+      "next_action": null
     },
     {
       "capability": "schema",
@@ -81,7 +81,7 @@
     {
       "capability": "verification",
       "source": "signed-in running preview",
-      "outcome": "Signed-in Settings displays Connect Google mailbox; click opens Google consent, no page errors; build OK; seven safety/credential tests passed",
+      "outcome": "Signed-in Settings verified stationary button/panel hover; Google and GoHighLevel connection controls and eight secure credential controls retained; credential form opened/cancelled without saving; no runtime errors; build OK; seven safety/credential tests passed",
       "status": "verified",
       "next_action": "User must complete Google consent; live scraping, mailbox send and scheduled dispatch remain unverified"
     }

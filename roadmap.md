@@ -28,4 +28,4 @@
 
 # Updated admin fix
 - [x] Apply stationary button/panel hover fix from inspirova-admin-engine_4.zip while retaining secure settings, crawler protections, homepage and data.
-- [ ] Verify signed-in admin hover behavior and retained mailbox/key controls.
+- [x] Verify signed-in admin hover behavior and retained mailbox/key controls; seven safety tests passed, no runtime errors.
