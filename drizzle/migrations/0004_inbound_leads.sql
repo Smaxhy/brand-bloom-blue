@@ -1,0 +1,10 @@
+alter table public.leads drop constraint if exists leads_status_check;
+alter table public.leads add constraint leads_status_check check (status in ('new','accepted','rejected','customer','inbound'));
+update public.leads set email = null where email = '';
+update public.leads set email = lower(email) where email <> lower(email);
+delete from public.leads a using public.leads b where a.email is not null and a.email = b.email and a.created_at > b.created_at;
+drop index if exists public.leads_email_unique;
+alter table public.leads drop constraint if exists leads_email_key;
+alter table public.leads add constraint leads_email_key unique (email);
+alter table public.leads drop constraint if exists leads_email_not_blank;
+alter table public.leads add constraint leads_email_not_blank check (email is null or email <> '');
