@@ -643,7 +643,56 @@ function SenderIdentityPanel() {
             placeholder="Street, City, State/Postcode, Country"
           />
         </Field>
-        <Field label="Notice for US leads">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Email format">
+            <select
+              className={inputCls}
+              value={s.plain_text === false ? "html" : "plain"}
+              onChange={(e) => setS({ ...s, plain_text: e.target.value !== "html" })}
+            >
+              <option value="plain">Plain text only (recommended — lands in Primary)</option>
+              <option value="html">Light HTML</option>
+            </select>
+          </Field>
+          <Field label="Opt-out footer">
+            <select
+              className={inputCls}
+              value={s.footer_style === "block" ? "block" : "sentence"}
+              onChange={(e) =>
+                setS({ ...s, footer_style: e.target.value === "block" ? "block" : "sentence" })
+              }
+            >
+              <option value="sentence">One sentence: "reply no" + address (recommended)</option>
+              <option value="block">Classic grey footer with Unsubscribe link</option>
+            </select>
+          </Field>
+        </div>
+        {(s.footer_style || "sentence") !== "block" ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Opt-out sentence for US leads">
+              <input
+                className={inputCls}
+                value={s.optout_line_us ?? ""}
+                onChange={(e) => setS({ ...s, optout_line_us: e.target.value })}
+                placeholder={"If this isn't relevant, just reply \"no\" and I won't write again."}
+              />
+            </Field>
+            <Field label="Opt-out sentence for EU leads">
+              <input
+                className={inputCls}
+                value={s.optout_line_eu ?? ""}
+                onChange={(e) => setS({ ...s, optout_line_eu: e.target.value })}
+                placeholder={'Niet relevant? Antwoord gewoon "nee" en ik mail je niet meer.'}
+              />
+            </Field>
+            <p className="text-xs text-muted-foreground sm:col-span-2">
+              Your company name and postal address are appended to this sentence. A reply of "no" /
+              "nee" is detected by the inbox sync and suppresses the address; Gmail sends still
+              carry the one-click List-Unsubscribe header invisibly.
+            </p>
+          </div>
+        ) : null}
+        <Field label="Notice for US leads (classic footer only)">
           <textarea
             className={inputCls + " min-h-[60px]"}
             value={s.us_notice}
