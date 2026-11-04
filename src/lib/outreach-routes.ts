@@ -5,15 +5,9 @@
 
 import { Db, enc } from "./db";
 import type { ApiUser } from "./api-auth";
-import {
-  makeState,
-  readState,
-  consentUrl,
-  exchangeCode,
-  userEmail,
-  accessTokenFor,
-} from "./google-oauth";
-import { gmailSend, newMessageId } from "./gmail";
+import { makeState, readState, consentUrl, exchangeCode, userEmail } from "./google-oauth";
+import { sendVia } from "./channel";
+import { ghlVerify } from "./ghl";
 import { runDispatch, type Lead, type Mailbox, type OutreachSettings } from "./sequencer";
 import { renderStep } from "./templates";
 import { hasMx } from "./providers/free-enrich";
@@ -67,6 +61,7 @@ export async function handleOutreachRoute(
     return json({ ok: true, url: u });
   }
   if (path === "/api/outreach/status") return status(e);
+  if (path === "/api/outreach/ghl/connect") return ghlConnect(request, e);
   if (path === "/api/outreach/test-send") return testSend(request, e);
   if (path === "/api/outreach/enroll") return enroll(request, e, user);
   if (path === "/api/outreach/verify") return verifyEmails(request, e);
@@ -114,19 +109,20 @@ async function sendReply(request: Request, e: Env): Promise<Response> {
   const html = `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1f2328;max-width:620px">${text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>")}</div>`;
   const subject = /^re:/i.test(msg.subject) ? msg.subject : `Re: ${msg.subject}`;
   try {
-    const token = await accessTokenFor(e, db, mb.id);
-    const sent = await gmailSend(
-      token,
+    const sent = await sendVia(
+      e,
+      db,
+      { ...mb, display_name: mb.display_name || settings.company_name },
       {
-        from: { name: mb.display_name || settings.company_name, email: mb.email },
         to: { name: lead?.contact_name || "", email: toEmail },
         subject,
         text,
         html,
         threadId: msg.gmail_thread_id || undefined,
         inReplyTo: msg.rfc_message_id || undefined,
+        company: lead?.company,
+        phone: lead?.phone,
       },
-      newMessageId(mb.email.split("@")[1] || "localhost"),
     );
     await db.insert("messages", {
       enrollment_id: msg.enrollment_id,
@@ -168,6 +164,59 @@ async function runSearchNow(request: Request, e: Env): Promise<Response> {
     next_run_at: next,
   });
   return json({ ok: true, result });
+}
+
+/* ------------------------------------------------------------ GHL channel */
+async function ghlConnect(request: Request, e: Env): Promise<Response> {
+  if (request.method !== "POST") return json({ error: "POST only" }, 405);
+  if (!Db.available(e))
+    return json({ ok: false, error: "SUPABASE_SERVICE_ROLE_KEY missing on the server." }, 500);
+  const b = (await request.json().catch(() => ({}))) as {
+    apiKey?: string;
+    locationId?: string;
+    companyId?: string;
+    fromEmail?: string;
+    fromName?: string;
+  };
+  const apiKey = (b.apiKey || "").trim();
+  const locationId = (b.locationId || "").trim();
+  const fromEmail = (b.fromEmail || "").trim().toLowerCase();
+  if (!apiKey || !locationId || !fromEmail.includes("@"))
+    return json({ ok: false, error: "API key, Location ID and the From email are required" }, 400);
+  const v = await ghlVerify({
+    apiKey,
+    locationId,
+    companyId: (b.companyId || "").trim() || undefined,
+  });
+  if (!v.ok) return json({ ok: false, error: v.error }, 400);
+  const db = new Db(e);
+  const existing = await db.one<{ id: string }>(
+    "mailboxes",
+    `email=eq.${enc(fromEmail)}&select=id`,
+  );
+  const row = {
+    email: fromEmail,
+    display_name: (b.fromName || "").trim() || v.name,
+    provider: "ghl",
+    status: "active",
+    daily_cap: 100,
+    last_error: null,
+  };
+  const mb = existing
+    ? (await db.update<{ id: string }>("mailboxes", `id=eq.${existing.id}`, row))[0]
+    : (await db.insert<{ id: string }>("mailboxes", row))[0];
+  await db.upsert(
+    "mailbox_tokens",
+    {
+      mailbox_id: mb.id,
+      refresh_token: "",
+      ghl_api_key: apiKey,
+      ghl_location_id: locationId,
+      ghl_company_id: (b.companyId || "").trim() || null,
+    },
+    "mailbox_id",
+  );
+  return json({ ok: true, id: mb.id, location: v.name });
 }
 
 /* ------------------------------------------------------------------ status */
@@ -314,17 +363,16 @@ async function testSend(request: Request, e: Env): Promise<Response> {
     firstSubject: "",
   });
   try {
-    const token = await accessTokenFor(e, db, mb.id);
-    const sent = await gmailSend(
-      token,
+    const sent = await sendVia(
+      e,
+      db,
+      { ...mb, display_name: mb.display_name || settings.company_name },
       {
-        from: { name: mb.display_name || settings.company_name, email: mb.email },
         to: { name: lead.contact_name, email: body.to },
         subject: rendered.subject,
         text: rendered.text,
         html: rendered.html,
       },
-      newMessageId(mb.email.split("@")[1] || "localhost"),
     );
     return json({ ok: true, id: sent.id, threadId: sent.threadId, preview: rendered });
   } catch (ex) {

@@ -26,6 +26,7 @@ export interface Mailbox {
   last_error: string | null;
   last_sync_at: string | null;
   created_at: string;
+  provider?: "google" | "ghl" | null;
 }
 
 export interface OutreachSettings {
@@ -186,6 +187,20 @@ export async function connectMailboxUrl(): Promise<string> {
   const j = (await res.json()) as { ok?: boolean; url?: string; error?: string };
   if (!j.ok || !j.url) throw new Error(j.error || "Could not start Google sign-in.");
   return j.url;
+}
+export async function connectGhl(input: {
+  apiKey: string;
+  locationId: string;
+  companyId?: string;
+  fromEmail: string;
+  fromName?: string;
+}): Promise<{ ok: boolean; id?: string; location?: string; error?: string }> {
+  const res = await authFetch("/api/outreach/ghl/connect", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return (await res.json()) as { ok: boolean; id?: string; location?: string; error?: string };
 }
 export async function sendTestEmail(
   mailboxId: string,

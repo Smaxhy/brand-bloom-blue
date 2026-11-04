@@ -18,6 +18,8 @@
 
 import { Db, enc } from "./db";
 import { accessTokenFor } from "./google-oauth";
+import { sendVia, isGhl } from "./channel";
+import { syncGhlMailbox } from "./ghl-sync";
 import {
   gmailSend,
   gmailListRecent,
@@ -46,6 +48,7 @@ export interface Mailbox {
   send_days: number[];
   signature: string;
   last_sync_at: string | null;
+  provider?: string | null; // 'google' | 'ghl'
 }
 
 export interface Lead {
@@ -254,8 +257,7 @@ export async function runDispatch(
         `status=in.(queued,active)&next_send_at=lte.${enc(new Date().toISOString())}&sequence_id=in.(${seqIds.join(",")})&or=(mailbox_id.eq.${mb.id},mailbox_id.is.null)&select=*&order=next_send_at.asc&limit=${Math.min(remaining, maxPerRun)}`,
       );
 
-      const token = due.length ? await accessTokenFor(env, db, mb.id) : "";
-      const domain = mb.email.split("@")[1] || "localhost";
+      if (due.length && !isGhl(mb)) await accessTokenFor(env, db, mb.id); // fail fast on a dead Google connection
 
       for (const en of due) {
         // Claim it for this mailbox (unassigned enrollments round-robin by whoever gets there first).
@@ -307,7 +309,8 @@ export async function runDispatch(
 
         const unsubscribeUrl = `${opts.origin || env.PUBLIC_ORIGIN || process.env?.PUBLIC_ORIGIN || "https://inspirovamarketing.com"}/api/unsub?t=${en.unsub_token}`;
         const variant = en.variant === "B" ? "B" : "A";
-        const pickSubject = (st: Step) => (variant === "B" && st.subject_b?.trim() ? st.subject_b : st.subject);
+        const pickSubject = (st: Step) =>
+          variant === "B" && st.subject_b?.trim() ? st.subject_b : st.subject;
         const rendered = renderStep({
           step: { ...step, subject: pickSubject(step) },
           lead,
@@ -317,23 +320,19 @@ export async function runDispatch(
           isFollowUp: en.current_step > 0,
           firstSubject: steps[0] ? pickSubject(steps[0]) : "",
         });
-        const messageId = newMessageId(domain);
         try {
-          const sent = await gmailSend(
-            token,
-            {
-              from: { name: mb.display_name || settings.company_name, email: mb.email },
-              to: { name: lead.contact_name, email: lead.email },
-              subject: rendered.subject,
-              text: rendered.text,
-              html: rendered.html,
-              threadId: en.current_step > 0 ? en.thread_id || undefined : undefined,
-              inReplyTo: en.current_step > 0 ? en.first_message_id || undefined : undefined,
-              unsubscribeUrl,
-              unsubscribeMailto: mb.email,
-            },
-            messageId,
-          );
+          const sent = await sendVia(env, db, mb, {
+            to: { name: lead.contact_name, email: lead.email },
+            subject: rendered.subject,
+            text: rendered.text,
+            html: rendered.html,
+            threadId: en.current_step > 0 ? en.thread_id || undefined : undefined,
+            inReplyTo: en.current_step > 0 ? en.first_message_id || undefined : undefined,
+            unsubscribeUrl,
+            company: lead.company,
+            phone: lead.phone,
+          });
+          const messageId = sent.rfcMessageId;
           await db.insert("messages", {
             enrollment_id: en.id,
             lead_id: lead.id,
@@ -415,6 +414,7 @@ async function syncMailbox(
   mb: Mailbox,
 ): Promise<{ replies: number; bounces: number; stops: number }> {
   const out = { replies: 0, bounces: 0, stops: 0 };
+  if (isGhl(mb)) return syncGhlMailbox(env, db, mb);
   const token = await accessTokenFor(env, db, mb.id);
   const ids = await gmailListRecent(token, "in:inbox newer_than:3d", 60);
   if (!ids.length) {
@@ -506,8 +506,14 @@ async function syncMailbox(
     let intent = auto ? "auto" : "unknown";
     let draft = "";
     if (!auto) {
-      const stepRows = await db.select<Step>("sequence_steps", `sequence_id=eq.${en.sequence_id}&select=*&order=position.asc`);
-      const settings = await db.one<OutreachSettings>("outreach_settings", "id=eq.singleton&select=*");
+      const stepRows = await db.select<Step>(
+        "sequence_steps",
+        `sequence_id=eq.${en.sequence_id}&select=*&order=position.asc`,
+      );
+      const settings = await db.one<OutreachSettings>(
+        "outreach_settings",
+        "id=eq.singleton&select=*",
+      );
       const ai = await classifyReply(env, {
         replyText: bodyText,
         lead,

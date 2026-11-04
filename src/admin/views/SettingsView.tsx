@@ -29,12 +29,13 @@ import {
   updateMailbox,
   deleteMailbox,
   connectMailboxUrl,
+  connectGhl,
   sendTestEmail,
   getOutreachSettings,
   saveOutreachSettings,
   integrationStatus,
 } from "../outreach";
-import { Panel, Field, inputCls, Btn } from "../ui";
+import { Panel, Field, inputCls, Btn, Modal } from "../ui";
 import { useServerFn } from "@tanstack/react-start";
 import { canConfigureIntegrations, saveIntegrationCredentials } from "@/lib/integration-settings.functions";
 import { integrationFields, integrationInputSchema } from "@/lib/integration-settings-schema";
@@ -195,6 +196,15 @@ function MailboxesPanel() {
     preview?: { subject: string; text: string };
   } | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [ghlOpen, setGhlOpen] = useState(false);
+  const [ghl, setGhl] = useState({
+    apiKey: "",
+    locationId: "",
+    companyId: "",
+    fromEmail: "",
+    fromName: "",
+  });
+  const [ghlBusy, setGhlBusy] = useState(false);
 
   const load = useCallback(
     () =>
@@ -254,10 +264,17 @@ function MailboxesPanel() {
         <div className="flex-1">
           <h3 className="font-display text-lg font-bold">Sending mailboxes</h3>
           <p className="text-xs text-muted-foreground">
-            Google Workspace accounts that outreach goes out from. Start each new mailbox at 10–15 a
-            day and raise it weekly.
+            Where outreach goes out from: Google Workspace mailboxes (best reply rates, ~40/day
+            each) or a GoHighLevel sub-account (volume from day one). Sequences can use any mix.
           </p>
         </div>
+        <Btn
+          variant="ghost"
+          onClick={() => setGhlOpen(true)}
+          title="Send through a GoHighLevel sub-account instead of a Google mailbox"
+        >
+          <Plus className="h-4 w-4" /> Connect GoHighLevel
+        </Btn>
         <Btn onClick={() => void connect()} disabled={connecting}>
           {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}{" "}
           Connect Google mailbox
@@ -280,7 +297,18 @@ function MailboxesPanel() {
           <div key={m.id} className="rounded-xl border border-border p-3">
             <div className="flex flex-wrap items-center gap-2">
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold">{m.email}</div>
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-sm font-semibold">{m.email}</span>
+                  <span
+                    className={`shrink-0 rounded-full px-1.5 py-px text-[.6rem] font-bold uppercase tracking-wide ${
+                      m.provider === "ghl"
+                        ? "bg-[oklch(.8_.16_80)]/25 text-[oklch(.45_.1_70)]"
+                        : "bg-secondary text-muted-foreground"
+                    }`}
+                  >
+                    {m.provider === "ghl" ? "GoHighLevel" : "Google"}
+                  </span>
+                </div>
                 <div className="text-xs text-muted-foreground">
                   {m.last_sync_at
                     ? `Inbox checked ${new Date(m.last_sync_at).toLocaleString()}`
@@ -471,6 +499,88 @@ function MailboxesPanel() {
         as secrets. Emails go out every 10 minutes within each mailbox's hours, follow-ups reply in
         the same thread, and replies or bounces stop the sequence automatically.
       </p>
+      <Modal open={ghlOpen} onClose={() => setGhlOpen(false)} title="Connect GoHighLevel">
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Sends go through your GHL sub-account's email (LC Email / Mailgun) instead of a Google
+            mailbox. Replies and bounces are picked up every 10 minutes. Use a dedicated sending
+            domain in GHL (Settings → Email Services) and start at 50–100 a day.
+          </p>
+          <Field label="Private Integration token (or Agency API key)">
+            <input
+              className={inputCls}
+              value={ghl.apiKey}
+              onChange={(e) => setGhl({ ...ghl, apiKey: e.target.value })}
+              placeholder="pit-… or eyJ…"
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Location ID (sub-account)">
+              <input
+                className={inputCls}
+                value={ghl.locationId}
+                onChange={(e) => setGhl({ ...ghl, locationId: e.target.value })}
+              />
+            </Field>
+            <Field label="Company ID (only for Agency keys)">
+              <input
+                className={inputCls}
+                value={ghl.companyId}
+                onChange={(e) => setGhl({ ...ghl, companyId: e.target.value })}
+                placeholder="optional"
+              />
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="From email (verified in GHL)">
+              <input
+                className={inputCls}
+                value={ghl.fromEmail}
+                onChange={(e) => setGhl({ ...ghl, fromEmail: e.target.value })}
+                placeholder="sam@getinspirova.com"
+              />
+            </Field>
+            <Field label="From name">
+              <input
+                className={inputCls}
+                value={ghl.fromName}
+                onChange={(e) => setGhl({ ...ghl, fromName: e.target.value })}
+                placeholder="Sam at Inspirova"
+              />
+            </Field>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Where to find these: GHL → Settings → Private Integrations (token); the Location ID is
+            in Settings → Business Profile. Daily cap starts at 100; raise it under the mailbox once
+            connected.
+          </p>
+          <div className="flex justify-end gap-2 pt-1">
+            <Btn variant="ghost" onClick={() => setGhlOpen(false)}>
+              Cancel
+            </Btn>
+            <Btn
+              disabled={ghlBusy || !ghl.apiKey || !ghl.locationId || !ghl.fromEmail.includes("@")}
+              onClick={async () => {
+                setGhlBusy(true);
+                const r = await connectGhl(ghl);
+                setGhlBusy(false);
+                if (!r.ok) return toast.error(r.error || "Could not connect");
+                toast.success(`Connected GoHighLevel: ${r.location}`);
+                setGhlOpen(false);
+                setGhl({ apiKey: "", locationId: "", companyId: "", fromEmail: "", fromName: "" });
+                void load();
+              }}
+            >
+              {ghlBusy ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}{" "}
+              Connect
+            </Btn>
+          </div>
+        </div>
+      </Modal>
     </Panel>
   );
 }
