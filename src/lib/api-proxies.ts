@@ -15,6 +15,7 @@
  */
 
 import { getApiUser, hasCronSecret, unauthorized } from "./api-auth";
+import { regionSubAreas, bboxSpanKm } from "./providers/regions";
 import { placesTextSearch } from "./providers/places";
 import { overpassBusinesses } from "./providers/osm";
 import {
@@ -1289,7 +1290,7 @@ export interface DiscoverResult {
 
 /** Provider waterfall shared by the UI route and scheduled saved searches. */
 export async function discoverCore(f: DiscoverFilters, env: Env): Promise<DiscoverResult> {
-  const wanted = Math.min(Math.max(f.perPage ?? 25, 1), 200);
+  const wanted = Math.min(Math.max(f.perPage ?? 25, 1), 1000);
   const keywords = (f.industry ?? "")
     .split(",")
     .map((k) => k.trim())
@@ -1310,8 +1311,10 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
   const used: Record<string, number> = {};
   const errors: string[] = [];
   const perQuery = Math.ceil(wanted / queries.length);
+  // Big areas (a state, a country): search city by city instead of one point.
+  const region = regionSubAreas(location, f.bbox);
   const osmPromise =
-    want.includes("osm") && f.bbox
+    want.includes("osm") && f.bbox && !region
       ? Promise.all(
           queries.map((kw) =>
             overpassBusinesses({ keyword: kw, bbox: f.bbox!, city, max: wanted, timeoutSec: 12 }),
@@ -1331,7 +1334,46 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
     return true;
   };
 
-  if (want.includes("places") && placesKey) {
+  if (want.includes("places") && placesKey && region) {
+    // REGION MODE. Each keyword is searched in each city (biggest first), five
+    // calls in flight at a time, until we have what was asked for. A city that
+    // returns nothing for a keyword is skipped for the remaining keywords.
+    const MAX_CALLS = 240;
+    const jobs: { kw: string; area: (typeof region.areas)[number] }[] = [];
+    for (const area of region.areas) for (const kw of queries) jobs.push({ kw, area });
+    const dead = new Set<string>();
+    let calls = 0;
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < jobs.length && byKey.size < wanted && calls < MAX_CALLS) {
+        const job = jobs[cursor++];
+        const areaKey = job.area.label + "|" + (job.area.lat ?? "");
+        if (dead.has(areaKey)) continue;
+        calls++;
+        const r = await placesTextSearch(placesKey, {
+          keyword: job.kw,
+          location: job.area.label,
+          max: Math.min(60, Math.max(20, wanted - byKey.size)),
+          bias:
+            job.area.lat != null && job.area.lng != null
+              ? { lat: job.area.lat, lng: job.area.lng, radiusM: job.area.radiusM }
+              : undefined,
+        });
+        if (r.error) errors.push(r.error);
+        const city = job.area.label.split(",")[0].trim();
+        for (const b of r.businesses)
+          add({ ...b, city: b.city || city, source: "Google Maps" }, "places");
+        if (r.businesses.length === 0) dead.add(areaKey);
+      }
+    };
+    await Promise.all(Array.from({ length: 5 }, worker));
+    const covered = new Set(jobs.slice(0, cursor).map((j) => j.area.label)).size;
+    errors.push(
+      region.kind === "cities"
+        ? `Searched ${covered} of ${region.areas.length} cities in ${location} (${calls} Google calls)`
+        : `Big area (${Math.round(bboxSpanKm(f.bbox))} km wide): searched ${covered} zones (${calls} Google calls)`,
+    );
+  } else if (want.includes("places") && placesKey) {
     // Google returns at most 60 per query+point. To get MORE than 60 for an area we
     // tile it: a grid of points across the bbox/radius, each searched separately and
     // de-duplicated. 3x3 for ~100, 4x4 for ~200, 5x5 for 300+.
@@ -1367,13 +1409,15 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
   }
 
   if (byKey.size < wanted && want.includes("serper") && serperKey) {
-    for (const kw of queries) {
+    const serperPlaces = region ? region.areas.slice(0, 8).map((a) => a.label) : [location];
+    const serperJobs = serperPlaces.flatMap((loc) => queries.map((kw) => ({ kw, loc })));
+    for (const { kw, loc } of serperJobs) {
       if (byKey.size >= wanted) break;
       try {
         const res = await fetch("https://google.serper.dev/places", {
           method: "POST",
           headers: { "X-API-KEY": serperKey, "Content-Type": "application/json" },
-          body: JSON.stringify({ q: location ? `${kw} in ${location}` : kw, num: 20 }),
+          body: JSON.stringify({ q: loc ? `${kw} in ${loc}` : kw, num: 20 }),
         });
         if (!res.ok) {
           errors.push(`Serper ${res.status}`);
@@ -1547,6 +1591,7 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
   if (
     businesses.length < wanted &&
     byKey.size < wanted &&
+    !region &&
     !errors.some((e) => /SerpApi|Serper \d/.test(e))
   )
     errors.push(
