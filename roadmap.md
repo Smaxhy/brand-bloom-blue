@@ -31,5 +31,5 @@
 - [x] Verify signed-in admin hover behavior and retained mailbox/key controls; seven safety tests passed, no runtime errors.
 
 # Outreach People update
-- [ ] Apply new People view while preserving homepage, data and security protections.
-- [ ] Verify signed-in filters, history and CSV export without sending emails.
+- [x] Apply new People view while preserving homepage, data and security protections.
+- [x] Verify signed-in filters, history and CSV export with temporary paused records; cleaned up without sending emails.

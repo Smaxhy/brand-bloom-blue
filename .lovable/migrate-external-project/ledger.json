@@ -95,9 +95,9 @@
     {
       "capability": "outreach-people-update",
       "source": "inspirova-admin-engine_8.zip",
-      "outcome": "Add People table, progress, enrollment-scoped history, filtering and CSV export; preserve secure Settings, server credential loading, crawler guard, applied schema and existing data",
-      "status": "in_progress",
-      "next_action": "Verify signed-in People workflow without sending messages"
+      "outcome": "Applied Outreach People view with search, mailbox/status/sequence filters, progress, enrollment-scoped history and formula-safe CSV download. Signed-in test used temporary paused Cloud records, read history and downloaded CSV, then removed all test records. No emails sent. Preserved homepage, secure settings, server credential loading, safe crawler, data and existing schema.",
+      "status": "verified",
+      "next_action": "Live sends and schedules remain unverified; pre-existing admin sidebar overflow persists on narrow screens."
     }
   ]
 }
