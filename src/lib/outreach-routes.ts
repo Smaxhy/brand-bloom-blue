@@ -12,6 +12,7 @@ import { ghlVerify } from "./ghl";
 import { runDispatch, type Lead, type Mailbox, type OutreachSettings } from "./sequencer";
 import { renderStep } from "./templates";
 import { hasMx } from "./providers/free-enrich";
+import { verifyEmail } from "./bounce";
 import { runSavedSearch, type SavedSearch } from "./saved-searches";
 
 type Env = Record<string, string | undefined>;
@@ -403,33 +404,8 @@ interface EnrollLead {
 }
 
 /** Single-address verification: Reoon when configured, else MX only. */
-async function verifyOne(
-  e: Env,
-  email: string,
-): Promise<"valid" | "invalid" | "risky" | "mx_ok" | "unknown"> {
-  const key = env(e, "REOON_API_KEY");
-  const domain = email.split("@")[1] || "";
-  if (key) {
-    try {
-      const u = new URL("https://emailverifier.reoon.com/api/v1/verify");
-      u.searchParams.set("email", email);
-      u.searchParams.set("key", key);
-      u.searchParams.set("mode", "power");
-      const res = await fetch(u.toString(), { signal: AbortSignal.timeout(25000) });
-      if (res.ok) {
-        const j = (await res.json()) as { status?: string; is_safe_to_send?: boolean };
-        const st = (j.status || "").toLowerCase();
-        if (st === "safe" || st === "valid" || j.is_safe_to_send) return "valid";
-        if (st === "invalid" || st === "disabled") return "invalid";
-        return "risky";
-      }
-    } catch {
-      /* fall back to MX */
-    }
-  }
-  const mx = await hasMx(domain);
-  return mx === true ? "mx_ok" : mx === false ? "invalid" : "unknown";
-}
+const verifyOne = (e: Env, email: string) =>
+  verifyEmail(e as Record<string, string | undefined>, email);
 
 function cleanDomain(s: string | undefined): string {
   if (!s) return "";

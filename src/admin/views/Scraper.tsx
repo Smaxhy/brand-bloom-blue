@@ -1413,7 +1413,7 @@ export function Scraper({
               { id: "google", label: "Google Maps" },
               { id: "osm", label: "OpenStreetMap" },
               { id: "claude", label: "Read each website" },
-              { id: "apify", label: "Apify bulk (hundreds per search)" },
+              { id: "apify", label: "Apify bulk (paid · ≈ $4 per 1,000)" },
               { id: "apollo", label: "Apollo (paid)" },
             ] as { id: ScrapeSource; label: string }[]
           ).map((s) => (

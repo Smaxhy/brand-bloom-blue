@@ -12,6 +12,7 @@ import { Db, enc } from "./db";
 import { classifyReply } from "./reply-ai";
 import { isAutoReplyText, wantsToStop } from "./gmail";
 import { ghlCredsFor } from "./channel";
+import { applyHardBounce } from "./bounce";
 import {
   ghlToken,
   ghlInboundConversations,
@@ -159,22 +160,15 @@ export async function syncGhlMailbox(
     const e = await ghlEmail(token, r.gmail_message_id);
     if (!e || !GHL_BOUNCE_STATUSES.has(e.status)) continue;
     const lead = r.lead_id ? await db.one<Lead>("leads", `id=eq.${r.lead_id}&select=*`) : null;
-    if (lead?.email) {
-      await db
-        .upsert(
-          "suppressions",
-          {
-            email: lead.email.toLowerCase(),
-            domain: lead.domain,
-            reason: "bounce",
-            note: `GHL: ${e.status}`,
-          },
-          "email",
-        )
-        .catch(() => {});
-      await db.update("leads", `id=eq.${lead.id}`, { email_verified: "invalid" });
-    }
-    if (r.enrollment_id)
+    if (lead?.email)
+      await applyHardBounce(db, {
+        email: lead.email,
+        lead,
+        enrollmentId: r.enrollment_id,
+        reason: "bounce",
+        note: `GHL: ${e.status}`,
+      });
+    else if (r.enrollment_id)
       await db.update("enrollments", `id=eq.${r.enrollment_id}`, {
         status: "bounced",
         last_error: `GHL ${e.status}`,

@@ -15,6 +15,7 @@
  *      site itself names nobody.
  */
 
+import { anthropicProblem } from "./anthropic-error";
 import { freeEnrich, type SiteSignals } from "./providers/free-enrich";
 import type { Db } from "./db";
 
@@ -84,6 +85,8 @@ export interface EnrichSiteOpts {
   ownerName?: string;
   useClaude?: boolean;
   db?: Db | null;
+  /** Called with a one-line reason when the AI call fails (out of credit, bad key…). */
+  onWarn?: (w: string) => void;
 }
 
 function cleanDomain(u: string): string {
@@ -187,10 +190,14 @@ async function claudeAssess(
     rating?: number;
     reviews?: number;
     hint?: string;
+    onWarn?: (w: string) => void;
   },
 ): Promise<AiAssessment | null> {
   const key = secret(env, "ANTHROPIC_API_KEY");
-  if (!key) return null;
+  if (!key) {
+    input.onWarn?.("Claude: ANTHROPIC_API_KEY not set — no AI ratings");
+    return null;
+  }
   const system = `You assess small local businesses for a marketing agency that sells websites, Google/Meta ads, review generation and lead automation. You get the text of the business's website plus technical signals read from it.
 
 Return ONLY a JSON object:
@@ -236,7 +243,10 @@ ${(input.text || "").slice(0, 9000)}
     let res = await call("claude-haiku-4-5");
     if (!res.ok && (res.status === 404 || res.status === 400))
       res = await call("claude-3-5-haiku-latest");
-    if (!res.ok) return null;
+    if (!res.ok) {
+      input.onWarn?.(await anthropicProblem(res));
+      return null;
+    }
     const d = (await res.json()) as { content?: { text?: string }[] };
     const m = (d.content?.[0]?.text || "").match(/\{[\s\S]*\}/);
     if (!m) return null;
@@ -372,6 +382,7 @@ export async function enrichSite(env: Env, o: EnrichSiteOpts): Promise<SiteProfi
       ? people.map((n) => `${n.name}${n.title ? ` (${n.title})` : ""}`).join("; ")
       : undefined;
     const ex = await claudeAssess(env, {
+      onWarn: o.onWarn,
       company: o.company || "",
       industry: o.industry,
       city: o.city,

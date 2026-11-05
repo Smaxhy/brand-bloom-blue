@@ -784,7 +784,7 @@ const INTEGRATIONS: {
     name: "Reoon verifier (REOON_API_KEY)",
     cost: "20 free/day, then $1.19 / 1,000",
     need: "optional",
-    how: "Verifies guessed addresses before they enter a sequence.",
+    how: "Powers the automatic bounce check: every address is verified (real SMTP check) before its first email. Without it the check is MX-only.",
   },
   {
     key: "apollo",
