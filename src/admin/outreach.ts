@@ -268,6 +268,16 @@ export async function listSequences(): Promise<Sequence[]> {
       .order("created_at", { ascending: false }),
   );
 }
+/** position count per sequence, for "sent 2 of 3" displays. */
+export async function stepCounts(): Promise<Record<string, number>> {
+  const rows = must<{ sequence_id: string }[]>(
+    await (await tbl("sequence_steps")).select("sequence_id"),
+  );
+  return rows.reduce(
+    (a, r) => ({ ...a, [r.sequence_id]: (a[r.sequence_id] ?? 0) + 1 }),
+    {} as Record<string, number>,
+  );
+}
 export async function listSteps(sequenceId: string): Promise<SequenceStep[]> {
   return must(
     await (await tbl("sequence_steps")).select("*").eq("sequence_id", sequenceId).order("position"),
@@ -305,7 +315,8 @@ export async function saveSequence(
         )
         .select("id"),
     );
-  return id!;
+  if (!id) throw new Error("Could not save sequence.");
+  return id;
 }
 export async function setSequenceStatus(id: string, status: Sequence["status"]): Promise<void> {
   must(await (await tbl("sequences")).update({ status }).eq("id", id).select("id"));
@@ -399,7 +410,7 @@ export async function enrollLeads(
 
 /* ------------------------------------------------------------- messages */
 export async function listMessages(
-  opts: { direction?: "in" | "out"; kind?: string; limit?: number } = {},
+  opts: { direction?: "in" | "out"; kind?: string; limit?: number; enrollmentId?: string } = {},
 ): Promise<Message[]> {
   let q = (await tbl("messages"))
     .select("*, leads(*), mailboxes(email)")
@@ -407,6 +418,7 @@ export async function listMessages(
     .limit(opts.limit ?? 100);
   if (opts.direction) q = q.eq("direction", opts.direction);
   if (opts.kind) q = q.eq("kind", opts.kind);
+  if (opts.enrollmentId) q = q.eq("enrollment_id", opts.enrollmentId);
   return must(await q);
 }
 export async function sentCounts(
