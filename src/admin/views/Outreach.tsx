@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { csvCell } from "../outreach-people-utils";
 import {
   Plus,
   Play,
@@ -23,6 +24,7 @@ import {
   BriefcaseBusiness,
   ExternalLink,
   FlaskConical,
+  Download,
 } from "lucide-react";
 import { type AdminData, type Deal, uid } from "../store";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -44,6 +46,7 @@ import {
   updateEnrollment,
   deleteEnrollment,
   listMessages,
+  stepCounts,
   sentCounts,
   listSuppressions,
   addSuppression,
@@ -221,12 +224,12 @@ export function Outreach({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex gap-1 rounded-xl border border-border bg-background p-1">
+        <div className="flex max-w-full flex-wrap gap-1 rounded-xl border border-border bg-background p-1">
           {(
             [
               ["overview", "Overview", Clock],
               ["sequences", "Sequences", Mail],
-              ["queue", "Queue", Users],
+              ["queue", "People", Users],
               ["inbox", "Replies", Inbox],
               ["suppressed", "Suppressed", Ban],
             ] as [Tab, string, React.ElementType][]
@@ -624,7 +627,7 @@ function Sequences({
                           seq: {
                             ...editing.seq,
                             mailbox_ids: on
-                              ? editing.seq.mailbox_ids!.filter((x) => x !== m.id)
+                              ? (editing.seq.mailbox_ids ?? []).filter((x) => x !== m.id)
                               : [...(editing.seq.mailbox_ids ?? []), m.id],
                           },
                         })
@@ -820,15 +823,27 @@ function Queue({ sequences, refresh }: { sequences: Sequence[]; refresh: () => P
   const [rows, setRows] = useState<Enrollment[]>([]);
   const [seqId, setSeqId] = useState("");
   const [status, setStatus] = useState("");
+  const [mailbox, setMailbox] = useState("");
+  const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
   const [confirm, setConfirm] = useState<Enrollment | null>(null);
+  const [steps, setSteps] = useState<Record<string, number>>({});
+  const [open, setOpen] = useState<string | null>(null);
+  const [history, setHistory] = useState<Record<string, Message[]>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setRows(
-        await listEnrollments({ sequenceId: seqId || undefined, status: status || undefined }),
-      );
+      const [r, sc] = await Promise.all([
+        listEnrollments({
+          sequenceId: seqId || undefined,
+          status: status || undefined,
+          limit: 500,
+        }),
+        stepCounts().catch(() => ({}) as Record<string, number>),
+      ]);
+      setRows(r);
+      setSteps(sc);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -843,12 +858,125 @@ function Queue({ sequences, refresh }: { sequences: Sequence[]; refresh: () => P
     await updateEnrollment(e.id, patch);
     await Promise.all([load(), refresh()]);
   }
+  async function toggle(e: Enrollment) {
+    const next = open === e.id ? null : e.id;
+    setOpen(next);
+    if (next && !history[e.id]) {
+      try {
+        const m = await listMessages({ enrollmentId: e.id, limit: 50 });
+        setHistory((h) => ({ ...h, [e.id]: m }));
+      } catch {
+        toast.error("Could not load message history. Close and reopen to retry.");
+        setOpen(null);
+      }
+    }
+  }
+
+  const mailboxes = useMemo(
+    () =>
+      Array.from(new Set(rows.map((r) => r.mailboxes?.email).filter(Boolean) as string[])).sort(),
+    [rows],
+  );
+  const visible = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return rows.filter((e) => {
+      if (mailbox && (e.mailboxes?.email || "") !== mailbox) return false;
+      if (!needle) return true;
+      return `${e.leads?.email || ""} ${e.leads?.company || ""} ${e.leads?.contact_name || ""} ${e.sequences?.name || ""}`
+        .toLowerCase()
+        .includes(needle);
+    });
+  }, [rows, mailbox, q]);
+  const counts = useMemo(
+    () =>
+      rows.reduce(
+        (a, r) => ({ ...a, [r.status]: (a[r.status] ?? 0) + 1 }),
+        {} as Record<string, number>,
+      ),
+    [rows],
+  );
+
+  function exportCsv() {
+    const header = [
+      "Email",
+      "Name",
+      "Company",
+      "Sequence",
+      "Mailbox",
+      "Status",
+      "Sent",
+      "Of",
+      "Next send",
+      "Replied",
+      "Last error",
+    ];
+    const lines = visible.map((e) =>
+      [
+        e.leads?.email || "",
+        e.leads?.contact_name || "",
+        e.leads?.company || "",
+        e.sequences?.name || "",
+        e.mailboxes?.email || "",
+        e.status,
+        String(e.current_step),
+        String(steps[e.sequence_id] ?? ""),
+        e.status === "queued" || e.status === "active" ? e.next_send_at : "",
+        e.replied_at || "",
+        e.last_error || "",
+      ]
+        .map(csvCell)
+        .join(","),
+    );
+    const blob = new Blob([[header.join(","), ...lines].join("\r\n")], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `outreach-people-${visible.length}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const Progress = ({ e }: { e: Enrollment }) => {
+    const total = steps[e.sequence_id] ?? 0;
+    const sent = Math.min(e.current_step, total || e.current_step);
+    return (
+      <div className="flex items-center gap-1.5" title={`${sent} of ${total || "?"} emails sent`}>
+        <div className="flex gap-0.5">
+          {Array.from({ length: Math.max(total, sent, 1) }, (_, i) => (
+            <span
+              key={i}
+              className={`h-2 w-3 rounded-sm ${
+                i < sent
+                  ? e.status === "bounced" || e.status === "failed"
+                    ? "bg-destructive"
+                    : "bg-primary"
+                  : "bg-secondary"
+              }`}
+            />
+          ))}
+        </div>
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {sent}/{total || "?"}
+        </span>
+      </div>
+    );
+  };
 
   return (
     <Panel>
       <div className="mb-3 flex flex-wrap items-center gap-2">
+        <input
+          aria-label="Search people"
+          className={inputCls + " sm:max-w-[260px]"}
+          placeholder="Search email, name, company…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
         <select
-          className={inputCls + " w-auto"}
+          className={inputCls.replace("w-full", "") + " w-auto"}
+          aria-label="Sequence filter"
           value={seqId}
           onChange={(e) => setSeqId(e.target.value)}
         >
@@ -860,7 +988,19 @@ function Queue({ sequences, refresh }: { sequences: Sequence[]; refresh: () => P
           ))}
         </select>
         <select
-          className={inputCls + " w-auto"}
+          className={inputCls.replace("w-full", "") + " w-auto"}
+          aria-label="Mailbox filter"
+          value={mailbox}
+          onChange={(e) => setMailbox(e.target.value)}
+        >
+          <option value="">All mailboxes</option>
+          {mailboxes.map((m) => (
+            <option key={m}>{m}</option>
+          ))}
+        </select>
+        <select
+          className={inputCls.replace("w-full", "") + " w-auto"}
+          aria-label="Status filter"
           value={status}
           onChange={(e) => setStatus(e.target.value)}
         >
@@ -879,85 +1019,207 @@ function Queue({ sequences, refresh }: { sequences: Sequence[]; refresh: () => P
             <option key={s}>{s}</option>
           ))}
         </select>
-        <span className="ml-auto text-xs text-muted-foreground">{rows.length} shown</span>
+        <Btn
+          variant="ghost"
+          onClick={exportCsv}
+          disabled={!visible.length}
+          title="Download what's shown as CSV"
+        >
+          <Download className="h-4 w-4" /><span className="sr-only">Download people CSV</span>
+        </Btn>
+        <span className="ml-auto text-xs text-muted-foreground">
+          {visible.length} shown
+          {rows.length === 500 ? " · latest 500 loaded" : ""}
+          {Object.keys(counts).length ? " · " : ""}
+          {["queued", "active", "replied", "completed", "bounced"]
+            .filter((k) => counts[k])
+            .map((k) => `${counts[k]} ${k}`)
+            .join(" · ")}
+        </span>
       </div>
       {loading ? (
         <div className="py-10 text-center text-sm text-muted-foreground">
           <Loader2 className="mx-auto h-5 w-5 animate-spin" />
         </div>
-      ) : !rows.length ? (
+      ) : !visible.length ? (
         <div className="py-10 text-center text-sm text-muted-foreground">
           Nothing here. Add leads from Raw Data → select → "Add to sequence".
         </div>
       ) : (
-        <div className="divide-y divide-border">
-          {rows.map((e) => (
-            <div key={e.id} className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
-              <div className="min-w-[220px] flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">
-                    {e.leads?.contact_name || e.leads?.company || "—"}
-                  </span>
-                  {e.leads?.contact_name && (
-                    <span className="text-muted-foreground">· {e.leads.company}</span>
-                  )}
-                  {e.leads?.email_guessed && (
-                    <span className="rounded bg-[oklch(.8_.16_80)]/30 px-1 text-[.6rem] font-semibold uppercase text-[oklch(.45_.1_70)]">
-                      guessed
-                    </span>
-                  )}
-                </div>
-                <div className="truncate text-xs text-muted-foreground">
-                  {e.leads?.email} · {e.sequences?.name} · via{" "}
-                  {e.mailboxes?.email?.split("@")[0] ?? "next free mailbox"}
-                </div>
-                {e.last_error && (
-                  <div className="truncate text-xs text-destructive">{e.last_error}</div>
-                )}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                step {e.current_step}
-                {e.status === "queued" || e.status === "active"
-                  ? ` · next ${fmt(e.next_send_at)}`
-                  : e.replied_at
-                    ? ` · replied ${fmt(e.replied_at)}`
-                    : ""}
-              </div>
-              <Pill s={e.status} />
-              <div className="flex gap-1">
-                {(e.status === "queued" || e.status === "active") && (
-                  <button
-                    aria-label="Pause"
-                    onClick={() => void act(e, { status: "paused" })}
-                    className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-secondary"
-                  >
-                    <Pause className="h-3.5 w-3.5" />
-                  </button>
-                )}
-                {e.status === "paused" && (
-                  <button
-                    aria-label="Resume"
-                    onClick={() =>
-                      void act(e, {
-                        status: e.current_step ? "active" : "queued",
-                        next_send_at: new Date().toISOString(),
-                      })
-                    }
-                    className="grid h-8 w-8 place-items-center rounded-lg border border-border hover:bg-secondary"
-                  >
-                    <Play className="h-3.5 w-3.5" />
-                  </button>
-                )}
-                <button
-                  aria-label="Remove from sequence"
-                  onClick={() => setConfirm(e)}
-                  className="grid h-8 w-8 place-items-center rounded-lg border border-border text-muted-foreground hover:bg-secondary"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-          ))}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs text-muted-foreground">
+              <tr className="border-b border-border">
+                <th className="px-2 py-2 font-medium">Who</th>
+                <th className="px-2 py-2 font-medium">Email</th>
+                <th className="px-2 py-2 font-medium">Sequence</th>
+                <th className="px-2 py-2 font-medium">From mailbox</th>
+                <th className="px-2 py-2 font-medium">Sent</th>
+                <th className="px-2 py-2 font-medium">Status</th>
+                <th className="px-2 py-2 font-medium">Next / last</th>
+                <th className="w-24 px-2 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((e) => {
+                const isOpen = open === e.id;
+                const h = history[e.id];
+                return (
+                  <Fragment key={e.id}>
+                    <tr
+                      className={`cursor-pointer border-b border-border/70 align-top hover:bg-secondary/40 ${isOpen ? "bg-secondary/40" : ""}`}
+                      onClick={() => void toggle(e)}
+                    >
+                      <td className="px-2 py-2.5" onClick={(ev) => ev.stopPropagation()}>
+                        <div className="flex items-center gap-1.5">
+                          <ChevronRight
+                            className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`}
+                          />
+                          <div>
+                            <Btn variant="ghost" title={isOpen ? "Close message history" : "Open message history"} onClick={() => void toggle(e)} className="max-w-64 whitespace-normal break-words text-left">
+                              {e.leads?.contact_name || e.leads?.company || "—"}
+                            </Btn>
+                            {e.leads?.contact_name && (
+                              <div className="text-xs text-muted-foreground">{e.leads.company}</div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-2 py-2.5">
+                        <span className="font-mono text-xs">{e.leads?.email}</span>
+                        {e.leads?.email_guessed && (
+                          <span className="ml-1 rounded bg-secondary px-1 text-[.6rem] font-semibold uppercase text-muted-foreground">
+                            guessed
+                          </span>
+                        )}
+                        {e.leads?.email_verified === "invalid" && (
+                          <span className="ml-1 rounded bg-destructive/10 px-1 text-[.6rem] font-semibold uppercase text-destructive">
+                            invalid
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-2 py-2.5 text-xs">{e.sequences?.name || "—"}</td>
+                      <td className="px-2 py-2.5 text-xs text-muted-foreground">
+                        {e.mailboxes?.email || <span className="italic">next free mailbox</span>}
+                      </td>
+                      <td className="px-2 py-2.5">
+                        <Progress e={e} />
+                      </td>
+                      <td className="px-2 py-2.5">
+                        <Pill s={e.status} />
+                      </td>
+                      <td className="px-2 py-2.5 text-xs text-muted-foreground">
+                        {e.status === "queued" || e.status === "active"
+                          ? `next ${fmt(e.next_send_at)}`
+                          : e.replied_at
+                            ? `replied ${fmt(e.replied_at)}`
+                            : e.completed_at
+                              ? `done ${fmt(e.completed_at)}`
+                              : fmt(e.updated_at)}
+                        {e.last_error && (
+                          <div className="truncate text-destructive">{e.last_error}</div>
+                        )}
+                      </td>
+                      <td className="px-2 py-2.5" onClick={(ev) => ev.stopPropagation()}>
+                        <div className="flex justify-end gap-1">
+                          {(e.status === "queued" || e.status === "active") && (
+                            <Btn variant="ghost"
+                              title="Pause"
+                              onClick={() => void act(e, { status: "paused" })}
+                              className="grid h-7 w-7 place-items-center rounded-md border border-border hover:bg-secondary"
+                            >
+                              <Pause className="h-3.5 w-3.5" /><span className="sr-only">Pause</span>
+                            </Btn>
+                          )}
+                          {e.status === "paused" && (
+                            <Btn variant="ghost"
+                              title="Resume"
+                              onClick={() =>
+                                void act(e, {
+                                  status: e.current_step ? "active" : "queued",
+                                  next_send_at: new Date().toISOString(),
+                                })
+                              }
+                              className="grid h-7 w-7 place-items-center rounded-md border border-border hover:bg-secondary"
+                            >
+                              <Play className="h-3.5 w-3.5" /><span className="sr-only">Resume</span>
+                            </Btn>
+                          )}
+                          <Btn variant="ghost"
+                            title="Remove from sequence"
+                            onClick={() => setConfirm(e)}
+                            className="grid h-7 w-7 place-items-center rounded-md border border-border text-muted-foreground hover:bg-secondary"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /><span className="sr-only">Remove from sequence</span>
+                          </Btn>
+                        </div>
+                      </td>
+                    </tr>
+                    {isOpen && (
+                      <tr className="border-b border-border/70 bg-secondary/30">
+                        <td colSpan={8} className="px-4 py-3">
+                          {!h ? (
+                            <div className="text-xs text-muted-foreground">Loading history…</div>
+                          ) : !h.length ? (
+                            <div className="text-xs text-muted-foreground">
+                              Nothing sent yet — first email goes out {fmt(e.next_send_at)} from{" "}
+                              {e.mailboxes?.email || "the next free mailbox"}.
+                            </div>
+                          ) : (
+                            <ul className="space-y-1.5 text-xs">
+                              {[...h]
+                                .sort(
+                                  (a, b) =>
+                                    new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime(),
+                                )
+                                .map((m) => (
+                                  <li key={m.id} className="flex flex-wrap items-center gap-2">
+                                    <span
+                                      className={`rounded-full px-2 py-0.5 text-[.6rem] font-semibold uppercase ${
+                                        m.direction === "in"
+                                          ? m.kind === "bounce"
+                                            ? "bg-destructive/10 text-destructive"
+                                            : "bg-primary/15 text-primary"
+                                          : m.status === "sent"
+                                            ? "bg-secondary text-muted-foreground"
+                                            : "bg-destructive/10 text-destructive"
+                                      }`}
+                                    >
+                                      {m.direction === "in"
+                                        ? m.kind === "bounce"
+                                          ? "bounced"
+                                          : m.kind === "auto_reply"
+                                            ? "auto-reply"
+                                            : "replied"
+                                        : m.status === "sent"
+                                          ? `sent · email ${(m.step_position ?? 0) + 1}`
+                                          : `failed · email ${(m.step_position ?? 0) + 1}`}
+                                    </span>
+                                    <span className="text-muted-foreground">{fmt(m.sent_at)}</span>
+                                    <span className="font-medium">{m.subject}</span>
+                                    {m.mailboxes?.email && (
+                                      <span className="text-muted-foreground">
+                                        from {m.mailboxes.email}
+                                      </span>
+                                    )}
+                                    {m.error && <span className="text-destructive">{m.error}</span>}
+                                    {m.direction === "in" && m.snippet && (
+                                      <span className="w-full text-muted-foreground">
+                                        “{m.snippet}”
+                                      </span>
+                                    )}
+                                  </li>
+                                ))}
+                            </ul>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
       <ConfirmDialog
@@ -980,7 +1242,7 @@ function Queue({ sequences, refresh }: { sequences: Sequence[]; refresh: () => P
 
 /* --------------------------------------------------------------- inbox */
 const INTENT_STYLE: Record<string, { label: string; cls: string }> = {
-  interested: { label: "Interested", cls: "bg-[oklch(.7_.18_150)]/20 text-[oklch(.35_.12_150)]" },
+  interested: { label: "Interested", cls: "bg-primary/15 text-primary" },
   question: { label: "Question", cls: "bg-[oklch(.7_.15_250)]/20 text-[oklch(.4_.12_250)]" },
   later: { label: "Later", cls: "bg-[oklch(.8_.16_80)]/25 text-[oklch(.45_.1_70)]" },
   not_interested: { label: "Not interested", cls: "bg-destructive/10 text-destructive" },

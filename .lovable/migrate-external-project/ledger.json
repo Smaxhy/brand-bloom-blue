@@ -1,5 +1,5 @@
 {
-  "source_archive": "inspirova-admin-engine_5.zip",
+  "source_archive": "inspirova-admin-engine_8.zip",
   "capabilities": [
     {
       "capability": "code",
@@ -91,6 +91,13 @@
       "outcome": "Applied plain-text/sentence opt-out footer (migration + templates + gmail/sequencer/ghl + settings UI); skipped server.ts, free-enrich.ts, SettingsView credential regressions",
       "status": "verified",
       "next_action": "none"
+    },
+    {
+      "capability": "outreach-people-update",
+      "source": "inspirova-admin-engine_8.zip",
+      "outcome": "Applied Outreach People view with search, mailbox/status/sequence filters, progress, enrollment-scoped history and formula-safe CSV download. Signed-in test used temporary paused Cloud records, read history and downloaded CSV, then removed all test records. No emails sent. Preserved homepage, secure settings, server credential loading, safe crawler, data and existing schema.",
+      "status": "verified",
+      "next_action": "Live sends and schedules remain unverified; pre-existing admin sidebar overflow persists on narrow screens."
     }
   ]
 }

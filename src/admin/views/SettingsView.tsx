@@ -699,7 +699,7 @@ function SenderIdentityPanel() {
             onChange={(e) => setS({ ...s, us_notice: e.target.value })}
           />
         </Field>
-        <Field label="Notice for EU leads (says where you got their details + how to object)">
+        <Field label="Notice for EU leads (classic footer only)">
           <textarea
             className={inputCls + " min-h-[72px]"}
             value={s.eu_notice}
