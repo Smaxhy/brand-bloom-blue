@@ -29,3 +29,7 @@
 # Updated admin fix
 - [x] Apply stationary button/panel hover fix from inspirova-admin-engine_4.zip while retaining secure settings, crawler protections, homepage and data.
 - [x] Verify signed-in admin hover behavior and retained mailbox/key controls; seven safety tests passed, no runtime errors.
+
+# Outreach People update
+- [ ] Apply new People view while preserving homepage, data and security protections.
+- [ ] Verify signed-in filters, history and CSV export without sending emails.
