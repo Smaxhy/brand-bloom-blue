@@ -116,6 +116,8 @@ export interface OutreachSettings {
   plain_text?: boolean | null;
   optout_line_us?: string | null;
   optout_line_eu?: string | null;
+  /** Owner-written instructions for every AI prompt (what we sell, tone). */
+  ai_instructions?: string | null;
 }
 
 /** Local time parts for a timezone without any library. */
@@ -538,6 +540,7 @@ async function syncMailbox(
         senderName: mb.display_name,
         company: settings?.company_name || "Inspirova Marketing",
         signature: mb.signature,
+        instructions: settings?.ai_instructions || "",
       });
       if (ai) {
         intent = ai.intent;

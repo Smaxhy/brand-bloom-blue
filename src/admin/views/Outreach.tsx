@@ -1,6 +1,6 @@
+import { csvCell } from "../outreach-people-utils";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { csvCell } from "../outreach-people-utils";
 import {
   Plus,
   Play,
@@ -25,8 +25,11 @@ import {
   ExternalLink,
   FlaskConical,
   Download,
+  UserPlus,
+  Wand2,
+  Search,
 } from "lucide-react";
-import { type AdminData, type Deal, uid } from "../store";
+import { type AdminData, type Deal, type RawBusiness, uid } from "../store";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Panel, StatCard, Modal, Field, inputCls, Btn } from "../ui";
 import {
@@ -55,6 +58,9 @@ import {
   sendReply,
   markHandled,
   abStats,
+  sequenceCounts,
+  aiWriteStep,
+  enrollLeads,
   type ReplyIntent,
 } from "../outreach";
 
@@ -105,22 +111,26 @@ export function Outreach({
   const [mailboxes, setMailboxes] = useState<Mailbox[]>([]);
   const [sequences, setSequences] = useState<Sequence[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [seqCounts, setSeqCounts] = useState<Record<string, Record<string, number>>>({});
+  const [queueSeq, setQueueSeq] = useState<string>("");
   const [series, setSeries] = useState<{ day: string; sent: number; replies: number }[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
-      const [m, s, c, d] = await Promise.all([
+      const [m, s, c, d, sc] = await Promise.all([
         listMailboxes(),
         listSequences(),
         enrollmentCounts(),
         sentCounts(14),
+        sequenceCounts().catch(() => ({}) as Record<string, Record<string, number>>),
       ]);
       setMailboxes(m);
       setSequences(s);
       setCounts(c);
       setSeries(d);
+      setSeqCounts(sc);
       setErr(null);
     } catch (e) {
       setErr((e as Error).message);
@@ -224,7 +234,7 @@ export function Outreach({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex max-w-full flex-wrap gap-1 rounded-xl border border-border bg-background p-1">
+        <div className="flex gap-1 rounded-xl border border-border bg-background p-1">
           {(
             [
               ["overview", "Overview", Clock],
@@ -275,9 +285,21 @@ export function Outreach({
         />
       )}
       {tab === "sequences" && (
-        <Sequences sequences={sequences} mailboxes={mailboxes} refresh={refresh} />
+        <Sequences
+          sequences={sequences}
+          mailboxes={mailboxes}
+          refresh={refresh}
+          counts={seqCounts}
+          data={data}
+          update={update}
+          showPeople={(id) => {
+            setQueueSeq(id);
+            setTab("queue");
+          }}
+          go={go}
+        />
       )}
-      {tab === "queue" && <Queue sequences={sequences} refresh={refresh} />}
+      {tab === "queue" && <Queue sequences={sequences} refresh={refresh} initialSeqId={queueSeq} />}
       {tab === "inbox" && <InboxView data={data} update={update} go={go} />}
       {tab === "suppressed" && <Suppressed />}
     </div>
@@ -348,9 +370,9 @@ function Overview({
           />
           <Step
             done={!nothingQueued}
-            label="Add accepted leads to the sequence"
-            sub="Raw Data → select → Add to sequence"
-            onClick={() => go?.("raw")}
+            label="Add people to the sequence"
+            sub="Sequences tab → Add people (picks from your scraped businesses)"
+            onClick={() => setTab("sequences")}
           />
           <Step
             done={
@@ -481,15 +503,69 @@ function Sequences({
   sequences,
   mailboxes,
   refresh,
+  counts,
+  data,
+  update,
+  showPeople,
+  go,
 }: {
   sequences: Sequence[];
   mailboxes: Mailbox[];
   refresh: () => Promise<void>;
+  counts: Record<string, Record<string, number>>;
+  data?: AdminData;
+  update?: (fn: (prev: AdminData) => AdminData) => void;
+  showPeople: (sequenceId: string) => void;
+  go?: (v: "settings" | "raw" | "pipeline") => void;
 }) {
   const [editing, setEditing] = useState<{ seq: Partial<Sequence>; steps: SequenceStep[] } | null>(
     null,
   );
   const [saving, setSaving] = useState(false);
+  const [adding, setAdding] = useState<Sequence | null>(null);
+  // "Write with AI"
+  const [audience, setAudience] = useState("");
+  const [extra, setExtra] = useState("");
+  const [writing, setWriting] = useState<number | null>(null);
+
+  async function writeWithAi(i: number) {
+    if (!editing) return;
+    setWriting(i);
+    try {
+      const st = await aiWriteStep({
+        sequenceName: editing.seq.name || "Outreach",
+        audience: audience || undefined,
+        index: i,
+        previous: editing.steps.slice(0, i).map((x) => ({ subject: x.subject, body: x.body })),
+        current: editing.steps[i]?.body?.trim() ? editing.steps[i] : undefined,
+        extra: extra || undefined,
+      });
+      setEditing((ed) =>
+        ed
+          ? {
+              ...ed,
+              steps: ed.steps.map((x, j) =>
+                j === i
+                  ? {
+                      ...x,
+                      subject: i === 0 ? st.subject : st.subject || "",
+                      subject_b: i === 0 ? st.subject_b || x.subject_b : x.subject_b,
+                      body: st.body,
+                    }
+                  : x,
+              ),
+            }
+          : ed,
+      );
+      toast.success(
+        i === 0 ? "First email written — edit anything you like" : `Follow-up ${i} written`,
+      );
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setWriting(null);
+    }
+  }
 
   async function openEdit(seq?: Sequence) {
     if (!seq)
@@ -566,8 +642,17 @@ function Sequences({
                   {s.gap_max_sec}s between sends
                 </p>
                 <AbStrip sequenceId={s.id} />
+                <SeqPeople c={counts[s.id]} onClick={() => showPeople(s.id)} />
               </div>
               <div className="flex shrink-0 gap-1">
+                <button
+                  aria-label="Add people"
+                  title="Add people from your scraped businesses"
+                  onClick={() => setAdding(s)}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-2.5 text-xs font-semibold hover:bg-secondary"
+                >
+                  <UserPlus className="h-4 w-4" /> Add people
+                </button>
                 <button
                   aria-label="Edit sequence"
                   onClick={() => void openEdit(s)}
@@ -627,7 +712,7 @@ function Sequences({
                           seq: {
                             ...editing.seq,
                             mailbox_ids: on
-                              ? (editing.seq.mailbox_ids ?? []).filter((x) => x !== m.id)
+                              ? editing.seq.mailbox_ids!.filter((x) => x !== m.id)
                               : [...(editing.seq.mailbox_ids ?? []), m.id],
                           },
                         })
@@ -688,6 +773,33 @@ function Sequences({
               </label>
             </div>
 
+            <div className="rounded-xl border border-dashed border-[var(--brand-violet)]/40 bg-[var(--brand-violet)]/5 p-3">
+              <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                <Wand2 className="h-4 w-4 text-[var(--brand-violet)]" /> Write with AI
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input
+                  className={inputCls}
+                  value={audience}
+                  onChange={(e) => setAudience(e.target.value)}
+                  placeholder="Who is this for? e.g. roofers in Denver who have no online booking"
+                />
+                <input
+                  className={inputCls}
+                  value={extra}
+                  onChange={(e) => setExtra(e.target.value)}
+                  placeholder="Any direction for this one? e.g. shorter, mention the snow season"
+                />
+              </div>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Press <b>Write</b> on any email below. It follows your{" "}
+                <button type="button" className="underline" onClick={() => go?.("settings")}>
+                  AI instructions
+                </button>{" "}
+                (Settings) and rewrites what's already in the box if there is something.
+              </p>
+            </div>
+
             <div className="space-y-3">
               {editing.steps.map((st, i) => (
                 <div key={i} className="rounded-xl border border-border p-3">
@@ -696,6 +808,19 @@ function Sequences({
                       {i === 0 ? "Email 1" : `Follow-up ${i}`}
                     </div>
                     <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void writeWithAi(i)}
+                        disabled={writing !== null}
+                        className="inline-flex h-8 items-center gap-1 rounded-lg bg-[var(--brand-violet)] px-2.5 text-xs font-semibold text-white disabled:opacity-60"
+                      >
+                        {writing === i ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Wand2 className="h-3.5 w-3.5" />
+                        )}
+                        {writing === i ? "Writing…" : st.body?.trim() ? "Rewrite" : "Write"}
+                      </button>
                       {i > 0 && (
                         <label className="flex items-center gap-1 text-xs text-muted-foreground">
                           after{" "}
@@ -814,14 +939,365 @@ function Sequences({
           </div>
         )}
       </Modal>
+
+      <AddPeople
+        seq={adding}
+        data={data}
+        update={update}
+        onClose={() => setAdding(null)}
+        onDone={async (seqId, activate) => {
+          if (activate) {
+            const sq = sequences.find((x) => x.id === seqId);
+            if (sq && sq.status !== "active" && sq.mailbox_ids.length)
+              await setSequenceStatus(seqId, "active");
+          }
+          await refresh();
+        }}
+        go={go}
+      />
     </div>
   );
 }
 
+/** Small per-sequence summary of who is in it. */
+function SeqPeople({ c, onClick }: { c?: Record<string, number>; onClick: () => void }) {
+  const total = c?.total ?? 0;
+  const waiting = (c?.queued ?? 0) + (c?.active ?? 0);
+  const done = c?.completed ?? 0;
+  const replied = c?.replied ?? 0;
+  const bad = (c?.bounced ?? 0) + (c?.unsubscribed ?? 0);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mt-2 inline-flex flex-wrap items-center gap-1.5 rounded-lg border border-border px-2 py-1 text-[.7rem] hover:bg-secondary"
+      title="See everyone in this sequence"
+    >
+      <Users className="h-3.5 w-3.5 text-muted-foreground" />
+      <b>{total}</b> {total === 1 ? "person" : "people"}
+      {total > 0 && (
+        <>
+          <span className="text-muted-foreground">·</span>
+          <span>{waiting} waiting</span>
+          <span className="text-muted-foreground">·</span>
+          <span>{done} finished</span>
+          {replied > 0 && (
+            <>
+              <span className="text-muted-foreground">·</span>
+              <span className="text-[oklch(.45_.15_150)]">{replied} replied</span>
+            </>
+          )}
+          {bad > 0 && (
+            <>
+              <span className="text-muted-foreground">·</span>
+              <span className="text-destructive">{bad} bounced/opted out</span>
+            </>
+          )}
+        </>
+      )}
+      <ChevronRight className="h-3 w-3 text-muted-foreground" />
+    </button>
+  );
+}
+
+/** Pick people from the scraped businesses (Raw Data) and enrol them in one go. */
+function AddPeople({
+  seq,
+  data,
+  update,
+  onClose,
+  onDone,
+  go,
+}: {
+  seq: Sequence | null;
+  data?: AdminData;
+  update?: (fn: (prev: AdminData) => AdminData) => void;
+  onClose: () => void;
+  onDone: (sequenceId: string, activate: boolean) => Promise<void>;
+  go?: (v: "settings" | "raw" | "pipeline") => void;
+}) {
+  const [q, setQ] = useState("");
+  const [hideEmailed, setHideEmailed] = useState(true);
+  const [onlyAccepted, setOnlyAccepted] = useState(false);
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [activate, setActivate] = useState(true);
+  const [result, setResult] = useState<{
+    enrolled: number;
+    skipped: { email: string; reason: string }[];
+  } | null>(null);
+
+  useEffect(() => {
+    if (!seq) return;
+    setSel(new Set());
+    setResult(null);
+    setQ("");
+  }, [seq]);
+
+  const rows = useMemo(() => {
+    const all = (data?.raw ?? []).filter((r) => r.email && r.status !== "rejected");
+    const needle = q.trim().toLowerCase();
+    return all
+      .filter((r) => !hideEmailed || !r.lastEmailedAt)
+      .filter((r) => !onlyAccepted || r.status === "accepted")
+      .filter(
+        (r) =>
+          !needle ||
+          [r.business, r.email, r.city, r.industry, r.contactName]
+            .join(" ")
+            .toLowerCase()
+            .includes(needle),
+      )
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  }, [data?.raw, q, hideEmailed, onlyAccepted]);
+
+  const allShown = rows.length > 0 && rows.every((r) => sel.has(r.id));
+  function toggleAll() {
+    setSel(allShown ? new Set() : new Set(rows.map((r) => r.id)));
+  }
+
+  async function add() {
+    if (!seq) return;
+    const picked = rows.filter((r) => sel.has(r.id));
+    if (!picked.length) return toast.error("Tick at least one person.");
+    setBusy(true);
+    try {
+      const res = await enrollLeads(seq.id, picked.map(rawToEnroll));
+      if (!res.ok) throw new Error(res.error || "Could not add people");
+      setResult({ enrolled: res.enrolled, skipped: res.skipped });
+      if (res.enrolled) {
+        update?.((p) => ({
+          ...p,
+          raw: p.raw.map((r) =>
+            sel.has(r.id)
+              ? { ...r, status: "accepted" as const, lastEmailedAt: r.lastEmailedAt ?? Date.now() }
+              : r,
+          ),
+        }));
+        toast.success(
+          `${res.enrolled} ${res.enrolled === 1 ? "person" : "people"} added to "${seq.name}"${
+            activate ? " — sequence is live" : ""
+          }`,
+        );
+        await onDone(seq.id, activate);
+      }
+      setSel(new Set());
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open={!!seq} onClose={onClose} title={seq ? `Add people to "${seq.name}"` : ""} wide>
+      {seq && (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Everyone below came from the Data Scraper and has an email address. Tick who should get
+            this sequence; people already on the suppression list or already in this sequence are
+            skipped automatically.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-[220px] flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                className={inputCls + " pl-9"}
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search business, city, niche…"
+              />
+            </div>
+            <label className="flex items-center gap-1.5 text-xs">
+              <input
+                type="checkbox"
+                checked={hideEmailed}
+                onChange={(e) => setHideEmailed(e.target.checked)}
+                className="accent-[var(--brand-violet)]"
+              />
+              Hide already emailed
+            </label>
+            <label className="flex items-center gap-1.5 text-xs">
+              <input
+                type="checkbox"
+                checked={onlyAccepted}
+                onChange={(e) => setOnlyAccepted(e.target.checked)}
+                className="accent-[var(--brand-violet)]"
+              />
+              Only "accepted"
+            </label>
+            <Btn variant="ghost" onClick={toggleAll}>
+              {allShown ? "Clear" : `Select all ${rows.length}`}
+            </Btn>
+          </div>
+
+          <div className="max-h-[46vh] overflow-auto rounded-xl border border-border">
+            {!rows.length ? (
+              <div className="p-6 text-center text-sm text-muted-foreground">
+                Nothing to show.{" "}
+                {(data?.raw ?? []).length === 0 ? (
+                  <>
+                    Run the{" "}
+                    <button className="underline" onClick={() => go?.("raw")}>
+                      Data Scraper
+                    </button>{" "}
+                    first and save the businesses.
+                  </>
+                ) : (
+                  "Try clearing the filters."
+                )}
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-secondary text-left text-[.65rem] uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="w-8 px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={allShown}
+                        onChange={toggleAll}
+                        className="accent-[var(--brand-violet)]"
+                      />
+                    </th>
+                    <th className="px-2 py-2">Business</th>
+                    <th className="px-2 py-2">Email</th>
+                    <th className="px-2 py-2">Where</th>
+                    <th className="px-2 py-2 text-right">Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.slice(0, 400).map((r) => (
+                    <tr
+                      key={r.id}
+                      className={`cursor-pointer border-t border-border ${sel.has(r.id) ? "bg-[var(--brand-violet)]/5" : "hover:bg-secondary/60"}`}
+                      onClick={() =>
+                        setSel((p) => {
+                          const n = new Set(p);
+                          if (n.has(r.id)) n.delete(r.id);
+                          else n.add(r.id);
+                          return n;
+                        })
+                      }
+                    >
+                      <td className="px-3 py-1.5">
+                        <input
+                          type="checkbox"
+                          checked={sel.has(r.id)}
+                          readOnly
+                          className="accent-[var(--brand-violet)]"
+                        />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <div className="font-medium">{r.business}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {r.contactName || ""}
+                          {r.contactName && r.industry ? " · " : ""}
+                          {r.industry || ""}
+                          {r.lastEmailedAt ? " · emailed before" : ""}
+                        </div>
+                      </td>
+                      <td className="px-2 py-1.5 font-mono text-xs">{r.email}</td>
+                      <td className="px-2 py-1.5 text-xs text-muted-foreground">{r.city}</td>
+                      <td className="px-2 py-1.5 text-right text-xs">{r.score ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+          {rows.length > 400 && (
+            <p className="text-xs text-muted-foreground">
+              Showing the first 400 — narrow with the search box to reach the rest.
+            </p>
+          )}
+
+          {result && (
+            <div className="rounded-lg border border-border bg-secondary/50 px-3 py-2 text-xs">
+              <b>{result.enrolled}</b> added
+              {result.skipped.length > 0 && (
+                <>
+                  {" "}
+                  · {result.skipped.length} skipped:{" "}
+                  {result.skipped
+                    .slice(0, 6)
+                    .map((x) => `${x.email} (${x.reason})`)
+                    .join(", ")}
+                  {result.skipped.length > 6 ? "…" : ""}
+                </>
+              )}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+            <label className="flex items-center gap-1.5 text-xs">
+              <input
+                type="checkbox"
+                checked={activate}
+                onChange={(e) => setActivate(e.target.checked)}
+                className="accent-[var(--brand-violet)]"
+              />
+              Start sending right away (sets the sequence to Active)
+            </label>
+            <div className="flex gap-2">
+              <Btn variant="ghost" onClick={onClose}>
+                Close
+              </Btn>
+              <Btn onClick={() => void add()} disabled={busy || !sel.size}>
+                {busy ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Adding…
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" /> Add {sel.size || ""}{" "}
+                    {sel.size === 1 ? "person" : "people"}
+                  </>
+                )}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function rawToEnroll(r: RawBusiness) {
+  return {
+    company: r.business,
+    website: r.website,
+    contactName: r.contactName,
+    contactTitle: r.contactTitle,
+    email: r.email,
+    emailSource: r.emailSource || r.source,
+    emailGuessed: r.emailSource ? r.emailSource === "Guess" : /guess/i.test(r.source || ""),
+    score: r.score,
+    scoreReasons: r.scoreWhy,
+    ai: r.ai ?? null,
+    phone: r.phone,
+    linkedin: r.linkedin,
+    city: r.city,
+    industry: r.industry,
+    source: r.source,
+    rawId: r.id,
+  };
+}
+
 /* --------------------------------------------------------------- queue */
-function Queue({ sequences, refresh }: { sequences: Sequence[]; refresh: () => Promise<void> }) {
+function Queue({
+  sequences,
+  refresh,
+  initialSeqId,
+}: {
+  sequences: Sequence[];
+  refresh: () => Promise<void>;
+  initialSeqId?: string;
+}) {
   const [rows, setRows] = useState<Enrollment[]>([]);
-  const [seqId, setSeqId] = useState("");
+  const [seqId, setSeqId] = useState(initialSeqId ?? "");
+  useEffect(() => {
+    setSeqId(initialSeqId ?? "");
+  }, [initialSeqId]);
   const [status, setStatus] = useState("");
   const [mailbox, setMailbox] = useState("");
   const [q, setQ] = useState("");
@@ -866,8 +1342,7 @@ function Queue({ sequences, refresh }: { sequences: Sequence[]; refresh: () => P
         const m = await listMessages({ enrollmentId: e.id, limit: 50 });
         setHistory((h) => ({ ...h, [e.id]: m }));
       } catch {
-        toast.error("Could not load message history. Close and reopen to retry.");
-        setOpen(null);
+        setHistory((h) => ({ ...h, [e.id]: [] }));
       }
     }
   }
@@ -951,7 +1426,7 @@ function Queue({ sequences, refresh }: { sequences: Sequence[]; refresh: () => P
                 i < sent
                   ? e.status === "bounced" || e.status === "failed"
                     ? "bg-destructive"
-                    : "bg-primary"
+                    : "bg-[oklch(.62_.17_150)]"
                   : "bg-secondary"
               }`}
             />
@@ -968,15 +1443,13 @@ function Queue({ sequences, refresh }: { sequences: Sequence[]; refresh: () => P
     <Panel>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <input
-          aria-label="Search people"
-          className={inputCls + " sm:max-w-[260px]"}
+          className={inputCls.replace("w-full", "") + " w-[260px]"}
           placeholder="Search email, name, company…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
         <select
           className={inputCls.replace("w-full", "") + " w-auto"}
-          aria-label="Sequence filter"
           value={seqId}
           onChange={(e) => setSeqId(e.target.value)}
         >
@@ -989,7 +1462,6 @@ function Queue({ sequences, refresh }: { sequences: Sequence[]; refresh: () => P
         </select>
         <select
           className={inputCls.replace("w-full", "") + " w-auto"}
-          aria-label="Mailbox filter"
           value={mailbox}
           onChange={(e) => setMailbox(e.target.value)}
         >
@@ -1000,7 +1472,6 @@ function Queue({ sequences, refresh }: { sequences: Sequence[]; refresh: () => P
         </select>
         <select
           className={inputCls.replace("w-full", "") + " w-auto"}
-          aria-label="Status filter"
           value={status}
           onChange={(e) => setStatus(e.target.value)}
         >
@@ -1025,11 +1496,10 @@ function Queue({ sequences, refresh }: { sequences: Sequence[]; refresh: () => P
           disabled={!visible.length}
           title="Download what's shown as CSV"
         >
-          <Download className="h-4 w-4" /><span className="sr-only">Download people CSV</span>
+          <Download className="h-4 w-4" />
         </Btn>
         <span className="ml-auto text-xs text-muted-foreground">
           {visible.length} shown
-          {rows.length === 500 ? " · latest 500 loaded" : ""}
           {Object.keys(counts).length ? " · " : ""}
           {["queued", "active", "replied", "completed", "bounced"]
             .filter((k) => counts[k])
@@ -1074,15 +1544,15 @@ function Queue({ sequences, refresh }: { sequences: Sequence[]; refresh: () => P
                       className={`cursor-pointer border-b border-border/70 align-top hover:bg-secondary/40 ${isOpen ? "bg-secondary/40" : ""}`}
                       onClick={() => void toggle(e)}
                     >
-                      <td className="px-2 py-2.5" onClick={(ev) => ev.stopPropagation()}>
+                      <td className="px-2 py-2.5">
                         <div className="flex items-center gap-1.5">
                           <ChevronRight
                             className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`}
                           />
                           <div>
-                            <Btn variant="ghost" title={isOpen ? "Close message history" : "Open message history"} onClick={() => void toggle(e)} className="max-w-64 whitespace-normal break-words text-left">
+                            <div className="font-medium">
                               {e.leads?.contact_name || e.leads?.company || "—"}
-                            </Btn>
+                            </div>
                             {e.leads?.contact_name && (
                               <div className="text-xs text-muted-foreground">{e.leads.company}</div>
                             )}
@@ -1092,7 +1562,7 @@ function Queue({ sequences, refresh }: { sequences: Sequence[]; refresh: () => P
                       <td className="px-2 py-2.5">
                         <span className="font-mono text-xs">{e.leads?.email}</span>
                         {e.leads?.email_guessed && (
-                          <span className="ml-1 rounded bg-secondary px-1 text-[.6rem] font-semibold uppercase text-muted-foreground">
+                          <span className="ml-1 rounded bg-[oklch(.8_.16_80)]/30 px-1 text-[.6rem] font-semibold uppercase text-[oklch(.45_.1_70)]">
                             guessed
                           </span>
                         )}
@@ -1127,17 +1597,17 @@ function Queue({ sequences, refresh }: { sequences: Sequence[]; refresh: () => P
                       <td className="px-2 py-2.5" onClick={(ev) => ev.stopPropagation()}>
                         <div className="flex justify-end gap-1">
                           {(e.status === "queued" || e.status === "active") && (
-                            <Btn variant="ghost"
-                              title="Pause"
+                            <button
+                              aria-label="Pause"
                               onClick={() => void act(e, { status: "paused" })}
                               className="grid h-7 w-7 place-items-center rounded-md border border-border hover:bg-secondary"
                             >
-                              <Pause className="h-3.5 w-3.5" /><span className="sr-only">Pause</span>
-                            </Btn>
+                              <Pause className="h-3.5 w-3.5" />
+                            </button>
                           )}
                           {e.status === "paused" && (
-                            <Btn variant="ghost"
-                              title="Resume"
+                            <button
+                              aria-label="Resume"
                               onClick={() =>
                                 void act(e, {
                                   status: e.current_step ? "active" : "queued",
@@ -1146,16 +1616,16 @@ function Queue({ sequences, refresh }: { sequences: Sequence[]; refresh: () => P
                               }
                               className="grid h-7 w-7 place-items-center rounded-md border border-border hover:bg-secondary"
                             >
-                              <Play className="h-3.5 w-3.5" /><span className="sr-only">Resume</span>
-                            </Btn>
+                              <Play className="h-3.5 w-3.5" />
+                            </button>
                           )}
-                          <Btn variant="ghost"
-                            title="Remove from sequence"
+                          <button
+                            aria-label="Remove from sequence"
                             onClick={() => setConfirm(e)}
                             className="grid h-7 w-7 place-items-center rounded-md border border-border text-muted-foreground hover:bg-secondary"
                           >
-                            <Trash2 className="h-3.5 w-3.5" /><span className="sr-only">Remove from sequence</span>
-                          </Btn>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1183,7 +1653,7 @@ function Queue({ sequences, refresh }: { sequences: Sequence[]; refresh: () => P
                                         m.direction === "in"
                                           ? m.kind === "bounce"
                                             ? "bg-destructive/10 text-destructive"
-                                            : "bg-primary/15 text-primary"
+                                            : "bg-[oklch(.7_.18_150)]/20 text-[oklch(.35_.12_150)]"
                                           : m.status === "sent"
                                             ? "bg-secondary text-muted-foreground"
                                             : "bg-destructive/10 text-destructive"
@@ -1246,7 +1716,7 @@ function Queue({ sequences, refresh }: { sequences: Sequence[]; refresh: () => P
 
 /* --------------------------------------------------------------- inbox */
 const INTENT_STYLE: Record<string, { label: string; cls: string }> = {
-  interested: { label: "Interested", cls: "bg-primary/15 text-primary" },
+  interested: { label: "Interested", cls: "bg-[oklch(.7_.18_150)]/20 text-[oklch(.35_.12_150)]" },
   question: { label: "Question", cls: "bg-[oklch(.7_.15_250)]/20 text-[oklch(.4_.12_250)]" },
   later: { label: "Later", cls: "bg-[oklch(.8_.16_80)]/25 text-[oklch(.45_.1_70)]" },
   not_interested: { label: "Not interested", cls: "bg-destructive/10 text-destructive" },

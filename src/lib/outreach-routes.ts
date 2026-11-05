@@ -13,6 +13,7 @@ import { runDispatch, type Lead, type Mailbox, type OutreachSettings } from "./s
 import { renderStep } from "./templates";
 import { hasMx } from "./providers/free-enrich";
 import { verifyEmail } from "./bounce";
+import { writeStep, DEFAULT_AI_INSTRUCTIONS } from "./email-ai";
 import { runSavedSearch, type SavedSearch } from "./saved-searches";
 
 type Env = Record<string, string | undefined>;
@@ -68,6 +69,7 @@ export async function handleOutreachRoute(
   if (path === "/api/outreach/enroll") return enroll(request, e, user);
   if (path === "/api/outreach/verify") return verifyEmails(request, e);
   if (path === "/api/outreach/reply") return sendReply(request, e);
+  if (path === "/api/outreach/ai/write") return aiWrite(request, e);
   if (path === "/api/outreach/search/run") return runSearchNow(request, e);
   return null;
 }
@@ -401,6 +403,38 @@ interface EnrollLead {
   score?: number;
   scoreReasons?: string[];
   ai?: LeadAi | null;
+}
+
+/** "Write with AI" in the sequence editor. */
+async function aiWrite(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") return json({ ok: false, error: "POST only" }, 405);
+  const b = (await request.json().catch(() => ({}))) as {
+    sequenceName?: string;
+    audience?: string;
+    index?: number;
+    previous?: { subject: string; body: string }[];
+    current?: { subject?: string; body?: string };
+    extra?: string;
+  };
+  const db = new Db(env);
+  const settings = await db
+    .one<{ company_name?: string; website?: string; ai_instructions?: string }>(
+      "outreach_settings",
+      "id=eq.singleton&select=company_name,website,ai_instructions",
+    )
+    .catch(() => null);
+  const r = await writeStep(env, {
+    sequenceName: b.sequenceName || "Outreach",
+    audience: b.audience,
+    index: Number(b.index) || 0,
+    previous: Array.isArray(b.previous) ? b.previous.slice(0, 6) : [],
+    current: b.current,
+    extra: b.extra,
+    company: settings?.company_name || "Inspirova Marketing",
+    website: settings?.website || undefined,
+    instructions: settings?.ai_instructions || DEFAULT_AI_INSTRUCTIONS,
+  });
+  return json(r, r.ok ? 200 : 502);
 }
 
 /** Single-address verification: Reoon when configured, else MX only. */

@@ -87,6 +87,8 @@ export interface EnrichSiteOpts {
   db?: Db | null;
   /** Called with a one-line reason when the AI call fails (out of credit, bad key…). */
   onWarn?: (w: string) => void;
+  /** Owner's AI instructions (Settings → AI instructions) — shapes the pitch line. */
+  instructions?: string;
 }
 
 function cleanDomain(u: string): string {
@@ -191,6 +193,7 @@ async function claudeAssess(
     reviews?: number;
     hint?: string;
     onWarn?: (w: string) => void;
+    instructions?: string;
   },
 ): Promise<AiAssessment | null> {
   const key = secret(env, "ANTHROPIC_API_KEY");
@@ -199,7 +202,16 @@ async function claudeAssess(
     return null;
   }
   const system = `You assess small local businesses for a marketing agency that sells websites, Google/Meta ads, review generation and lead automation. You get the text of the business's website plus technical signals read from it.
-
+${
+  input.instructions?.trim()
+    ? `
+THE AGENCY'S OWN INSTRUCTIONS (what they sell, how they talk — the "pitch" must fit these):
+"""
+${input.instructions.trim().slice(0, 2500)}
+"""
+`
+    : ""
+}
 Return ONLY a JSON object:
 {
   "ownerName": "",        // the single most senior decision-maker named on the site (Owner/Founder/CEO > Director > Manager), "" if none
@@ -383,6 +395,7 @@ export async function enrichSite(env: Env, o: EnrichSiteOpts): Promise<SiteProfi
       : undefined;
     const ex = await claudeAssess(env, {
       onWarn: o.onWarn,
+      instructions: o.instructions,
       company: o.company || "",
       industry: o.industry,
       city: o.city,
