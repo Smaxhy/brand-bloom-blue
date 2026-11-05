@@ -433,12 +433,12 @@ async function enrich(request: Request, env: Env): Promise<Response> {
     if (!r || !r.website) return;
     const prof = await enrichSite(env, {
       onWarn: warn,
+      instructions: aiInstructions,
       website: r.website,
       company: p.organizationName || "",
       industry: (p as { industry?: string }).industry || "",
       city: (p as { city?: string }).city || "",
       rating: p.rating,
-      instructions: aiInstructions,
       reviews: p.reviews,
       ownerName: p.name,
       useClaude: payload.useClaude !== false,
@@ -649,7 +649,7 @@ async function googleSearch(
       error?: string;
     };
     if (d.error && /limit|exceed|run out|plan/i.test(d.error))
-      return { blob: "", firstLink: "", error: searchProviderProblem("SerpApi", 429) };
+      return { blob: "", firstLink: "", error: `SerpApi: ${d.error}` };
     // Only the fields that describe the RESULT. The raw SerpApi JSON is full of
     // serpapi.com links (serpapi_link, thumbnails, pagination) that used to leak
     // in as "the website".
@@ -1369,8 +1369,9 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
     const dead = new Set<string>();
     let calls = 0;
     let cursor = 0;
+    let quotaHit = false;
     const worker = async () => {
-      while (cursor < jobs.length && byKey.size < wanted && calls < MAX_CALLS) {
+      while (cursor < jobs.length && byKey.size < wanted && calls < MAX_CALLS && !quotaHit) {
         const job = jobs[cursor++];
         const areaKey = job.area.label + "|" + (job.area.lat ?? "");
         if (dead.has(areaKey)) continue;
@@ -1384,7 +1385,11 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
               ? { lat: job.area.lat, lng: job.area.lng, radiusM: job.area.radiusM }
               : undefined,
         });
-        if (r.error) errors.push(r.error);
+        if (r.error && !errors.includes(r.error)) errors.push(r.error);
+        if (r.quota) {
+          quotaHit = true; // stop every worker — more calls just add more 429s
+          break;
+        }
         const city = job.area.label.split(",")[0].trim();
         for (const b of r.businesses)
           add({ ...b, city: b.city || city, source: "Google Maps" }, "places");
@@ -1420,7 +1425,8 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
                 ? { lat: t.lat, lng: t.lng, radiusM: t.radiusM }
                 : undefined,
           });
-          if (r.error) errors.push(r.error);
+          if (r.error && !errors.includes(r.error)) errors.push(r.error);
+          if (r.quota) break outer;
           let fresh = 0;
           for (const b of r.businesses) {
             if (add({ ...b, source: "Google Maps" }, "places")) fresh++;
