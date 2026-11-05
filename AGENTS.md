@@ -6,3 +6,4 @@
 - Scraper and scheduled searches share server-only domain enrichment caching; public website extracts are cached without browser grants to reduce repeated crawling.
 - Website enrichment uses a public-destination fetch guard on every redirect, with DNS checks and bounded reads, to prevent crawling internal endpoints.
 - Outreach People history queries must filter by enrollment ID through the authenticated RLS client; spreadsheet exports escape cells and neutralize formula prefixes to keep lead data safe.
+- GHL plain-text sends must populate its HTML email-body field with escaped text; URL attributes must also be escaped to prevent injection.

@@ -110,6 +110,22 @@ export async function ghlUpsertContact(
   return id;
 }
 
+/** Plain text as minimal HTML for GHL's email-body field. */
+export function textToMinimalHtml(text: string): string {
+  const escape = (value: string) => value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+  const body = (text || "").split(/(https?:\/\/[^\s<>"']+)/g)
+    .map((part, index) => index % 2 === 1
+      ? `<a href="${escape(part)}">${escape(part)}</a>`
+      : escape(part))
+    .join("");
+  return `<div style="white-space:pre-wrap;font-family:inherit">${body}</div>`;
+}
+
 export interface GhlSent {
   id: string; // message id
   conversationId: string;
@@ -135,7 +151,8 @@ export async function ghlSendEmail(
       type: "Email",
       contactId: m.contactId,
       subject: m.subject,
-      html: m.html || undefined,
+      // GHL uses html for email bodies; message alone is intended for SMS.
+      html: m.html || textToMinimalHtml(m.text),
       message: m.text,
       emailFrom: m.fromName ? `${m.fromName} <${m.fromEmail}>` : m.fromEmail,
       replyMessageId: m.replyToEmailMessageId || undefined,
