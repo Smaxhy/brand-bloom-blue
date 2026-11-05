@@ -1262,13 +1262,14 @@ export function Scraper({
               value={filters.perPage}
               onChange={(e) => setFilters({ ...filters, perPage: Number(e.target.value) })}
             >
-              {(sources.apify ? [50, 100, 200, 300, 500, 1000] : [25, 50, 100, 200, 500]).map(
-                (n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ),
-              )}
+              {(sources.apify
+                ? [50, 100, 200, 300, 500, 1000, 2000]
+                : [25, 50, 100, 200, 500, 1000]
+              ).map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
             </select>
           </Field>
 
