@@ -1,5 +1,5 @@
 {
-  "source_archive": "inspirova-admin-engine_9.zip",
+  "source_archive": "inspirova-admin-engine_15.zip",
   "capabilities": [
     {
       "capability": "code",
@@ -105,6 +105,13 @@
       "outcome": "Apply seasonal lighting niches, provider warnings and cleaned search result extraction. Preserve secure Settings, server credential resolution, private-address crawler guard and Outreach CSV/accessibility fixes. All archived schema additions already exist in managed migrations; no replay needed. Signed-in preview verified Christmas preset selection and niche group, retained Google/GHL mailbox controls and secure credential form, and accessible Outreach People. All 12 tests passed; build OK; protected-file hashes unchanged.",
       "status": "verified",
       "next_action": "Live provider searches, email sends and schedules remain unverified; no live calls or sends performed."
+    },
+    {
+      "capability": "admin-engine-15-update",
+      "source": "inspirova-admin-engine_15.zip",
+      "outcome": "Apply GHL plain-text email body fallback with safe escaping. Keep secure key entry, server key resolution, private-address fetch protection and sanitized SerpApi warnings; existing schema already applied.",
+      "status": "in_progress",
+      "next_action": "Run email payload regression tests and signed-in Settings check without sending real emails."
     }
   ]
 }
