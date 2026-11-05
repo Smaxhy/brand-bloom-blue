@@ -86,12 +86,19 @@ export function renderStep(input: {
     (lead.region === "EU" ? settings.optout_line_eu : settings.optout_line_us) ||
     "If this isn't relevant, just reply \"no\" and I won't write again.";
   const addressLine = [settings.company_name, settings.postal_address].filter(Boolean).join(", ");
+  const company = (settings.company_name || "").trim();
+  const address = (settings.postal_address || "").trim().replace(/[.\s]+$/, "");
 
   // Sentence style: reads like a person wrote it. The reply-"no" is a working opt-out
   // (the inbox sync suppresses on it) and the address satisfies CAN-SPAM. The
   // one-click unsubscribe still travels in the List-Unsubscribe header on Gmail.
+  //
+  //   If this isn't relevant, just reply "no" and I won't write again.
+  //
+  //   Inspirova Marketing,
+  //   Kerkstraat 106, 9050 Gent.
   const footerLines = sentenceStyle
-    ? [`${optout}${addressLine ? ` ${addressLine}.` : ""}`]
+    ? [optout, "", ...(company ? [`${company},`] : []), ...(address ? [`${address}.`] : [])]
     : [notice, addressLine, `Unsubscribe: ${input.unsubscribeUrl}`].filter(Boolean);
 
   const text = (
@@ -116,7 +123,14 @@ ${para(body)}
 ${signature ? `<div style="margin-top:18px;color:#1f2328">${esc(signature).replace(/\n/g, "<br>")}</div>` : ""}
 ${
   sentenceStyle
-    ? `<p style="margin:18px 0 0;color:#1f2328">${esc(footerLines[0])}</p>`
+    ? `<p style="margin:18px 0 0;color:#1f2328">${esc(footerLines[0])}</p>${
+        footerLines.length > 2
+          ? `<p style="margin:14px 0 0;color:#1f2328">${footerLines
+              .slice(2)
+              .map(esc)
+              .join("<br>")}</p>`
+          : ""
+      }`
     : `<div style="margin-top:28px;padding-top:12px;border-top:1px solid #e6e8eb;font-size:12px;line-height:1.5;color:#6b7280">
 ${esc(notice)}<br>
 ${esc(addressLine)}<br>

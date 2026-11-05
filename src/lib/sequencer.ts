@@ -306,11 +306,21 @@ export async function runDispatch(
       if (due.length && !isGhl(mb)) await accessTokenFor(env, db, mb.id); // fail fast on a dead Google connection
 
       for (const en of due) {
-        // Claim it for this mailbox (unassigned enrollments round-robin by whoever gets there first).
-        if (!en.mailbox_id)
-          await db.update("enrollments", `id=eq.${en.id}&mailbox_id=is.null`, {
-            mailbox_id: mb.id,
-          });
+        // ATOMIC CLAIM. Two dispatchers can run at once (the 10-minute cron and a
+        // "Send now" click, or two clicks) and both used to pick the same row and
+        // send it twice. The claim only succeeds if the row is still exactly as we
+        // read it (same step, same scheduled time); the loser gets 0 rows and skips.
+        const claimed = await db.update<{ id: string }>(
+          "enrollments",
+          `id=eq.${en.id}&current_step=eq.${en.current_step}&next_send_at=${en.next_send_at ? `eq.${enc(en.next_send_at)}` : "is.null"}&status=in.(queued,active,paused)&select=id`,
+          {
+            mailbox_id: en.mailbox_id || mb.id,
+            // Park it 20 minutes out while we send; the real next time is written after.
+            next_send_at: new Date(Date.now() + 20 * 60_000).toISOString(),
+          },
+        );
+        if (!claimed.length) continue; // another run already took this one
+        en.mailbox_id = en.mailbox_id || mb.id;
 
         const seq = seqById.get(en.sequence_id);
         if (!seq) continue;
