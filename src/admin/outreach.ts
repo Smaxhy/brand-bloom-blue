@@ -325,6 +325,10 @@ export async function saveSequence(
 export async function setSequenceStatus(id: string, status: Sequence["status"]): Promise<void> {
   must(await (await tbl("sequences")).update({ status }).eq("id", id).select("id"));
 }
+/** Delete a sequence with its steps, enrollments and their message log (DB cascades). */
+export async function deleteSequence(id: string): Promise<void> {
+  must(await (await tbl("sequences")).delete().eq("id", id).select("id"));
+}
 
 /* ---------------------------------------------------------- enrollments */
 export async function listEnrollments(

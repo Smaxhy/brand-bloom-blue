@@ -8,12 +8,13 @@ touches the public homepage or any public page.
 | `src/admin/**` | Admin screens: scraper (Apify bulk, AI marketing-need rating, scores), raw data, outreach, settings (Google + **GoHighLevel** sending) | Replace your `src/admin` |
 | `src/lib/**` | Server: discovery (Places, OSM, Serper, Apify), tiered crawl + 30-day cache, AI assessment, scoring, sequencer with **two sending channels (Gmail, GHL)**, reply/bounce sync for both, saved searches, auth, DB | Replace your `src/lib` |
 | `src/server.ts` | Worker entry (api + cron) | Replace |
-| `supabase/migrations/*.sql` | 9 migrations, run in order: outreach_engine → outreach_v2 → site_cache → inbound_leads → ghl_channel → saved_search_filters → plain_footer → seen_businesses → ai_instructions | Run the ones you haven't |
+| `supabase/migrations/*.sql` | 10 migrations, run in order: outreach_engine → outreach_v2 → site_cache → inbound_leads → ghl_channel → saved_search_filters → plain_footer → seen_businesses → ai_instructions → sequence_send_anytime | Run the ones you haven't |
 | `wrangler.jsonc` | cron trigger + CPU limit | Merge `triggers` + `limits` |
 | `SETUP.md` | Every site and key, in order | Read |
 
 ## What changed in this build (Nov 5, night) — ONE NEW MIGRATION
 
+- **Page "refreshing" fix** (`src/admin/AdminApp.tsx`, `store.ts`): a token refresh — especially with the admin open in two tabs — made Supabase report "signed out" then "signed in" a second later, which rebuilt the whole screen. The app now waits 3 s before treating a sign-out as real, never hydrates twice for the same user, and ignores the realtime echo of its own saves.
 - Google Places daily-quota (429) errors now stop the scan immediately instead of burning more calls, and the banner says exactly where to raise the quota.
 - **Send now.** People tab: a purple send button on every waiting row, and "Send now to everyone waiting" when a sequence is selected. Ignores the scheduled time and the mailbox's sending hours (daily cap and the bounce check still apply; 20 per click, short gaps). Works even if the sequence is paused/draft.
 - The "Send due emails now" toast now says WHY nothing went out, e.g. "m@x.com: outside send hours (08:00–17:00 Europe/Brussels, Mon/Tue/Wed/Thu/Fri)".

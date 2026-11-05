@@ -529,6 +529,20 @@ async function enroll(request: Request, e: Env, user: ApiUser): Promise<Response
           email,
           reason: env(e, "REOON_API_KEY") ? "verifier says invalid" : "domain has no mail server",
         });
+        // Remember it as bad so nobody enrols this address again. Email-level only:
+        // one wrong guessed address doesn't condemn the whole company.
+        await db
+          .upsert(
+            "suppressions",
+            {
+              email,
+              domain: null,
+              reason: "bounce",
+              note: "pre-send: address failed verification",
+            },
+            "email",
+          )
+          .catch(() => {});
         continue;
       }
     }
