@@ -660,6 +660,7 @@ export type Database = {
           id: string
           mailbox_ids: string[]
           name: string
+          send_anytime: boolean
           settings: Json
           status: string
           stop_on_reply: boolean
@@ -673,6 +674,7 @@ export type Database = {
           id?: string
           mailbox_ids?: string[]
           name: string
+          send_anytime?: boolean
           settings?: Json
           status?: string
           stop_on_reply?: boolean
@@ -686,6 +688,7 @@ export type Database = {
           id?: string
           mailbox_ids?: string[]
           name?: string
+          send_anytime?: boolean
           settings?: Json
           status?: string
           stop_on_reply?: boolean
