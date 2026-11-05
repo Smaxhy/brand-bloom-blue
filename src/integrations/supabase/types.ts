@@ -419,6 +419,7 @@ export type Database = {
       }
       outreach_settings: {
         Row: {
+          ai_instructions: string
           company_name: string
           eu_notice: string
           footer_style: string
@@ -432,6 +433,7 @@ export type Database = {
           website: string
         }
         Insert: {
+          ai_instructions?: string
           company_name?: string
           eu_notice?: string
           footer_style?: string
@@ -445,6 +447,7 @@ export type Database = {
           website?: string
         }
         Update: {
+          ai_instructions?: string
           company_name?: string
           eu_notice?: string
           footer_style?: string

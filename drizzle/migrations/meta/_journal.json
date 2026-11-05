@@ -64,6 +64,13 @@
       "when": 1793839856479,
       "tag": "0008_seen_businesses",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793907857628,
+      "tag": "0009_ai_instructions",
+      "breakpoints": true
     }
   ]
 }
