@@ -915,6 +915,14 @@ export interface EnrichResult {
  * waterfall on the server: Apollo enrichment first, then Hunter.io for anyone
  * still missing. Process at most 10 people per call (Apollo bulk limit).
  */
+/** Provider problems reported by /api/enrich (quota used up, bad key). */
+const enrichWarnings = new Set<string>();
+export function takeEnrichWarnings(): string[] {
+  const out = Array.from(enrichWarnings);
+  enrichWarnings.clear();
+  return out;
+}
+
 export async function enrichContacts(
   people: {
     id: string;
@@ -939,7 +947,8 @@ export async function enrichContacts(
       body: JSON.stringify({ people, revealPhone, usePaid, useClaude }),
     });
     if (res.ok) {
-      const j = (await res.json()) as { results?: EnrichResult[] };
+      const j = (await res.json()) as { results?: EnrichResult[]; warnings?: string[] };
+      (j.warnings ?? []).forEach((w) => enrichWarnings.add(w));
       if (Array.isArray(j.results)) {
         return j.results.map((r) => ({
           ...r,
@@ -1439,9 +1448,11 @@ export async function discoverLeads(
     );
   }
   if (apifyNote) bits.push(apifyNote);
+  // Why fewer than asked: filters, "seen before", provider errors, area exhausted.
+  const notes = ((googleRes as { errors?: string[] }).errors ?? []).filter(Boolean);
   const message = `${people.length} unique business(es) after merge. ${bits.join(" · ")}${
     skippedDenied ? ` · ${skippedDenied} skipped (denied)` : ""
-  }`;
+  }${notes.length ? ` · ${Array.from(new Set(notes)).slice(0, 4).join(" · ")}` : ""}`;
 
   return {
     people,
