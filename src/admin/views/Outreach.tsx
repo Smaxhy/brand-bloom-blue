@@ -1037,6 +1037,10 @@ function Queue({ sequences, refresh }: { sequences: Sequence[]; refresh: () => P
             .join(" · ")}
         </span>
       </div>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Everyone enrolled in a sequence, which mailbox sends to them, how many of the emails have
+        gone out, and what's next. Click a row for the exact emails sent and any replies.
+      </p>
       {loading ? (
         <div className="py-10 text-center text-sm text-muted-foreground">
           <Loader2 className="mx-auto h-5 w-5 animate-spin" />
