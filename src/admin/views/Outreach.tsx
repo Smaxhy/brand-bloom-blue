@@ -43,6 +43,7 @@ import {
   listSteps,
   saveSequence,
   setSequenceStatus,
+  deleteSequence,
   listEnrollments,
   enrollmentCounts,
   updateEnrollment,
@@ -524,6 +525,7 @@ function Sequences({
   );
   const [saving, setSaving] = useState(false);
   const [adding, setAdding] = useState<Sequence | null>(null);
+  const [deleting, setDeleting] = useState<Sequence | null>(null);
   // "Write with AI"
   const [audience, setAudience] = useState("");
   const [extra, setExtra] = useState("");
@@ -671,6 +673,14 @@ function Sequences({
                   className="grid h-9 w-9 place-items-center rounded-lg border border-border hover:bg-secondary"
                 >
                   <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  aria-label="Delete sequence"
+                  title="Delete this sequence"
+                  onClick={() => setDeleting(s)}
+                  className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
                 </button>
                 <button
                   aria-label={s.status === "active" ? "Pause sequence" : "Activate sequence"}
@@ -972,6 +982,30 @@ function Sequences({
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        open={!!deleting}
+        title={deleting ? `Delete "${deleting.name}"?` : "Delete sequence?"}
+        description={`${
+          counts[deleting?.id ?? ""]?.total
+            ? `${counts[deleting!.id].total} people are in it — they will get no further emails, and their send history for this sequence is removed. `
+            : ""
+        }Suppressions (opt-outs, bounces) are kept. This cannot be undone.`}
+        confirmLabel="Delete sequence"
+        destructive
+        onOpenChange={(o) => !o && setDeleting(null)}
+        onConfirm={() => {
+          const target = deleting;
+          setDeleting(null);
+          if (!target) return;
+          void deleteSequence(target.id)
+            .then(async () => {
+              toast.success(`"${target.name}" deleted`);
+              await refresh();
+            })
+            .catch((e) => toast.error((e as Error).message));
+        }}
+      />
 
       <AddPeople
         seq={adding}

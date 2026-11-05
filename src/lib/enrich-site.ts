@@ -16,6 +16,7 @@
  */
 
 import { anthropicProblem } from "./anthropic-error";
+import { findOwnerLinkedin } from "./providers/websearch";
 import { freeEnrich, type SiteSignals } from "./providers/free-enrich";
 import type { Db } from "./db";
 
@@ -51,6 +52,8 @@ export interface SiteProfile {
   mx: boolean | null;
   signals: SiteSignals | null;
   linkedin: string;
+  /** We already searched for the owner's LinkedIn (don't spend another credit). */
+  linkedinTried?: boolean;
   phone: string;
   name: string;
   title: string;
@@ -310,51 +313,11 @@ async function serperOwner(
   company: string,
   city: string,
   domain: string,
+  name?: string,
 ): Promise<{ name: string; title: string; linkedin: string } | null> {
-  const key = secret(env, "SERPER_API_KEY");
+  const key = secret(env, "SERPER_API_KEY") || secret(env, "SERPAPI_API_KEY");
   if (!key || !company) return null;
-  try {
-    const res = await fetch("https://google.serper.dev/search", {
-      method: "POST",
-      headers: { "X-API-KEY": key, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        q: `"${company}" ${city} (owner OR founder OR CEO) site:linkedin.com/in`,
-        num: 5,
-      }),
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return null;
-    const d = (await res.json()) as {
-      organic?: { title?: string; link?: string; snippet?: string }[];
-    };
-    const brand = company
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, " ")
-      .trim()
-      .split(" ")[0];
-    for (const r of d.organic ?? []) {
-      const t = (r.title || "").replace(/\s*\|\s*LinkedIn.*$/i, "");
-      // "Jane Doe - Owner - Summit Roofing" or "Jane Doe – Owner at Summit Roofing"
-      const m = t.match(/^([^-–|]+?)\s*[-–]\s*([^-–|]+?)(?:\s*[-–]\s*(.+))?$/);
-      if (!m) continue;
-      const name = m[1].trim();
-      const title = m[2].trim();
-      const rest = `${m[3] || ""} ${r.snippet || ""}`.toLowerCase();
-      if (!OWNERISH.test(title)) continue;
-      if (
-        brand &&
-        !rest.includes(brand) &&
-        !t.toLowerCase().includes(brand) &&
-        !(r.snippet || "").toLowerCase().includes(domain)
-      )
-        continue;
-      if (name.split(" ").length < 2 || name.length > 50) continue;
-      return { name, title: title.slice(0, 60), linkedin: r.link || "" };
-    }
-    return null;
-  } catch {
-    return null;
-  }
+  return findOwnerLinkedin(key, { company, city, domain, name });
 }
 
 /* ------------------------------------------------------------------- main */
@@ -371,7 +334,18 @@ export async function enrichSite(env: Env, o: EnrichSiteOpts): Promise<SiteProfi
     return null;
 
   const hit = await readCache(o.db, domain);
-  if (hit) return hit;
+  if (hit) {
+    // Cached before the LinkedIn lookup existed (or it found nothing then):
+    // one targeted search now, written back so it's not repeated.
+    if (!hit.linkedin && hit.name && !hit.linkedinTried) {
+      const so = await serperOwner(env, o.company || "", o.city || "", domain, hit.name);
+      const next: SiteProfile = { ...hit, linkedin: so?.linkedin || "", linkedinTried: true };
+      if (!hit.title && so?.title) next.title = so.title;
+      await writeCache(o.db, domain, { ...next, cached: false });
+      return next;
+    }
+    return hit;
+  }
 
   const fe = await freeEnrich({ website: domain, ownerName: o.ownerName, tiered: true });
   if (!fe.ok) return null;
@@ -429,12 +403,17 @@ export async function enrichSite(env: Env, o: EnrichSiteOpts): Promise<SiteProfi
   if (!name) name = people[0]?.name || "";
   if (!title && people[0]?.name === name) title = people[0]?.title || "";
 
-  // Still nobody: one cheap LinkedIn lookup.
-  if (!name) {
-    const so = await serperOwner(env, o.company || "", o.city || "", fe.website);
+  // LinkedIn of the owner: one cheap search. With a name we look that person
+  // up directly; with no name we search for the company's owner/founder.
+  let linkedinTried = false;
+  if (!linkedin || !name) {
+    linkedinTried = true;
+    const so = await serperOwner(env, o.company || "", o.city || "", fe.website, name || undefined);
     if (so) {
-      name = so.name;
-      title = so.title;
+      if (!name) {
+        name = so.name;
+        title = so.title;
+      } else if (!title) title = so.title;
       if (!linkedin) linkedin = so.linkedin;
     }
   }
@@ -458,6 +437,7 @@ export async function enrichSite(env: Env, o: EnrichSiteOpts): Promise<SiteProfi
     mx: fe.mx,
     signals: fe.signals,
     linkedin,
+    linkedinTried,
     phone: fe.phones[0] || "",
     name,
     title,

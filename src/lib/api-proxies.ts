@@ -1601,6 +1601,28 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
         /* table not migrated yet — show everything */
       }
     }
+    // Automatic blacklist: a company whose address hard-bounced, opted out or
+    // complained never comes back in a scan (any source, regardless of "Only new").
+    try {
+      const domains = Array.from(new Set(kept.map((b) => cleanDomain(b.website)).filter(Boolean)));
+      const bad = new Set<string>();
+      for (let i = 0; i < domains.length; i += 150) {
+        const chunk = domains.slice(i, i + 150);
+        const rows = await db.select<{ domain: string }>(
+          "suppressions",
+          `domain=in.(${chunk.map((k) => `"${k}"`).join(",")})&select=domain`,
+        );
+        rows.forEach((r) => r.domain && bad.add(r.domain));
+      }
+      if (bad.size) {
+        const before = kept.length;
+        kept = kept.filter((b) => !bad.has(cleanDomain(b.website)));
+        if (before - kept.length)
+          errors.push(`${before - kept.length} blacklisted (bounced / opted out) — hidden`);
+      }
+    } catch {
+      /* no suppressions table yet */
+    }
     const toRemember = kept.slice(0, wanted);
     if (toRemember.length) {
       const now = new Date().toISOString();
