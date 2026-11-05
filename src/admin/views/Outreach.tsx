@@ -224,7 +224,7 @@ export function Outreach({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex gap-1 rounded-xl border border-border bg-background p-1">
+        <div className="flex max-w-full flex-wrap gap-1 rounded-xl border border-border bg-background p-1">
           {(
             [
               ["overview", "Overview", Clock],
@@ -1029,6 +1029,7 @@ function Queue({ sequences, refresh }: { sequences: Sequence[]; refresh: () => P
         </Btn>
         <span className="ml-auto text-xs text-muted-foreground">
           {visible.length} shown
+          {rows.length === 500 ? " · latest 500 loaded" : ""}
           {Object.keys(counts).length ? " · " : ""}
           {["queued", "active", "replied", "completed", "bounced"]
             .filter((k) => counts[k])
