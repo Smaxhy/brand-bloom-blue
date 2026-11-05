@@ -1,5 +1,5 @@
 {
-  "source_archive": "inspirova-admin-engine_8.zip",
+  "source_archive": "inspirova-admin-engine_9.zip",
   "capabilities": [
     {
       "capability": "code",
@@ -98,6 +98,13 @@
       "outcome": "Applied Outreach People view with search, mailbox/status/sequence filters, progress, enrollment-scoped history and formula-safe CSV download. Signed-in test used temporary paused Cloud records, read history and downloaded CSV, then removed all test records. No emails sent. Preserved homepage, secure settings, server credential loading, safe crawler, data and existing schema.",
       "status": "verified",
       "next_action": "Live sends and schedules remain unverified; pre-existing admin sidebar overflow persists on narrow screens."
+    },
+    {
+      "capability": "admin-engine-9-update",
+      "source": "inspirova-admin-engine_9.zip",
+      "outcome": "Apply seasonal lighting niches, provider warnings and cleaned search result extraction. Preserve secure Settings, server credential resolution, private-address crawler guard and Outreach CSV/accessibility fixes. All archived schema additions already exist in managed migrations; no replay needed. Signed-in preview verified Christmas preset selection and niche group, retained Google/GHL mailbox controls and secure credential form, and accessible Outreach People. All 12 tests passed; build OK; protected-file hashes unchanged.",
+      "status": "verified",
+      "next_action": "Live provider searches, email sends and schedules remain unverified; no live calls or sends performed."
     }
   ]
 }

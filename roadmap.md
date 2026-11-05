@@ -33,3 +33,7 @@
 # Outreach People update
 - [x] Apply new People view while preserving homepage, data and security protections.
 - [x] Verify signed-in filters, history and CSV export with temporary paused records; cleaned up without sending emails.
+
+# Admin engine 9 update
+- [x] Apply seasonal niches and provider warning fixes while retaining security and existing Outreach improvements.
+- [x] Verify signed-in scraper controls and provider response handling without live searches or sends; 12 tests passed and build OK.

@@ -39,6 +39,7 @@ import {
   geocodeLocation,
   enrichContacts,
   discoverLeads,
+  takeEnrichWarnings,
   addToDenylist,
   restoreFromDenylist,
   denylistEntries,
@@ -123,6 +124,19 @@ const KEYWORD_GROUPS: { group: string; keywords: string[] }[] = [
       "Moving Company",
       "Cleaning Service",
       "House Cleaning",
+    ],
+  },
+  {
+    group: "Seasonal — Christmas (Nov–Dec)",
+    keywords: [
+      "Christmas Light Installation",
+      "Holiday Lighting",
+      "Christmas Light Installer",
+      "Holiday Light Installation",
+      "Christmas Decorating Service",
+      "Landscape Lighting",
+      "Christmas Tree Farm",
+      "Snow Removal",
     ],
   },
   {
@@ -297,6 +311,25 @@ const KEYWORD_GROUPS: { group: string; keywords: string[] }[] = [
 
 /** One-click keyword bundles for the niche browser. Click = replace the selection. */
 const PRESETS: { id: string; label: string; hint: string; keywords: string[] }[] = [
+  {
+    id: "christmas-lights",
+    label: "Christmas lights (Dec)",
+    hint: "Who sells — or should sell — holiday lighting this December: installers plus the trades that add it on",
+    keywords: [
+      "Christmas Light Installation",
+      "Holiday Lighting",
+      "Christmas Light Installer",
+      "Holiday Light Installation",
+      "Christmas Decorating Service",
+      "Landscape Lighting",
+      "Tree Service",
+      "Landscaping",
+      "Window Cleaning",
+      "Pressure Washing",
+      "Gutter Cleaning",
+      "Roofing",
+    ],
+  },
   {
     id: "home-exterior",
     label: "Home exterior",
@@ -840,6 +873,12 @@ export function Scraper({
         while (next < chunks.length) await runChunk(chunks[next++]);
       }),
     );
+    const warnings = takeEnrichWarnings();
+    if (warnings.length)
+      setBanner((b) => ({
+        live: b?.live ?? true,
+        text: `${b?.text ?? ""} · ⚠ ${warnings.join(" · ")}`.replace(/^ · /, ""),
+      }));
 
     setResults((prev) =>
       prev.map((p) => {

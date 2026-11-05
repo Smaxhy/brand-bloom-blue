@@ -382,6 +382,9 @@ async function enrich(request: Request, env: Env): Promise<Response> {
   // Cheap Google (Serper ≈ $1/1k) is allowed as a fallback even without usePaid; SerpApi only with usePaid.
   const googleKey =
     secret(env, "SERPER_API_KEY") || (usePaid ? secret(env, "SERPAPI_API_KEY") : undefined);
+  // Provider problems (quota used up, bad key) — shown once in the scraper banner.
+  const warnings = new Set<string>();
+  const warn = (w: string) => warnings.add(w);
 
   const results = people.map((p) => ({
     id: p.id,
@@ -479,8 +482,8 @@ async function enrich(request: Request, env: Env): Promise<Response> {
     // 2a) Find the company website via Google if we still don't have one.
     if (!r.website && googleKey && p.organizationName) {
       try {
-        const site = await googleFindWebsite(googleKey, p.organizationName);
-        if (site) r.website = site;
+        const site = await googleFindWebsite(googleKey, p.organizationName, warn);
+        if (site && !NOT_A_WEBSITE.test(site)) r.website = site;
       } catch {
         /* skip */
       }
@@ -527,7 +530,8 @@ async function enrich(request: Request, env: Env): Promise<Response> {
         .filter(Boolean)
         .join(" ");
       try {
-        const { blob, firstLink } = await googleSearch(googleKey, q);
+        const { blob, firstLink, error } = await googleSearch(googleKey, q);
+        if (error) warn(error);
         const found = pickEmail(blob, domain);
         if (found) {
           r.email = found;
@@ -588,7 +592,7 @@ async function enrich(request: Request, env: Env): Promise<Response> {
       : sc.reasons;
   }
 
-  return json({ demo: false, results });
+  return json({ demo: false, results, warnings: Array.from(warnings) });
 }
 
 /** SerpApi.com keys are 64 hex chars; Serper.dev keys are ~40. */
@@ -596,8 +600,23 @@ function isSerpApi(key: string): boolean {
   return key.length >= 50;
 }
 
+/** Provider-side URLs that must never be mistaken for a business website. */
+const PROVIDER_URL_RE =
+  /https?:\/\/[^"\\ ]*(serpapi\.com|serper\.dev|google\.com\/search|gstatic\.com|googleusercontent\.com)[^"\\ ]*/gi;
+
+/** Human-readable reason a search provider refused us (quota, bad key). */
+function searchProviderProblem(provider: "SerpApi" | "Serper", status: number): string {
+  if (status === 429)
+    return `${provider}: monthly searches used up — website/email lookups are skipped until it resets or you add a Serper.dev key`;
+  if (status === 401 || status === 403) return `${provider}: key rejected (check the secret)`;
+  return `${provider}: HTTP ${status}`;
+}
+
 /** Run a Google search via whichever provider the key belongs to. */
-async function googleSearch(key: string, q: string): Promise<{ blob: string; firstLink: string }> {
+async function googleSearch(
+  key: string,
+  q: string,
+): Promise<{ blob: string; firstLink: string; error?: string }> {
   if (isSerpApi(key)) {
     const u = new URL("https://serpapi.com/search.json");
     u.searchParams.set("engine", "google");
@@ -605,18 +624,33 @@ async function googleSearch(key: string, q: string): Promise<{ blob: string; fir
     u.searchParams.set("num", "10");
     u.searchParams.set("api_key", key);
     const res = await fetch(u.toString());
-    if (!res.ok) return { blob: "", firstLink: "" };
+    if (!res.ok)
+      return { blob: "", firstLink: "", error: searchProviderProblem("SerpApi", res.status) };
     const d = (await res.json()) as {
-      organic_results?: { link?: string }[];
-      knowledge_graph?: unknown;
+      organic_results?: { link?: string; title?: string; snippet?: string }[];
+      knowledge_graph?: { website?: string; description?: string; title?: string };
       answer_box?: unknown;
+      error?: string;
     };
-    const organic = d.organic_results ?? [];
+    if (d.error && /limit|exceed|run out|plan/i.test(d.error))
+      return { blob: "", firstLink: "", error: searchProviderProblem("SerpApi", 429) };
+    // Only the fields that describe the RESULT. The raw SerpApi JSON is full of
+    // serpapi.com links (serpapi_link, thumbnails, pagination) that used to leak
+    // in as "the website".
+    const organic = (d.organic_results ?? []).map((o) => ({
+      link: o.link,
+      title: o.title,
+      snippet: o.snippet,
+    }));
+    const kg = d.knowledge_graph
+      ? {
+          website: d.knowledge_graph.website,
+          title: d.knowledge_graph.title,
+          description: d.knowledge_graph.description,
+        }
+      : {};
     return {
-      blob:
-        JSON.stringify(organic) +
-        JSON.stringify(d.knowledge_graph ?? {}) +
-        JSON.stringify(d.answer_box ?? {}),
+      blob: (JSON.stringify(organic) + JSON.stringify(kg)).replace(PROVIDER_URL_RE, ""),
       firstLink: organic[0]?.link ?? "",
     };
   }
@@ -626,21 +660,37 @@ async function googleSearch(key: string, q: string): Promise<{ blob: string; fir
     headers: { "X-API-KEY": key, "Content-Type": "application/json" },
     body: JSON.stringify({ q, num: 10 }),
   });
-  if (!res.ok) return { blob: "", firstLink: "" };
-  const d = (await res.json()) as { organic?: { link?: string }[]; knowledgeGraph?: unknown };
-  const organic = d.organic ?? [];
+  if (!res.ok)
+    return { blob: "", firstLink: "", error: searchProviderProblem("Serper", res.status) };
+  const d = (await res.json()) as {
+    organic?: { link?: string; title?: string; snippet?: string }[];
+    knowledgeGraph?: { website?: string; title?: string; description?: string };
+  };
+  const organic = (d.organic ?? []).map((o) => ({
+    link: o.link,
+    title: o.title,
+    snippet: o.snippet,
+  }));
   return {
-    blob: JSON.stringify(organic) + JSON.stringify(d.knowledgeGraph ?? {}),
+    blob: (JSON.stringify(organic) + JSON.stringify(d.knowledgeGraph ?? {})).replace(
+      PROVIDER_URL_RE,
+      "",
+    ),
     firstLink: organic[0]?.link ?? "",
   };
 }
 
 const SOCIAL_RE =
-  /(facebook|instagram|linkedin|twitter|x\.com|youtube|yelp|wikipedia|crunchbase|bloomberg|indeed|glassdoor|tripadvisor|mapquest|yellowpages|google\.|g\.page|goo\.gl|business\.site|bing\.|duckduckgo|angi\.|homeadvisor|thumbtack|houzz|nextdoor|bbb\.org|manta\.|chamberofcommerce|zoominfo|dnb\.com|buzzfile|cylex|hotfrog)/i;
+  /(serpapi\.com|serper\.dev|facebook|instagram|linkedin|twitter|x\.com|youtube|yelp|wikipedia|crunchbase|bloomberg|indeed|glassdoor|tripadvisor|mapquest|yellowpages|google\.|g\.page|goo\.gl|business\.site|bing\.|duckduckgo|angi\.|homeadvisor|thumbtack|houzz|nextdoor|bbb\.org|manta\.|chamberofcommerce|zoominfo|dnb\.com|buzzfile|cylex|hotfrog)/i;
 
 /** Find a company's website domain via Google (skips social/directory links). */
-async function googleFindWebsite(key: string, company: string): Promise<string> {
-  const { blob, firstLink } = await googleSearch(key, `${company} official website`);
+async function googleFindWebsite(
+  key: string,
+  company: string,
+  warn?: (w: string) => void,
+): Promise<string> {
+  const { blob, firstLink, error } = await googleSearch(key, `${company} official website`);
+  if (error) warn?.(error);
   if (firstLink && !SOCIAL_RE.test(firstLink)) {
     const dom = cleanDomain(firstLink);
     if (dom && dom.includes(".")) return dom;
@@ -1071,7 +1121,7 @@ export interface DiscoverFilters {
 
 /** Domains that are never the business's own site. */
 const NOT_A_WEBSITE =
-  /(^|\.)(google\.com|google\.[a-z]{2,3}|g\.page|goo\.gl|business\.site|facebook\.com|fb\.com|instagram\.com|linkedin\.com|yelp\.com|yellowpages\.com|linktr\.ee|wixsite\.com|nextdoor\.com|angi\.com|homeadvisor\.com|thumbtack\.com|houzz\.com|bark\.com|trustpilot\.com|mapquest\.com|bing\.com)$/i;
+  /(^|\.)(serpapi\.com|serper\.dev|google\.com|google\.[a-z]{2,3}|g\.page|goo\.gl|business\.site|facebook\.com|fb\.com|instagram\.com|linkedin\.com|yelp\.com|yellowpages\.com|linktr\.ee|wixsite\.com|nextdoor\.com|angi\.com|homeadvisor\.com|thumbtack\.com|houzz\.com|bark\.com|trustpilot\.com|mapquest\.com|bing\.com)$/i;
 
 /** Grid of search points across the area. 1 point for small pulls, up to 5x5 for big ones. */
 function tilePoints(
@@ -1118,6 +1168,13 @@ const KEYWORD_SYNONYMS: Record<string, string[]> = {
   landscaping: ["landscaper", "lawn care", "landscape contractor"],
   "tree service": ["tree removal", "arborist", "tree trimming"],
   "tree specialists": ["tree service", "tree removal", "arborist"],
+  "christmas light installation": [
+    "holiday lighting",
+    "christmas light installer",
+    "holiday light installation",
+  ],
+  "holiday lighting": ["christmas light installation", "christmas lights installer"],
+  "christmas lights": ["christmas light installation", "holiday lighting"],
   dentist: ["dental clinic", "dental office", "family dentistry"],
   dental: ["dentist", "dental clinic"],
   chiropractor: ["chiropractic clinic"],
@@ -1487,6 +1544,14 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
     }
   }
   const businesses = kept.slice(0, wanted);
+  if (
+    businesses.length < wanted &&
+    byKey.size < wanted &&
+    !errors.some((e) => /SerpApi|Serper \d/.test(e))
+  )
+    errors.push(
+      `Google only had ${byKey.size} businesses for this search area — widen the radius, add nearby cities, or add keywords for more`,
+    );
   const available = {
     places: !!placesKey,
     serper: !!serperKey,
