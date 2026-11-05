@@ -649,7 +649,7 @@ async function googleSearch(
       error?: string;
     };
     if (d.error && /limit|exceed|run out|plan/i.test(d.error))
-      return { blob: "", firstLink: "", error: `SerpApi: ${d.error}` };
+      return { blob: "", firstLink: "", error: searchProviderProblem("SerpApi", 429) };
     // Only the fields that describe the RESULT. The raw SerpApi JSON is full of
     // serpapi.com links (serpapi_link, thumbnails, pagination) that used to leak
     // in as "the website".
