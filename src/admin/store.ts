@@ -1350,7 +1350,12 @@ export async function discoverLeads(
   // Bulk source: Apify walks the map (hundreds per search). Start, then poll.
   let apifyCount = 0;
   let apifyNote = "";
-  if (sources.apify) {
+  // Apify is PAID per business (≈ $4 / 1,000). Only ask it for what Google
+  // Maps did not already find, and never for a handful.
+  const apifyNeed = wanted - merged.size;
+  if (sources.apify && apifyNeed < 20) {
+    apifyNote = `Apify skipped — Google Maps already found ${merged.size}`;
+  } else if (sources.apify) {
     try {
       const startRes = await authFetch("/api/discover/apify/start", {
         method: "POST",
@@ -1358,7 +1363,7 @@ export async function discoverLeads(
         body: JSON.stringify({
           location: filters.location,
           industry: filters.industry,
-          perPage: wanted,
+          perPage: apifyNeed,
         }),
       });
       const st = (await startRes.json()) as {
@@ -1389,6 +1394,23 @@ export async function discoverLeads(
           result = (await r.json()) as typeof result;
           if (result.done) break;
         }
+        if (!result.done) {
+          // Stop the meter, then collect whatever it scraped so far.
+          await authFetch(`/api/discover/apify/abort?run=${encodeURIComponent(st.runId)}`, {
+            method: "POST",
+          }).catch(() => {});
+          for (let i = 0; i < 6 && !result.done; i++) {
+            await new Promise((r) => setTimeout(r, 5000));
+            const q = new URLSearchParams({
+              run: st.runId,
+              dataset: st.datasetId,
+              city: filters.location,
+              industry: kw,
+            });
+            const r = await authFetch(`/api/discover/apify/status?${q}`);
+            result = (await r.json()) as typeof result;
+          }
+        }
         for (const b of result.businesses ?? []) {
           const key = cleanDomain(b.website) || norm(b.company) || b.id;
           const existing = merged.get(key);
@@ -1403,9 +1425,12 @@ export async function discoverLeads(
             apifyCount++;
           }
         }
-        apifyNote = result.done
-          ? `Apify: ${apifyCount} new`
-          : `Apify: still running after 8 min — ${apifyCount} so far`;
+        apifyNote =
+          result.status === "ABORTED"
+            ? `Apify: stopped after 8 min to save credits — ${apifyCount} new`
+            : result.done
+              ? `Apify: ${apifyCount} new`
+              : `Apify: still running — ${apifyCount} so far`;
       }
     } catch (e) {
       apifyNote = `Apify: ${(e as Error).message}`;

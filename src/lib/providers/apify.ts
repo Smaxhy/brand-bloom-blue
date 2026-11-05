@@ -39,11 +39,16 @@ export async function apifyStart(
 ): Promise<{ run: ApifyRun } | { error: string }> {
   const token = secret(env, "APIFY_TOKEN");
   if (!token) return { error: "APIFY_TOKEN missing" };
+  // `max` is the TOTAL we want. The actor's limit is per search string, so
+  // split it — before this fix 10 keywords × 500 asked Apify for 5,000 places
+  // (≈ $20, a whole month of the Starter plan) in one click.
+  const queries = opts.queries.slice(0, 6);
   const max = Math.max(20, Math.min(opts.max, 1000));
+  const perSearch = Math.max(10, Math.ceil(max / queries.length));
   const input = {
-    searchStringsArray: opts.queries.slice(0, 10),
+    searchStringsArray: queries,
     locationQuery: opts.location,
-    maxCrawledPlacesPerSearch: max,
+    maxCrawledPlacesPerSearch: perSearch,
     language: opts.language || "en",
     skipClosedPlaces: true,
     scrapeContacts: false, // we read the website ourselves (free, cached)

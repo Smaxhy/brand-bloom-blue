@@ -16,6 +16,7 @@
 
 import { getApiUser, hasCronSecret, unauthorized } from "./api-auth";
 import { regionSubAreas, bboxSpanKm } from "./providers/regions";
+import { anthropicProblem } from "./anthropic-error";
 import { placesTextSearch } from "./providers/places";
 import { overpassBusinesses } from "./providers/osm";
 import {
@@ -24,6 +25,7 @@ import {
   apifyRunStatus,
   apifyItems,
   apifyRunAndWait,
+  apifyAbort,
 } from "./providers/apify";
 import { enrichSite, enrichMany } from "./enrich-site";
 import { publicCheck, publicConfig } from "./public-check";
@@ -110,6 +112,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   if (path === "/api/verify-domain") return verifyDomain(url);
   if (path === "/api/diag") return diag(env);
   if (path === "/api/discover/apify/start") return apifyStartRoute(request, env);
+  if (path === "/api/discover/apify/abort") return apifyAbortRoute(request, env);
   if (path === "/api/discover/apify/status") return apifyStatusRoute(request, env);
   if (path === "/api/apollo/search") return apolloSearch(request, env);
   if (path === "/api/enrich") return enrich(request, env);
@@ -419,6 +422,7 @@ async function enrich(request: Request, env: Env): Promise<Response> {
     const r = byId.get(p.id);
     if (!r || !r.website) return;
     const prof = await enrichSite(env, {
+      onWarn: warn,
       website: r.website,
       company: p.organizationName || "",
       industry: (p as { industry?: string }).industry || "",
@@ -1245,6 +1249,16 @@ async function apifyStartRoute(request: Request, env: Env): Promise<Response> {
   return json({ ok: true, runId: r.run.id, datasetId: r.run.defaultDatasetId });
 }
 
+/** Stop a run the browser gave up waiting for, so it stops costing credits. */
+async function apifyAbortRoute(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") return json({ error: "POST only" }, 405);
+  const u = new URL(request.url);
+  const runId = u.searchParams.get("run") || "";
+  if (!runId) return json({ ok: false, error: "run required" }, 400);
+  await apifyAbort(env, runId);
+  return json({ ok: true });
+}
+
 async function apifyStatusRoute(request: Request, env: Env): Promise<Response> {
   const u = new URL(request.url);
   const runId = u.searchParams.get("run") || "";
@@ -1980,7 +1994,7 @@ Return exactly ${count} entries, best first. "searchAs" must be a string Google 
       });
     let res = await call("claude-sonnet-4-5");
     if (!res.ok && (res.status === 404 || res.status === 400)) res = await call("claude-haiku-4-5");
-    if (!res.ok) return json({ ok: false, reason: `claude ${res.status}`, areas: [] });
+    if (!res.ok) return json({ ok: false, reason: await anthropicProblem(res), areas: [] });
     const d = (await res.json()) as { content?: { text?: string }[] };
     const m = (d.content?.[0]?.text || "").match(/\{[\s\S]*\}/);
     if (!m) return json({ ok: false, reason: "no_json", areas: [] });

@@ -33,6 +33,7 @@ import { renderStep } from "./templates";
 import { gmailGetFull } from "./gmail";
 import { runDueSavedSearches } from "./saved-searches";
 import { classifyReply } from "./reply-ai";
+import { preSendCheck, classifyBounce, applyHardBounce, applySoftBounce } from "./bounce";
 
 type Env = Record<string, string | undefined>;
 
@@ -185,6 +186,8 @@ export interface DispatchReport {
     sent: number;
     remaining_today: number;
     skipped?: string;
+    /** Addresses the pre-send bounce check refused this run. */
+    bounce_blocked?: number;
     synced?: { replies: number; bounces: number; stops: number };
   }[];
   errors: string[];
@@ -294,13 +297,6 @@ export async function runDispatch(
           });
           continue;
         }
-        if (lead.email_verified === "invalid") {
-          await db.update("enrollments", `id=eq.${en.id}`, {
-            status: "skipped",
-            last_error: "email marked invalid",
-          });
-          continue;
-        }
         const suppressed = await db.one(
           "suppressions",
           `or=(email.eq.${enc(lead.email.toLowerCase())}${lead.domain ? `,domain.eq.${enc(lead.domain)}` : ""})&select=id`,
@@ -310,6 +306,21 @@ export async function runDispatch(
             status: "unsubscribed",
             last_error: "on suppression list",
           });
+          continue;
+        }
+        // Automatic bounce check BEFORE the first send: never-verified addresses
+        // are checked once (Reoon SMTP check if configured, else MX). A dead
+        // address is suppressed and pulled from every sequence.
+        const check = await preSendCheck(env, db, { ...lead, email: lead.email });
+        if (!check.ok) {
+          await applyHardBounce(db, {
+            email: lead.email,
+            lead,
+            enrollmentId: en.id,
+            reason: "verify_invalid",
+            note: `pre-send check: ${check.reason}`,
+          });
+          entry.bounce_blocked = (entry.bounce_blocked ?? 0) + 1;
           continue;
         }
 
@@ -462,26 +473,26 @@ async function syncMailbox(
           ? await db.one<Lead>("leads", `email=ilike.${enc(failed)}&select=*`)
           : null;
       const email = (lead?.email || failed || "").toLowerCase();
-      if (email) {
-        await db
-          .upsert(
-            "suppressions",
-            {
-              email,
-              domain: lead?.domain ?? null,
-              reason: "bounce",
-              note: m.subject.slice(0, 200),
-            },
-            "email",
-          )
-          .catch(() => {});
-        if (lead) await db.update("leads", `id=eq.${lead.id}`, { email_verified: "invalid" });
-      }
-      if (en)
-        await db.update("enrollments", `id=eq.${en.id}`, {
-          status: "bounced",
-          last_error: "bounced",
+      const kind = classifyBounce(m.subject, m.snippet);
+      if (kind === "hard") {
+        await applyHardBounce(db, {
+          email,
+          lead,
+          enrollmentId: en?.id ?? null,
+          reason: "bounce",
+          note: `${m.subject} — ${m.snippet}`.slice(0, 200),
         });
+      } else {
+        const r = await applySoftBounce(db, en, m.snippet);
+        if (r === "gave_up")
+          await applyHardBounce(db, {
+            email,
+            lead,
+            enrollmentId: en?.id ?? null,
+            reason: "bounce",
+            note: `soft bounce twice: ${m.snippet}`.slice(0, 200),
+          });
+      }
       await db
         .insert("messages", {
           enrollment_id: en?.id ?? null,
@@ -491,7 +502,7 @@ async function syncMailbox(
           gmail_message_id: m.id,
           gmail_thread_id: m.threadId,
           subject: m.subject,
-          snippet: m.snippet.slice(0, 300),
+          snippet: `${kind === "hard" ? "HARD" : "soft"} bounce: ${m.snippet}`.slice(0, 300),
           kind: "bounce",
           status: "received",
           sent_at: new Date(m.internalDate || Date.now()).toISOString(),
