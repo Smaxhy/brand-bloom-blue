@@ -41,6 +41,8 @@ export interface OutreachSettings {
   plain_text?: boolean | null;
   optout_line_us?: string | null;
   optout_line_eu?: string | null;
+  /** Owner-written instructions used by every AI prompt (emails, pitch lines, reply drafts). */
+  ai_instructions?: string | null;
 }
 
 export interface Sequence {
@@ -353,6 +355,20 @@ export async function abStats(
   }
   return out;
 }
+/** Per-sequence people counts: { [sequenceId]: { total, queued, active, completed, replied, bounced, ... } } */
+export async function sequenceCounts(): Promise<Record<string, Record<string, number>>> {
+  const rows = must<{ sequence_id: string; status: string }[]>(
+    await (await tbl("enrollments")).select("sequence_id,status").limit(10000),
+  );
+  const out: Record<string, Record<string, number>> = {};
+  for (const r of rows) {
+    const o = (out[r.sequence_id] ??= { total: 0 });
+    o[r.status] = (o[r.status] ?? 0) + 1;
+    o.total++;
+  }
+  return out;
+}
+
 export async function enrollmentCounts(): Promise<Record<string, number>> {
   const rows = must<{ status: string }[]>(await (await tbl("enrollments")).select("status"));
   const out: Record<string, number> = {};
@@ -406,6 +422,29 @@ export async function enrollLeads(
     skipped: { email: string; reason: string }[];
     error?: string;
   };
+}
+
+/** "Write with AI" for one sequence step. Uses Settings → AI instructions. */
+export async function aiWriteStep(input: {
+  sequenceName: string;
+  audience?: string;
+  index: number;
+  previous: { subject: string; body: string }[];
+  current?: { subject?: string; body?: string };
+  extra?: string;
+}): Promise<{ subject: string; subject_b: string; body: string }> {
+  const res = await authFetch("/api/outreach/ai/write", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const j = (await res.json()) as {
+    ok: boolean;
+    step?: { subject: string; subject_b: string; body: string };
+    error?: string;
+  };
+  if (!j.ok || !j.step) throw new Error(j.error || "Could not write the email");
+  return j.step;
 }
 
 /* ------------------------------------------------------------- messages */

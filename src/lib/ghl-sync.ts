@@ -87,6 +87,7 @@ export async function syncGhlMailbox(
           senderName: mb.display_name,
           company: settings?.company_name || "Inspirova Marketing",
           signature: mb.signature,
+          instructions: settings?.ai_instructions || "",
         });
         if (ai) {
           intent = ai.intent;

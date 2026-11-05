@@ -1,0 +1,1 @@
+alter table public.outreach_settings add column if not exists ai_instructions text not null default '';

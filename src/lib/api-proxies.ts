@@ -418,6 +418,16 @@ async function enrich(request: Request, env: Env): Promise<Response> {
   // 0) FREE pass — read each company's own website. Cached per domain for 30 days,
   //    tiered crawl, Claude only when the pages didn't already name owner + email.
   const cacheDb = Db.available(env) ? new Db(env) : null;
+  const aiInstructions = cacheDb
+    ? (
+        await cacheDb
+          .one<{ ai_instructions?: string }>(
+            "outreach_settings",
+            "id=eq.singleton&select=ai_instructions",
+          )
+          .catch(() => null)
+      )?.ai_instructions || ""
+    : "";
   await enrichMany(people, 6, async (p) => {
     const r = byId.get(p.id);
     if (!r || !r.website) return;
@@ -428,6 +438,7 @@ async function enrich(request: Request, env: Env): Promise<Response> {
       industry: (p as { industry?: string }).industry || "",
       city: (p as { city?: string }).city || "",
       rating: p.rating,
+      instructions: aiInstructions,
       reviews: p.reviews,
       ownerName: p.name,
       useClaude: payload.useClaude !== false,

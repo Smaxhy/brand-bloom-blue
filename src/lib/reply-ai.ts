@@ -9,7 +9,8 @@ import type { Lead } from "./sequencer";
 type Env = Record<string, string | undefined>;
 const secret = (e: Env, k: string) => e[k] || process.env?.[k];
 
-export type ReplyIntent = "interested" | "later" | "question" | "not_interested" | "wrong_person" | "auto" | "unknown";
+export type ReplyIntent =
+  "interested" | "later" | "question" | "not_interested" | "wrong_person" | "auto" | "unknown";
 
 export interface ReplyAnalysis {
   intent: ReplyIntent;
@@ -19,7 +20,16 @@ export interface ReplyAnalysis {
 
 export async function classifyReply(
   env: Env,
-  input: { replyText: string; lead: Lead | null; ourFirstEmail: string; senderName: string; company: string; signature: string },
+  input: {
+    replyText: string;
+    lead: Lead | null;
+    ourFirstEmail: string;
+    senderName: string;
+    company: string;
+    signature: string;
+    /** Owner's AI instructions (Settings → AI instructions). */
+    instructions?: string;
+  },
 ): Promise<ReplyAnalysis | null> {
   const key = secret(env, "ANTHROPIC_API_KEY");
   if (!key) return null;
@@ -41,7 +51,16 @@ Rules:
 - "later": not now / busy / after a date → acknowledge, name the time they mentioned, say you'll follow up then; no pushing.
 - "not_interested" or "wrong_person": draft a one-line gracious close (and ask who the right person is only for wrong_person). Never argue.
 - Never invent prices, results or facts about ${input.company}. If pricing is asked, say it depends on scope and offer a 10-minute call to scope it.
-- Use the lead's first name if known. Keep it under 90 words.`;
+- Use the lead's first name if known. Keep it under 90 words.${
+    input.instructions?.trim()
+      ? `
+
+OWNER'S INSTRUCTIONS (what we sell, tone — follow these):
+"""
+${input.instructions.trim().slice(0, 3000)}
+"""`
+      : ""
+  }`;
 
   const user = `Lead: ${input.lead?.contact_name || "(unknown name)"} at ${input.lead?.company || "(unknown company)"} (${input.lead?.industry || ""}, ${input.lead?.city || ""})
 
@@ -59,22 +78,41 @@ ${text}
     const call = (model: string) =>
       fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-        body: JSON.stringify({ model, max_tokens: 500, system, messages: [{ role: "user", content: user }] }),
+        headers: {
+          "x-api-key": key,
+          "anthropic-version": "2023-06-01",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 500,
+          system,
+          messages: [{ role: "user", content: user }],
+        }),
       });
     let res = await call("claude-haiku-4-5");
-    if (!res.ok && (res.status === 404 || res.status === 400)) res = await call("claude-3-5-haiku-latest");
+    if (!res.ok && (res.status === 404 || res.status === 400))
+      res = await call("claude-3-5-haiku-latest");
     if (!res.ok) return null;
     const data = (await res.json()) as { content?: { text?: string }[] };
     const raw = data.content?.[0]?.text || "";
     const m = raw.match(/\{[\s\S]*\}/);
     if (!m) return null;
     const j = JSON.parse(m[0]) as Partial<ReplyAnalysis>;
-    const ok: ReplyIntent[] = ["interested", "later", "question", "not_interested", "wrong_person", "unknown"];
+    const ok: ReplyIntent[] = [
+      "interested",
+      "later",
+      "question",
+      "not_interested",
+      "wrong_person",
+      "unknown",
+    ];
     return {
       intent: ok.includes(j.intent as ReplyIntent) ? (j.intent as ReplyIntent) : "unknown",
       summary: String(j.summary || "").slice(0, 300),
-      draft: String(j.draft || "").trim().slice(0, 1500),
+      draft: String(j.draft || "")
+        .trim()
+        .slice(0, 1500),
     };
   } catch {
     return null;

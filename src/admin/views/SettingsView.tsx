@@ -692,6 +692,25 @@ function SenderIdentityPanel() {
             </p>
           </div>
         ) : null}
+        <Field label="AI instructions — what we sell and how we sound">
+          <textarea
+            className={inputCls + " min-h-[160px] font-mono text-xs"}
+            value={s.ai_instructions ?? ""}
+            onChange={(e) => setS({ ...s, ai_instructions: e.target.value })}
+            placeholder={`We are a small marketing agency for local service businesses.
+What we sell: websites, Google Ads, Google Business Profile, review automation, online booking.
+Tone: plain, warm, direct. No hype, no exclamation marks.
+Length: first email under 90 words, follow-ups under 50.
+Always mention one specific thing about their business ({{pitch}} / {{gap}}); one ask: a 10-minute call.
+Never promise results or quote prices.`}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            This one text steers every AI prompt: <b>Write with AI</b> in the sequence editor, the{" "}
+            <code>{"{{pitch}}"}</code> / <code>{"{{gap}}"}</code> lines written when a business is
+            scanned, and the reply drafts in Outreach → Replies. Change it any time; leave it empty
+            for the built-in default.
+          </p>
+        </Field>
         <Field label="Notice for US leads (classic footer only)">
           <textarea
             className={inputCls + " min-h-[60px]"}
