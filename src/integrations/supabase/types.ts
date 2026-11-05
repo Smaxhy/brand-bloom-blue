@@ -577,6 +577,39 @@ export type Database = {
           },
         ]
       }
+      seen_businesses: {
+        Row: {
+          city: string
+          company: string
+          domain: string | null
+          first_seen_at: string
+          industry: string
+          key: string
+          last_seen_at: string
+          times_seen: number
+        }
+        Insert: {
+          city?: string
+          company?: string
+          domain?: string | null
+          first_seen_at?: string
+          industry?: string
+          key: string
+          last_seen_at?: string
+          times_seen?: number
+        }
+        Update: {
+          city?: string
+          company?: string
+          domain?: string | null
+          first_seen_at?: string
+          industry?: string
+          key?: string
+          last_seen_at?: string
+          times_seen?: number
+        }
+        Relationships: []
+      }
       sequence_steps: {
         Row: {
           body: string

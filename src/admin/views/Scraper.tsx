@@ -295,6 +295,182 @@ const KEYWORD_GROUPS: { group: string; keywords: string[] }[] = [
   },
 ];
 
+/** One-click keyword bundles for the niche browser. Click = replace the selection. */
+const PRESETS: { id: string; label: string; hint: string; keywords: string[] }[] = [
+  {
+    id: "home-exterior",
+    label: "Home exterior",
+    hint: "Roofing, siding, gutters, solar, fencing, concrete, paving",
+    keywords: [
+      "Roofing",
+      "Siding Contractor",
+      "Gutter Cleaning",
+      "Solar Installation",
+      "Fencing",
+      "Concrete Contractor",
+      "Paving",
+      "Window Installation",
+      "Garage Door",
+    ],
+  },
+  {
+    id: "home-interior",
+    label: "Home interior",
+    hint: "Plumbing, HVAC, electrical, remodels, flooring, cleaning",
+    keywords: [
+      "Plumbing",
+      "HVAC",
+      "Electrician",
+      "Kitchen Remodel",
+      "Bathroom Remodel",
+      "Flooring",
+      "Painter",
+      "Handyman",
+      "House Cleaning",
+    ],
+  },
+  {
+    id: "outdoor",
+    label: "Outdoor & trees",
+    hint: "Landscaping, tree service, lawn, irrigation, pest, pools",
+    keywords: [
+      "Landscaping",
+      "Tree Service",
+      "Tree Removal",
+      "Arborist",
+      "Lawn Care",
+      "Irrigation",
+      "Pest Control",
+      "Pool Service",
+      "Hardscaping",
+    ],
+  },
+  {
+    id: "high-ticket",
+    label: "High-ticket home",
+    hint: "Jobs worth $5k+: roofs, HVAC, solar, remodels, pools, foundation",
+    keywords: [
+      "Roofing",
+      "HVAC",
+      "Solar Installation",
+      "Kitchen Remodel",
+      "Bathroom Remodel",
+      "Pool Builder",
+      "Foundation Repair",
+      "Basement Finishing",
+      "Custom Home Builder",
+    ],
+  },
+  {
+    id: "health",
+    label: "Health & wellness",
+    hint: "Dentists, ortho, chiro, physio, med spas, vets",
+    keywords: [
+      "Dentist",
+      "Orthodontist",
+      "Chiropractor",
+      "Physiotherapy",
+      "Med Spa",
+      "Dermatology",
+      "Optometrist",
+      "Veterinarian",
+      "Massage Therapy",
+    ],
+  },
+  {
+    id: "professional",
+    label: "Professional services",
+    hint: "Law, accounting, insurance, financial advisors, IT",
+    keywords: [
+      "Law Firm",
+      "Accountant",
+      "CPA",
+      "Bookkeeping",
+      "Financial Advisor",
+      "Insurance Agency",
+      "IT Services",
+      "Managed IT",
+      "Consulting",
+    ],
+  },
+  {
+    id: "auto",
+    label: "Automotive",
+    hint: "Repair, body shops, detailing, tires, dealers",
+    keywords: [
+      "Auto Repair",
+      "Auto Body Shop",
+      "Car Detailing",
+      "Tire Shop",
+      "Used Car Dealer",
+      "Windshield Repair",
+      "Towing Service",
+    ],
+  },
+  {
+    id: "beauty-food",
+    label: "Beauty & hospitality",
+    hint: "Salons, spas, barbers, restaurants, venues",
+    keywords: [
+      "Hair Salon",
+      "Barber Shop",
+      "Nail Salon",
+      "Beauty Spa",
+      "Tattoo Studio",
+      "Restaurant",
+      "Catering",
+      "Event Venue",
+    ],
+  },
+  {
+    id: "be-bouw",
+    label: "🇧🇪 Bouw & renovatie",
+    hint: "Dakwerkers, aannemers, loodgieters, elektriciens, tuinaanleg",
+    keywords: [
+      "Dakwerker",
+      "Aannemer",
+      "Loodgieter",
+      "Elektricien",
+      "Tuinaanleg",
+      "Schrijnwerker",
+      "Schilder",
+      "Isolatie",
+      "Ramen en deuren",
+      "Verwarming",
+    ],
+  },
+  {
+    id: "be-zorg",
+    label: "🇧🇪 Zorg & welzijn",
+    hint: "Tandartsen, kinesisten, osteopaten, dierenartsen, schoonheid",
+    keywords: [
+      "Tandarts",
+      "Kinesist",
+      "Osteopaat",
+      "Dierenarts",
+      "Schoonheidssalon",
+      "Kapper",
+      "Opticien",
+      "Podoloog",
+    ],
+  },
+  {
+    id: "be-diensten",
+    label: "🇧🇪 Diensten",
+    hint: "Boekhouders, advocaten, verzekeringen, vastgoed, garages",
+    keywords: [
+      "Boekhouder",
+      "Advocaat",
+      "Verzekeringsmakelaar",
+      "Vastgoedkantoor",
+      "Garage",
+      "Carrosserie",
+      "Notaris",
+      "Rijschool",
+    ],
+  },
+];
+
 export function Scraper({
   data,
   update,
@@ -374,6 +550,52 @@ export function Scraper({
   const [rulesOpen, setRulesOpen] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showHidden, setShowHidden] = useState(false);
+  const [areasOpen, setAreasOpen] = useState(false);
+  const [areasBusy, setAreasBusy] = useState(false);
+  const [areasCountry, setAreasCountry] = useState<"United States" | "Belgium" | "Netherlands">(
+    "United States",
+  );
+  const [areas, setAreas] = useState<
+    {
+      area: string;
+      state: string;
+      why: string;
+      estBusinesses: string;
+      competition: string;
+      season: string;
+      searchAs: string;
+    }[]
+  >([]);
+  const [areasErr, setAreasErr] = useState<string | null>(null);
+
+  async function suggestAreas() {
+    if (areasBusy) return;
+    setAreasBusy(true);
+    setAreasErr(null);
+    try {
+      const res = await authFetch("/api/claude/areas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          niche: filters.industry || "local service businesses",
+          country: areasCountry,
+          count: 12,
+        }),
+      });
+      const j = (await res.json()) as { ok: boolean; areas?: typeof areas; reason?: string };
+      if (!j.ok)
+        setAreasErr(
+          j.reason === "missing_key"
+            ? "AI key not configured on the server."
+            : j.reason || "No suggestions.",
+        );
+      else setAreas(j.areas ?? []);
+    } catch (e) {
+      setAreasErr((e as Error).message);
+    } finally {
+      setAreasBusy(false);
+    }
+  }
   const [nicheDraft, setNicheDraft] = useState("");
 
   async function suggestKeywordsWithAI() {
@@ -679,10 +901,10 @@ export function Scraper({
     });
   }
 
-  async function locate() {
-    if (!filters.location.trim()) return;
+  async function locate(loc: string = filters.location) {
+    if (!loc.trim()) return;
     setGeoBusy(true);
-    const g = await geocodeLocation(filters.location);
+    const g = await geocodeLocation(loc);
     setGeo(g);
     setGeoBusy(false);
   }
@@ -927,11 +1149,11 @@ export function Scraper({
                 className={inputCls + " pl-9 pr-20"}
                 value={filters.location}
                 onChange={(e) => setFilters({ ...filters, location: e.target.value })}
-                onKeyDown={(e) => e.key === "Enter" && locate()}
+                onKeyDown={(e) => e.key === "Enter" && void locate()}
                 placeholder="City, region or address"
               />
               <button
-                onClick={locate}
+                onClick={() => void locate()}
                 className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-xs font-semibold text-primary hover:bg-secondary"
               >
                 {geoBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Locate"}
@@ -1040,6 +1262,38 @@ export function Scraper({
         {/* Niche browser */}
         {nichesOpen && (
           <div className="border-t border-border bg-secondary/40 p-4">
+            <div className="mb-3">
+              <div className="mb-1 text-[.7rem] font-semibold text-muted-foreground">
+                Presets{" "}
+                <span className="font-normal">
+                  (click to select the whole bundle; add or remove single niches below)
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {PRESETS.map((pr) => {
+                  const on =
+                    pr.keywords.length > 0 &&
+                    pr.keywords.every((k) => activeKeywords.includes(k.toLowerCase())) &&
+                    activeKeywords.length === pr.keywords.length;
+                  return (
+                    <button
+                      key={pr.id}
+                      onClick={() =>
+                        setFilters({ ...filters, industry: on ? "" : pr.keywords.join(", ") })
+                      }
+                      title={pr.hint}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        on
+                          ? "border-transparent bg-[var(--brand-coral)] text-white"
+                          : "border-border bg-background text-foreground hover:bg-secondary"
+                      }`}
+                    >
+                      {pr.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <input
                 className={inputCls + " max-w-xs"}
@@ -1140,6 +1394,13 @@ export function Scraper({
             Phones
           </button>
           <button
+            onClick={() => setFilters({ ...filters, includeSeen: !filters.includeSeen })}
+            className={pill(!filters.includeSeen)}
+            title="Hide businesses that any earlier scan already returned, or that are already in Leads"
+          >
+            Only new
+          </button>
+          <button
             onClick={() => setUsePaid((v) => !v)}
             className={pill(usePaid)}
             title="Use Apollo / Hunter / SerpApi credits for contacts the free pass can't resolve"
@@ -1147,8 +1408,18 @@ export function Scraper({
             Paid fallback
           </button>
           <button
-            onClick={() => setOptionsOpen((v) => !v)}
+            onClick={() => {
+              setAreasOpen((v) => !v);
+              if (!areas.length && !areasOpen) void suggestAreas();
+            }}
             className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+            title="Which areas are worth prospecting for this niche"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-[var(--brand-violet)]" /> Area ideas
+          </button>
+          <button
+            onClick={() => setOptionsOpen((v) => !v)}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
           >
             <SlidersHorizontal className="h-3.5 w-3.5" /> More filters
             <ChevronDown
@@ -1156,6 +1427,81 @@ export function Scraper({
             />
           </button>
         </div>
+
+        {areasOpen && (
+          <div className="border-t border-border bg-secondary/40 p-4">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-muted-foreground">
+                Where to prospect for {filters.industry || "local service businesses"}
+              </span>
+              <select
+                className={inputCls.replace("w-full", "") + " w-40 py-1.5 text-xs"}
+                value={areasCountry}
+                onChange={(e) => setAreasCountry(e.target.value as typeof areasCountry)}
+              >
+                <option>United States</option>
+                <option>Belgium</option>
+                <option>Netherlands</option>
+              </select>
+              <Btn variant="ghost" onClick={() => void suggestAreas()} disabled={areasBusy}>
+                {areasBusy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                {areas.length ? "Refresh" : "Suggest areas"}
+              </Btn>
+              {areasErr && <span className="text-xs text-destructive">{areasErr}</span>}
+              <span className="ml-auto text-xs text-muted-foreground">
+                Ranked by independent businesses, growth, ticket size and how crowded the agency
+                market is. Opinion, not a dataset.
+              </span>
+            </div>
+            {areas.length > 0 && (
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {areas.map((a, i) => (
+                  <div
+                    key={a.area}
+                    className="flex flex-col gap-1.5 rounded-xl border border-border bg-background p-3"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-display text-sm font-bold">
+                        {i + 1}. {a.area}
+                      </span>
+                      <span
+                        className={`ml-auto rounded-full px-2 py-0.5 text-[.6rem] font-bold uppercase tracking-wide ${
+                          a.competition === "low"
+                            ? "bg-[oklch(.7_.18_150)]/15 text-[oklch(.4_.12_150)]"
+                            : a.competition === "high"
+                              ? "bg-destructive/10 text-destructive"
+                              : "bg-[oklch(.8_.16_80)]/25 text-[oklch(.45_.1_70)]"
+                        }`}
+                      >
+                        {a.competition || "?"} competition
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{a.why}</p>
+                    <div className="text-[.7rem] text-muted-foreground">
+                      {a.estBusinesses && <span>{a.estBusinesses} businesses</span>}
+                      {a.season && <span> · best: {a.season}</span>}
+                    </div>
+                    <button
+                      onClick={() => {
+                        setFilters({ ...filters, location: a.searchAs });
+                        setGeo(null);
+                        setAreasOpen(false);
+                        void locate(a.searchAs);
+                      }}
+                      className="mt-1 self-start rounded-md border border-border px-2 py-1 text-xs font-semibold text-primary hover:bg-secondary"
+                    >
+                      Use this area →
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {optionsOpen && (
           <div className="grid gap-4 border-t border-border bg-secondary/40 p-4 md:grid-cols-2">
