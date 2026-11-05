@@ -109,9 +109,9 @@
     {
       "capability": "admin-engine-15-update",
       "source": "inspirova-admin-engine_15.zip",
-      "outcome": "Apply GHL plain-text email body fallback with safe escaping. Keep secure key entry, server key resolution, private-address fetch protection and sanitized SerpApi warnings; existing schema already applied.",
-      "status": "in_progress",
-      "next_action": "Run email payload regression tests and signed-in Settings check without sending real emails."
+      "outcome": "Applied GHL plain-text HTML body fallback with safe escaping and URL attributes. Fifteen regression/security tests passed; build OK. Signed-in jomaceo Settings loaded with Google/GHL connection controls and permission-gated credential panel, no runtime errors. Retained secure Settings, server key resolution, public fetch protection and safe provider errors; no schema changes or data writes.",
+      "status": "verified",
+      "next_action": "Live GHL delivery remains unverified; no real emails sent."
     }
   ]
 }

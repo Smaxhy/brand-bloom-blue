@@ -39,5 +39,5 @@
 - [x] Verify signed-in scraper controls and provider response handling without live searches or sends; 12 tests passed and build OK.
 
 # Admin engine 15 update
-- [ ] Apply GHL plain-text body fallback with safe escaping; retain homepage, data and security protections.
-- [ ] Verify email payloads and signed-in Settings without sending real emails.
+- [x] Apply GHL plain-text body fallback with safe escaping; retain homepage, data and security protections.
+- [x] Verify email payloads and signed-in Settings without sending real emails; 15 tests passed and build OK.
