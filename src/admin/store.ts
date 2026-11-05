@@ -695,6 +695,8 @@ export interface ScrapeFilters {
   maxReviews?: number; // 0 = any
   teamSizes?: string[]; // AI-estimated bands: "1-10" | "11-50" | "51-200" | "200+"
   revenueBands?: string[]; // AI-estimated: "<250k" | "250k-1M" | "1M-5M" | "5M-25M" | "25M+"
+  includeSeen?: boolean; // show businesses earlier scans already returned (default: hidden)
+  noSynonyms?: boolean; // search only the exact keywords (default: synonyms on)
 }
 
 export interface ScrapedPerson {
@@ -1112,6 +1114,8 @@ export async function businessDiscovery(filters: {
   minRating?: number;
   minReviews?: number;
   maxReviews?: number;
+  includeSeen?: boolean;
+  noSynonyms?: boolean;
 }): Promise<{
   live: boolean;
   businesses: DiscoveredBusiness[];
@@ -1136,6 +1140,8 @@ export async function businessDiscovery(filters: {
         minRating: filters.minRating || undefined,
         minReviews: filters.minReviews || undefined,
         maxReviews: filters.maxReviews || undefined,
+        hideSeen: !filters.includeSeen,
+        expandKeywords: !filters.noSynonyms,
       }),
     });
     if (res.status === 401) return { live: false, businesses: [], reason: "Not signed in" };
@@ -1288,6 +1294,8 @@ export async function discoverLeads(
           minRating: filters.minRating,
           minReviews: filters.minReviews,
           maxReviews: filters.maxReviews,
+          includeSeen: filters.includeSeen,
+          noSynonyms: filters.noSynonyms,
           providers: [
             ...(sources.google ? (["places", "serper", "serpapi"] as DiscoverProvider[]) : []),
             ...(sources.osm ? (["osm"] as DiscoverProvider[]) : []),

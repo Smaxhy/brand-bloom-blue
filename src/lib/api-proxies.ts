@@ -118,6 +118,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   if (path === "/api/scrape-site") return scrapeSite(request, env);
   if (path === "/api/claude/extract") return claudeExtract(request, env);
   if (path === "/api/claude/keywords") return claudeKeywords(request, env);
+  if (path === "/api/claude/areas") return claudeAreas(request, env);
   if (path === "/api/claude/ad-scan") return claudeAdScan(request, env);
 
   return null;
@@ -635,7 +636,7 @@ async function googleSearch(key: string, q: string): Promise<{ blob: string; fir
 }
 
 const SOCIAL_RE =
-  /(facebook|instagram|linkedin|twitter|x\.com|youtube|yelp|wikipedia|crunchbase|bloomberg|indeed|glassdoor|tripadvisor|mapquest|yellowpages)\./i;
+  /(facebook|instagram|linkedin|twitter|x\.com|youtube|yelp|wikipedia|crunchbase|bloomberg|indeed|glassdoor|tripadvisor|mapquest|yellowpages|google\.|g\.page|goo\.gl|business\.site|bing\.|duckduckgo|angi\.|homeadvisor|thumbtack|houzz|nextdoor|bbb\.org|manta\.|chamberofcommerce|zoominfo|dnb\.com|buzzfile|cylex|hotfrog)/i;
 
 /** Find a company's website domain via Google (skips social/directory links). */
 async function googleFindWebsite(key: string, company: string): Promise<string> {
@@ -1062,6 +1063,79 @@ export interface DiscoverFilters {
   minRating?: number; // e.g. 4.0
   minReviews?: number; // e.g. 10
   maxReviews?: number; // e.g. 500 — a cheap way to exclude chains
+  /** Also search common synonyms of each keyword (default on). */
+  expandKeywords?: boolean;
+  /** Hide businesses already seen in any earlier scan / in Leads (default on). */
+  hideSeen?: boolean;
+}
+
+/** Domains that are never the business's own site. */
+const NOT_A_WEBSITE =
+  /(^|\.)(google\.com|google\.[a-z]{2,3}|g\.page|goo\.gl|business\.site|facebook\.com|fb\.com|instagram\.com|linkedin\.com|yelp\.com|yellowpages\.com|linktr\.ee|wixsite\.com|nextdoor\.com|angi\.com|homeadvisor\.com|thumbtack\.com|houzz\.com|bark\.com|trustpilot\.com|mapquest\.com|bing\.com)$/i;
+
+/** Grid of search points across the area. 1 point for small pulls, up to 5x5 for big ones. */
+function tilePoints(
+  f: DiscoverFilters,
+  wanted: number,
+  queryCount: number,
+): { lat?: number; lng?: number; radiusM?: number; label?: string }[] {
+  const hasCentre = typeof f.lat === "number" && typeof f.lng === "number";
+  if (!hasCentre) return [{ label: f.location }];
+  const perQuery = Math.ceil(wanted / Math.max(1, queryCount));
+  const n =
+    perQuery <= 60 ? 1 : perQuery <= 120 ? 2 : perQuery <= 220 ? 3 : perQuery <= 350 ? 4 : 5;
+  const radiusKm =
+    f.radiusKm ||
+    (f.bbox ? Math.min(60, Math.max(8, Math.abs(f.bbox[1] - f.bbox[0]) * 111 * 0.6)) : 20);
+  if (n === 1) return [{ lat: f.lat!, lng: f.lng!, radiusM: radiusKm * 1000 }];
+  const pts: { lat: number; lng: number; radiusM: number }[] = [];
+  const step = (2 * radiusKm) / n; // km between tile centres
+  const tileR = Math.max(2000, (step / 1.4) * 1000);
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const dy = -radiusKm + step * (i + 0.5);
+      const dx = -radiusKm + step * (j + 0.5);
+      const lat = f.lat! + dy / 111;
+      const lng = f.lng! + dx / (111 * Math.cos((f.lat! * Math.PI) / 180));
+      pts.push({ lat, lng, radiusM: tileR });
+    }
+  }
+  // Centre tile first so small result sets are still the most central businesses.
+  pts.sort(
+    (a, b) => distanceKm(f.lat!, f.lng!, a.lat, a.lng) - distanceKm(f.lat!, f.lng!, b.lat, b.lng),
+  );
+  return pts;
+}
+
+/** Cheap synonym expansion so "roofing" also finds "roofer" and "roof repair" listings. */
+const KEYWORD_SYNONYMS: Record<string, string[]> = {
+  roofing: ["roofer", "roof repair", "roofing contractor"],
+  roofer: ["roofing", "roof repair"],
+  plumbing: ["plumber", "plumbing contractor", "drain cleaning"],
+  plumber: ["plumbing", "drain cleaning"],
+  hvac: ["heating and air conditioning", "furnace repair", "ac repair"],
+  electrician: ["electrical contractor", "electrical services"],
+  landscaping: ["landscaper", "lawn care", "landscape contractor"],
+  "tree service": ["tree removal", "arborist", "tree trimming"],
+  "tree specialists": ["tree service", "tree removal", "arborist"],
+  dentist: ["dental clinic", "dental office", "family dentistry"],
+  dental: ["dentist", "dental clinic"],
+  chiropractor: ["chiropractic clinic"],
+  "med spa": ["medical spa", "aesthetic clinic"],
+  "law firm": ["attorney", "lawyer"],
+  accountant: ["cpa", "accounting firm", "bookkeeping"],
+  "auto repair": ["mechanic", "car repair shop"],
+  dakwerker: ["dakwerken", "dakdekker"],
+  dakwerkers: ["dakwerken", "dakdekker"],
+  tandarts: ["tandartspraktijk", "tandartsen"],
+  loodgieter: ["sanitair", "loodgieterij"],
+  tuinaanleg: ["tuinaannemer", "tuinonderhoud"],
+};
+function expandKeyword(kw: string, on: boolean): string[] {
+  const k = kw.trim();
+  if (!on) return [k];
+  const syn = KEYWORD_SYNONYMS[k.toLowerCase()] ?? [];
+  return [k, ...syn.filter((x) => x.toLowerCase() !== k.toLowerCase())];
 }
 
 function distanceKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
@@ -1188,7 +1262,10 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
         )
       : Promise.resolve([] as Awaited<ReturnType<typeof overpassBusinesses>>[]);
 
-  const add = (b: DiscoveredBusiness, provider: string) => {
+  const add = (b0: DiscoveredBusiness, provider: string) => {
+    // Google sometimes hands back google.com / g.page / business.site or a social
+    // profile as the "website". Blank those so the real-site lookup runs instead.
+    const b = NOT_A_WEBSITE.test(cleanDomain(b0.website)) ? { ...b0, website: "" } : b0;
     const k =
       cleanDomain(b.website) || `${b.company.toLowerCase()}|${(b.phone || "").replace(/\D/g, "")}`;
     if (!k || byKey.has(k)) return false;
@@ -1198,21 +1275,36 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
   };
 
   if (want.includes("places") && placesKey) {
-    for (const kw of queries) {
-      if (byKey.size >= wanted) break;
-      const r = await placesTextSearch(placesKey, {
-        keyword: kw,
-        location,
-        max: Math.min(perQuery, 60),
-        bias:
-          typeof f.lat === "number" && typeof f.lng === "number"
-            ? { lat: f.lat, lng: f.lng }
-            : undefined,
-      });
-      if (r.error) errors.push(r.error);
-      for (const b of r.businesses) {
-        add({ ...b, source: "Google Maps" }, "places");
-        if (byKey.size >= wanted) break;
+    // Google returns at most 60 per query+point. To get MORE than 60 for an area we
+    // tile it: a grid of points across the bbox/radius, each searched separately and
+    // de-duplicated. 3x3 for ~100, 4x4 for ~200, 5x5 for 300+.
+    const tiles = tilePoints(f, wanted, queries.length);
+    // Synonyms only when the user gave a few keywords; a preset of 15 keywords
+    // already covers the ground, and tiles × keywords × synonyms adds up fast.
+    const synonyms = (kw: string) =>
+      expandKeyword(kw, f.expandKeywords !== false && queries.length <= 4);
+    outer: for (const kw of queries) {
+      for (const variant of synonyms(kw)) {
+        for (const t of tiles) {
+          if (byKey.size >= wanted) break outer;
+          const r = await placesTextSearch(placesKey, {
+            keyword: variant,
+            location: t.label || location,
+            max: Math.min(perQuery, 60),
+            bias:
+              t.lat != null && t.lng != null
+                ? { lat: t.lat, lng: t.lng, radiusM: t.radiusM }
+                : undefined,
+          });
+          if (r.error) errors.push(r.error);
+          let fresh = 0;
+          for (const b of r.businesses) {
+            if (add({ ...b, source: "Google Maps" }, "places")) fresh++;
+            if (byKey.size >= wanted) break;
+          }
+          // A tile that adds nothing new means the area is exhausted for this keyword.
+          if (fresh === 0 && tiles.length > 1 && r.businesses.length > 0) continue;
+        }
       }
     }
   }
@@ -1342,7 +1434,59 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
 
   const filtered = applyUniversalFilters(Array.from(byKey.values()), f);
   if (filtered.dropped) errors.push(`${filtered.dropped} filtered out (radius / rating / reviews)`);
-  const businesses = filtered.kept.slice(0, wanted);
+
+  // Global "seen" memory: drop anything an earlier scan already returned, or that
+  // is already in Leads; then remember everything we return this time.
+  let kept = filtered.kept;
+  if (Db.available(env)) {
+    const db = new Db(env);
+    const keyOf = (b: DiscoveredBusiness) =>
+      cleanDomain(b.website) || `${b.company.toLowerCase()}|${(b.phone || "").replace(/\D/g, "")}`;
+    if (f.hideSeen !== false && kept.length) {
+      try {
+        const keys = kept.map(keyOf).filter(Boolean);
+        const seen = new Set<string>();
+        for (let i = 0; i < keys.length; i += 150) {
+          const chunk = keys.slice(i, i + 150);
+          const rows = await db.select<{ key: string }>(
+            "seen_businesses",
+            `key=in.(${chunk.map((k) => `"${k.replace(/"/g, "")}"`).join(",")})&select=key`,
+          );
+          rows.forEach((r) => seen.add(r.key));
+          const domains = chunk.filter((k) => !k.includes("|"));
+          if (domains.length) {
+            const leads = await db.select<{ domain: string }>(
+              "leads",
+              `domain=in.(${domains.map((k) => `"${k}"`).join(",")})&select=domain`,
+            );
+            leads.forEach((r) => r.domain && seen.add(r.domain));
+          }
+        }
+        const before = kept.length;
+        kept = kept.filter((b) => !seen.has(keyOf(b)));
+        if (before - kept.length) errors.push(`${before - kept.length} seen before (hidden)`);
+      } catch {
+        /* table not migrated yet — show everything */
+      }
+    }
+    const toRemember = kept.slice(0, wanted);
+    if (toRemember.length) {
+      const now = new Date().toISOString();
+      db.upsert(
+        "seen_businesses",
+        toRemember.map((b) => ({
+          key: keyOf(b),
+          company: b.company,
+          domain: cleanDomain(b.website) || null,
+          city: b.city || "",
+          industry: b.industry || "",
+          last_seen_at: now,
+        })),
+        "key",
+      ).catch(() => {});
+    }
+  }
+  const businesses = kept.slice(0, wanted);
   const available = {
     places: !!placesKey,
     serper: !!serperKey,
@@ -1676,6 +1820,77 @@ function parseClaudeJson(raw: string): unknown {
     return JSON.parse(slice);
   } catch {
     return null;
+  }
+}
+
+/**
+ * "Where should we prospect?" — Claude ranks metro areas for a niche + what we sell.
+ * Returns a list the scraper can scan with one click. Opinionated, not a dataset:
+ * it reasons from market size, growth, home-service demand, ticket size and how
+ * saturated local agencies already are.
+ */
+async function claudeAreas(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") return json({ error: "POST only" }, 405);
+  const key = secret(env, "ANTHROPIC_API_KEY");
+  if (!key) return json({ ok: false, reason: "missing_key", areas: [] });
+  const body = (await request.json().catch(() => ({}))) as {
+    niche?: string;
+    country?: string;
+    region?: string;
+    count?: number;
+  };
+  const niche = (body.niche || "local service businesses").slice(0, 120);
+  const country = (body.country || "United States").slice(0, 60);
+  const region = (body.region || "").slice(0, 120);
+  const count = Math.max(5, Math.min(body.count || 12, 20));
+  const system = `You advise a small marketing agency (websites, Google/Meta ads, review generation, lead automation) on WHERE to prospect by cold email. Rank metro areas for the given niche in the given country${region ? ` (focus: ${region})` : ""}.
+
+Favour: many independent (non-franchise) businesses in the niche; population growth and new-housing activity; high average job ticket; seasonality that creates urgency; owners who buy marketing (affluent suburbs, service areas of 200k–2M people); less saturation by local agencies than the biggest coastal metros.
+Avoid: the five largest metros unless there's a specific reason (they're over-prospected), and places where the niche barely exists.
+
+Reply with ONLY JSON:
+{"areas":[{"area":"Denver, CO","state":"CO","why":"one sentence, concrete","estBusinesses":"~400","competition":"low|medium|high","season":"best months to email, short","searchAs":"Denver, CO"}]}
+Return exactly ${count} entries, best first. "searchAs" must be a string Google Maps understands as a place.`;
+  try {
+    const call = (model: string) =>
+      fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": key,
+          "anthropic-version": "2023-06-01",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 1800,
+          system,
+          messages: [{ role: "user", content: `Niche: ${niche}\nCountry: ${country}` }],
+        }),
+        signal: AbortSignal.timeout(40000),
+      });
+    let res = await call("claude-sonnet-4-5");
+    if (!res.ok && (res.status === 404 || res.status === 400)) res = await call("claude-haiku-4-5");
+    if (!res.ok) return json({ ok: false, reason: `claude ${res.status}`, areas: [] });
+    const d = (await res.json()) as { content?: { text?: string }[] };
+    const m = (d.content?.[0]?.text || "").match(/\{[\s\S]*\}/);
+    if (!m) return json({ ok: false, reason: "no_json", areas: [] });
+    const j = JSON.parse(m[0]) as { areas?: unknown[] };
+    const areas = (Array.isArray(j.areas) ? j.areas : [])
+      .map((x) => x as Record<string, unknown>)
+      .filter((x) => x.area)
+      .slice(0, count)
+      .map((x) => ({
+        area: String(x.area),
+        state: String(x.state || ""),
+        why: String(x.why || ""),
+        estBusinesses: String(x.estBusinesses || ""),
+        competition: String(x.competition || ""),
+        season: String(x.season || ""),
+        searchAs: String(x.searchAs || x.area),
+      }));
+    return json({ ok: true, areas });
+  } catch (e) {
+    return json({ ok: false, reason: (e as Error).message, areas: [] });
   }
 }
 

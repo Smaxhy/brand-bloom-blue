@@ -57,6 +57,13 @@
       "when": 1793833952667,
       "tag": "0007_plain_footer",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793839856479,
+      "tag": "0008_seen_businesses",
+      "breakpoints": true
     }
   ]
 }

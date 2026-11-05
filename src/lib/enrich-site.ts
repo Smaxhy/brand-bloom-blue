@@ -340,7 +340,13 @@ async function serperOwner(
 export async function enrichSite(env: Env, o: EnrichSiteOpts): Promise<SiteProfile | null> {
   const t0 = Date.now();
   const domain = cleanDomain(o.website);
-  if (!domain) return null;
+  if (
+    !domain ||
+    /(^|\.)(google\.[a-z.]+|g\.page|business\.site|facebook\.com|instagram\.com|linkedin\.com|yelp\.com)$/i.test(
+      domain,
+    )
+  )
+    return null;
 
   const hit = await readCache(o.db, domain);
   if (hit) return hit;
