@@ -53,6 +53,8 @@ export interface Sequence {
   stop_on_reply: boolean;
   gap_min_sec: number;
   gap_max_sec: number;
+  /** Ignore mailbox sending hours; start/add sends at once. */
+  send_anytime?: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -297,6 +299,7 @@ export async function saveSequence(
     stop_on_reply: seq.stop_on_reply ?? true,
     gap_min_sec: seq.gap_min_sec ?? 45,
     gap_max_sec: seq.gap_max_sec ?? 180,
+    send_anytime: seq.send_anytime ?? true,
   };
   let id = seq.id;
   if (id) must(await t.update(row).eq("id", id).select("id"));

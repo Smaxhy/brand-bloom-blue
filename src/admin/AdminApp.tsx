@@ -95,27 +95,49 @@ export function AdminApp() {
 
     let unsubData: (() => void) | null = null;
     let currentUserId: string | null = null;
+    let hydratingUserId: string | null = null; // blocks duplicate hydrations racing at startup
+    let signOutTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function tearDown() {
+      currentUserId = null;
+      hydratingUserId = null;
+      setAuthed(false);
+      setRole(null);
+      setAccountName("");
+      setData(null);
+      setLoadError("");
+      unsubData?.();
+      unsubData = null;
+    }
 
     async function verifyAndHydrate(userId: string | undefined) {
       if (!userId) {
-        currentUserId = null;
-        setAuthed(false);
-        setRole(null);
-        setAccountName("");
-        setData(null);
-        setLoadError("");
-        unsubData?.();
-        unsubData = null;
+        // Supabase briefly reports "no session" while a token refresh is in flight
+        // (very common with the admin open in two tabs). Wait a moment: if the
+        // same user comes straight back, keep the screen exactly as it is.
+        if (signOutTimer) clearTimeout(signOutTimer);
+        signOutTimer = setTimeout(() => {
+          signOutTimer = null;
+          void supabase.auth.getSession().then(({ data: { session } }) => {
+            if (!session?.user?.id) tearDown();
+          });
+        }, 3000);
         return;
       }
-      // Skip re-hydration if the same user is already loaded — e.g. TOKEN_REFRESHED
-      // fires when the tab regains focus; we don't want to clear state.
-      if (userId === currentUserId) return;
+      if (signOutTimer) {
+        clearTimeout(signOutTimer);
+        signOutTimer = null;
+      }
+      // Skip re-hydration if the same user is already loaded (or loading) — e.g.
+      // TOKEN_REFRESHED / SIGNED_IN fire on tab focus; we don't want to clear state.
+      if (userId === currentUserId || userId === hydratingUserId) return;
+      hydratingUserId = userId;
       // Two-factor: if this account has an authenticator set up, the session
       // must complete it before anything loads.
       try {
         const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
         if (aal?.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
+          hydratingUserId = null;
           setMfaPending(true);
           setAuthed(false);
           return;
@@ -125,11 +147,13 @@ export function AdminApp() {
       }
       setMfaPending(false);
       currentUserId = userId;
+      hydratingUserId = null;
       const { data: roles, error: roleError } = await supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", userId);
       if (roleError) {
+        hydratingUserId = null;
         setAuthed(true);
         setLoadError(
           "Your login worked, but the role check is temporarily unavailable. Your data was not changed.",
@@ -148,6 +172,7 @@ export function AdminApp() {
       if (!resolved) {
         await supabase.auth.signOut();
         currentUserId = null;
+        hydratingUserId = null;
         setAuthed(false);
         setRole(null);
         setAccountName("");
@@ -190,6 +215,7 @@ export function AdminApp() {
 
     return () => {
       sub.subscription.unsubscribe();
+      if (signOutTimer) clearTimeout(signOutTimer);
       unsubData?.();
     };
   }, []);

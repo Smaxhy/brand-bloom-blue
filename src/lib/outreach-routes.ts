@@ -496,9 +496,9 @@ async function enroll(request: Request, e: Env, user: ApiUser): Promise<Response
   if (!body.sequenceId || !Array.isArray(body.leads) || !body.leads.length)
     return json({ ok: false, error: "sequenceId and leads[] are required" }, 400);
   const db = new Db(e);
-  const seq = await db.one<{ id: string; mailbox_ids: string[] }>(
+  const seq = await db.one<{ id: string; mailbox_ids: string[]; send_anytime?: boolean }>(
     "sequences",
-    `id=eq.${enc(body.sequenceId)}&select=id,mailbox_ids`,
+    `id=eq.${enc(body.sequenceId)}&select=id,mailbox_ids,send_anytime`,
   );
   if (!seq) return json({ ok: false, error: "sequence not found" }, 404);
 
@@ -561,9 +561,11 @@ async function enroll(request: Request, e: Env, user: ApiUser): Promise<Response
     );
     // Round-robin mailboxes; spread first sends over the day so they don't all fire at once.
     const mailboxId = seq.mailbox_ids.length ? seq.mailbox_ids[i % seq.mailbox_ids.length] : null;
-    const nextSendAt = new Date(
-      start.getTime() + i * 4 * 60_000 + Math.floor(Math.random() * 120_000),
-    );
+    // "Send any time" sequences: everyone is due now (the dispatcher paces them
+    // with the sequence's own gap). Otherwise spread first sends over the day.
+    const nextSendAt = seq.send_anytime
+      ? new Date(start.getTime() + i * 1000)
+      : new Date(start.getTime() + i * 4 * 60_000 + Math.floor(Math.random() * 120_000));
     const existing = await db.one<{ id: string; status: string }>(
       "enrollments",
       `sequence_id=eq.${seq.id}&lead_id=eq.${lead.id}&select=id,status`,
