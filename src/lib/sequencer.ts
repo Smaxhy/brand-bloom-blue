@@ -195,13 +195,22 @@ export interface DispatchReport {
   errors: string[];
 }
 
+export interface ForceSend {
+  /** Send these enrollments right now, ignoring their scheduled time and the mailbox hours. */
+  enrollmentIds?: string[];
+  /** …or everyone waiting in this sequence. */
+  sequenceId?: string;
+}
+
 export async function runDispatch(
   env: Env,
-  opts: { maxPerRun?: number; origin?: string; syncOnly?: boolean } = {},
+  opts: { maxPerRun?: number; origin?: string; syncOnly?: boolean; force?: ForceSend } = {},
 ): Promise<DispatchReport> {
   const db = new Db(env);
   const report: DispatchReport = { ran_at: new Date().toISOString(), mailboxes: [], errors: [] };
-  const maxPerRun = opts.maxPerRun ?? 40;
+  const force = opts.force;
+  // A forced run is a person waiting at the screen: short gaps, small batch.
+  const maxPerRun = opts.maxPerRun ?? (force ? 20 : 40);
 
   const [mailboxes, settingsRow] = await Promise.all([
     db.select<Mailbox>("mailboxes", "status=eq.active&select=*"),
@@ -214,11 +223,16 @@ export async function runDispatch(
     eu_notice: "",
     us_notice: "",
   };
-  const activeSequences = await db.select<Sequence>("sequences", "status=eq.active&select=*");
+  // Forced sends also work from paused/draft sequences (the follow-ups still
+  // wait for the sequence to be active).
+  const activeSequences = await db.select<Sequence>(
+    "sequences",
+    force ? "status=neq.archived&select=*" : "status=eq.active&select=*",
+  );
   const seqById = new Map(activeSequences.map((s) => [s.id, s]));
 
   // Scheduled saved searches (find + enrich + enroll new businesses) run first.
-  if (!opts.syncOnly) {
+  if (!opts.syncOnly && !force) {
     try {
       const ss = await runDueSavedSearches(env, db);
       if (ss.errors.length) report.errors.push(...ss.errors.map((e) => `saved search ${e}`));
@@ -237,11 +251,11 @@ export async function runDispatch(
     report.mailboxes.push(entry);
     try {
       // --- inbox sync first (cheap, and it may stop sequences before we send) ---
-      entry.synced = await syncMailbox(env, db, mb);
+      if (!force) entry.synced = await syncMailbox(env, db, mb);
 
       if (opts.syncOnly) continue;
-      if (!inWindow(mb)) {
-        entry.skipped = "outside send window";
+      if (!force && !inWindow(mb)) {
+        entry.skipped = `outside send hours (${String(mb.window_start).padStart(2, "0")}:00–${String(mb.window_end).padStart(2, "0")}:00 ${mb.timezone}${mb.send_days.length < 7 ? ", " + ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].filter((_, i) => mb.send_days.includes(i)).join("/") : ""}) — use "Send now" to override`;
         continue;
       }
       const sentToday = (
@@ -263,9 +277,18 @@ export async function runDispatch(
         entry.skipped = "no active sequence uses this mailbox";
         continue;
       }
+      const dueFilter = force
+        ? `status=in.(queued,active,paused)${
+            force.enrollmentIds?.length
+              ? `&id=in.(${force.enrollmentIds.slice(0, 200).join(",")})`
+              : force.sequenceId
+                ? `&sequence_id=eq.${force.sequenceId}`
+                : `&next_send_at=lte.${enc(new Date().toISOString())}`
+          }`
+        : `status=in.(queued,active)&next_send_at=lte.${enc(new Date().toISOString())}`;
       const due = await db.select<Enrollment>(
         "enrollments",
-        `status=in.(queued,active)&next_send_at=lte.${enc(new Date().toISOString())}&sequence_id=in.(${seqIds.join(",")})&or=(mailbox_id.eq.${mb.id},mailbox_id.is.null)&select=*&order=next_send_at.asc&limit=${Math.min(remaining, maxPerRun)}`,
+        `${dueFilter}&sequence_id=in.(${seqIds.join(",")})&or=(mailbox_id.eq.${mb.id},mailbox_id.is.null)&select=*&order=next_send_at.asc&limit=${Math.min(remaining, maxPerRun)}`,
       );
 
       if (due.length && !isGhl(mb)) await accessTokenFor(env, db, mb.id); // fail fast on a dead Google connection
@@ -411,9 +434,9 @@ export async function runDispatch(
           );
           if (/401|403|invalid_grant/i.test(msg)) break; // mailbox auth problem — stop this mailbox for now
         }
-        // Human-looking gap between sends.
+        // Human-looking gap between sends (short when someone is waiting at the screen).
         if (due.indexOf(en) < due.length - 1)
-          await sleep(rand(seq.gap_min_sec, seq.gap_max_sec) * 1000);
+          await sleep(force ? rand(3, 8) * 1000 : rand(seq.gap_min_sec, seq.gap_max_sec) * 1000);
       }
     } catch (err) {
       const msg = (err as Error).message;

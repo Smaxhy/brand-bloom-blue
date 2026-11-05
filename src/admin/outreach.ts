@@ -317,8 +317,7 @@ export async function saveSequence(
         )
         .select("id"),
     );
-  if (!id) throw new Error("Could not save sequence.");
-  return id;
+  return id!;
 }
 export async function setSequenceStatus(id: string, status: Sequence["status"]): Promise<void> {
   must(await (await tbl("sequences")).update({ status }).eq("id", id).select("id"));
@@ -514,6 +513,23 @@ export async function runDispatchNow(
 ): Promise<{ ok: boolean; report?: unknown; error?: string }> {
   const res = await authFetch(`/api/cron/dispatch${syncOnly ? "?sync=1" : ""}`);
   return (await res.json()) as { ok: boolean; report?: unknown; error?: string };
+}
+
+/** Send right now, ignoring the schedule and mailbox hours (daily cap still applies). */
+export async function sendNow(target: {
+  enrollmentIds?: string[];
+  sequenceId?: string;
+}): Promise<{ ok: boolean; report?: DispatchSummary; error?: string }> {
+  const res = await authFetch("/api/outreach/send-now", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(target),
+  });
+  return (await res.json()) as { ok: boolean; report?: DispatchSummary; error?: string };
+}
+export interface DispatchSummary {
+  mailboxes?: { email: string; sent: number; skipped?: string; bounce_blocked?: number }[];
+  errors?: string[];
 }
 
 /* -------------------------------------------------------------- replies */

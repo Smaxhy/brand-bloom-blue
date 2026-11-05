@@ -1,4 +1,3 @@
-import { csvCell } from "../outreach-people-utils";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -61,8 +60,28 @@ import {
   sequenceCounts,
   aiWriteStep,
   enrollLeads,
+  sendNow,
+  type DispatchSummary,
   type ReplyIntent,
 } from "../outreach";
+
+/** One toast that explains a dispatch report: what went out, what was held back and why. */
+function toastDispatch(rep: DispatchSummary | undefined, prefix = "") {
+  const sent = rep?.mailboxes?.reduce((a, m) => a + m.sent, 0) ?? 0;
+  const blocked = rep?.mailboxes?.reduce((a, m) => a + (m.bounce_blocked ?? 0), 0) ?? 0;
+  const skips = (rep?.mailboxes ?? [])
+    .filter((m) => m.skipped)
+    .map((m) => `${m.email}: ${m.skipped}`);
+  const errs = (rep?.errors ?? []).filter((e) => !/^ran saved searches/.test(e));
+  const parts = [
+    `${prefix}Sent ${sent}`,
+    blocked ? `${blocked} held back by the bounce check` : "",
+    ...skips,
+    ...errs.slice(0, 2),
+  ].filter(Boolean);
+  if (sent > 0) toast.success(parts.join(" · "), { duration: 8000 });
+  else toast.warning(parts.join(" · "), { duration: 10000 });
+}
 
 type Tab = "overview" | "sequences" | "queue" | "inbox" | "suppressed";
 
@@ -145,33 +164,15 @@ export function Outreach({
     const r = await runDispatchNow(syncOnly);
     setBusy(false);
     if (!r.ok) return toast.error(r.error || "Dispatch failed");
-    const rep = r.report as
-      | {
-          mailboxes?: {
-            email: string;
-            sent: number;
-            skipped?: string;
-            synced?: { replies: number; bounces: number };
-          }[];
-          errors?: string[];
-        }
-      | undefined;
-    const sent = rep?.mailboxes?.reduce((a, m) => a + m.sent, 0) ?? 0;
-    const replies = rep?.mailboxes?.reduce((a, m) => a + (m.synced?.replies ?? 0), 0) ?? 0;
-    toast.success(
-      syncOnly
-        ? `Inbox sync done · ${replies} new repl${replies === 1 ? "y" : "ies"}`
-        : `Sent ${sent} · ${replies} new repl${replies === 1 ? "y" : "ies"}${
-            rep?.mailboxes?.some((m) => m.skipped)
-              ? ` · ${rep.mailboxes
-                  .filter((m) => m.skipped)
-                  .map((m) => `${m.email.split("@")[0]}: ${m.skipped}`)
-                  .join(", ")}`
-              : ""
-          }`,
-    );
-    if (rep?.errors?.length) toast.error(rep.errors.join(" · "));
-    void refresh();
+    const rep = r.report as DispatchSummary | undefined;
+    const replies =
+      (rep?.mailboxes as { synced?: { replies: number } }[] | undefined)?.reduce(
+        (a, m) => a + (m.synced?.replies ?? 0),
+        0,
+      ) ?? 0;
+    if (syncOnly)
+      toast.success(`Inbox sync done · ${replies} new repl${replies === 1 ? "y" : "ies"}`);
+    else toastDispatch(rep);
   }
 
   const sentTotal = series.reduce((a, d) => a + d.sent, 0);
@@ -1306,6 +1307,24 @@ function Queue({
   const [steps, setSteps] = useState<Record<string, number>>({});
   const [open, setOpen] = useState<string | null>(null);
   const [history, setHistory] = useState<Record<string, Message[]>>({});
+  const [sending, setSending] = useState<string | null>(null); // enrollment id or "all"
+
+  async function sendNowFor(
+    target: { enrollmentIds?: string[]; sequenceId?: string },
+    key: string,
+  ) {
+    setSending(key);
+    try {
+      const r = await sendNow(target);
+      if (!r.ok) throw new Error(r.error || "Could not send");
+      toastDispatch(r.report);
+      await Promise.all([load(), refresh()]);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSending(null);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1399,7 +1418,7 @@ function Queue({
         e.replied_at || "",
         e.last_error || "",
       ]
-        .map(csvCell)
+        .map((c) => `"${String(c).replace(/"/g, '""')}"`)
         .join(","),
     );
     const blob = new Blob([[header.join(","), ...lines].join("\r\n")], {
@@ -1498,6 +1517,20 @@ function Queue({
         >
           <Download className="h-4 w-4" />
         </Btn>
+        {seqId && (counts.queued || counts.active || counts.paused) ? (
+          <Btn
+            onClick={() => void sendNowFor({ sequenceId: seqId }, "all")}
+            disabled={sending !== null}
+            title="Ignore the schedule and mailbox hours; the daily cap still applies. Up to 20 per click."
+          >
+            {sending === "all" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+            Send now to everyone waiting
+          </Btn>
+        ) : null}
         <span className="ml-auto text-xs text-muted-foreground">
           {visible.length} shown
           {Object.keys(counts).length ? " · " : ""}
@@ -1596,6 +1629,23 @@ function Queue({
                       </td>
                       <td className="px-2 py-2.5" onClick={(ev) => ev.stopPropagation()}>
                         <div className="flex justify-end gap-1">
+                          {(e.status === "queued" ||
+                            e.status === "active" ||
+                            e.status === "paused") && (
+                            <button
+                              aria-label="Send now"
+                              title="Send the next email right now (ignores the schedule and mailbox hours)"
+                              disabled={sending !== null}
+                              onClick={() => void sendNowFor({ enrollmentIds: [e.id] }, e.id)}
+                              className="grid h-7 w-7 place-items-center rounded-md border border-transparent bg-[var(--brand-violet)] text-white hover:opacity-90 disabled:opacity-50"
+                            >
+                              {sending === e.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Send className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          )}
                           {(e.status === "queued" || e.status === "active") && (
                             <button
                               aria-label="Pause"

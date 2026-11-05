@@ -70,6 +70,7 @@ export async function handleOutreachRoute(
   if (path === "/api/outreach/verify") return verifyEmails(request, e);
   if (path === "/api/outreach/reply") return sendReply(request, e);
   if (path === "/api/outreach/ai/write") return aiWrite(request, e);
+  if (path === "/api/outreach/send-now") return sendNow(request, e, url.origin);
   if (path === "/api/outreach/search/run") return runSearchNow(request, e);
   return null;
 }
@@ -403,6 +404,25 @@ interface EnrollLead {
   score?: number;
   scoreReasons?: string[];
   ai?: LeadAi | null;
+}
+
+/** "Send now": ignore the schedule and mailbox hours for chosen people / a sequence. */
+async function sendNow(request: Request, env: Env, origin: string): Promise<Response> {
+  if (request.method !== "POST") return json({ ok: false, error: "POST only" }, 405);
+  if (!Db.available(env))
+    return json({ ok: false, error: "SUPABASE_SERVICE_ROLE_KEY missing on the server." }, 500);
+  const b = (await request.json().catch(() => ({}))) as {
+    enrollmentIds?: string[];
+    sequenceId?: string;
+  };
+  const ids = (b.enrollmentIds ?? []).filter((x) => /^[0-9a-f-]{36}$/i.test(x));
+  const seq = b.sequenceId && /^[0-9a-f-]{36}$/i.test(b.sequenceId) ? b.sequenceId : undefined;
+  if (!ids.length && !seq) return json({ ok: false, error: "nothing to send" }, 400);
+  const report = await runDispatch(env, {
+    origin,
+    force: ids.length ? { enrollmentIds: ids } : { sequenceId: seq },
+  });
+  return json({ ok: true, report });
 }
 
 /** "Write with AI" in the sequence editor. */

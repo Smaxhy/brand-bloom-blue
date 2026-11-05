@@ -78,7 +78,7 @@ export async function placesTextSearch(
     bias?: { lat: number; lng: number; radiusM?: number };
     languageCode?: string;
   },
-): Promise<{ businesses: PlaceBusiness[]; error?: string; calls: number }> {
+): Promise<{ businesses: PlaceBusiness[]; error?: string; calls: number; quota?: boolean }> {
   const out: PlaceBusiness[] = [];
   const seen = new Set<string>();
   const max = Math.min(Math.max(opts.max, 1), 60);
@@ -113,8 +113,26 @@ export async function placesTextSearch(
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      const detail = (await res.text()).slice(0, 300);
-      return { businesses: out, error: `Places ${res.status}: ${detail}`, calls };
+      const raw = await res.text();
+      let detail = raw.slice(0, 300);
+      try {
+        const j = JSON.parse(raw) as { error?: { message?: string; status?: string } };
+        if (j.error?.message) detail = j.error.message;
+        if (res.status === 429 || j.error?.status === "RESOURCE_EXHAUSTED")
+          detail = /per day/i.test(detail)
+            ? 'Google Places DAILY quota used up — raise it in Google Cloud Console → APIs & Services → Places API (New) → Quotas → "Text Search requests per day" (resets at midnight Pacific)'
+            : /per minute/i.test(detail)
+              ? "Google Places per-minute limit hit — retry in a minute"
+              : `Google Places quota: ${detail}`;
+      } catch {
+        /* not JSON */
+      }
+      return {
+        businesses: out,
+        error: `Places ${res.status}: ${detail}`,
+        calls,
+        quota: res.status === 429,
+      };
     }
     const data = (await res.json()) as { places?: RawPlace[]; nextPageToken?: string };
     for (const p of data.places ?? []) {
