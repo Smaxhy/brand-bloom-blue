@@ -1,0 +1,1 @@
+alter table public.sequences add column if not exists send_anytime boolean not null default false;

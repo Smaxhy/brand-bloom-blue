@@ -578,6 +578,7 @@ function Sequences({
           stop_on_reply: true,
           gap_min_sec: 45,
           gap_max_sec: 180,
+          send_anytime: true,
         },
         steps: SAMPLE_STEPS.map((s) => ({ ...s })),
       });
@@ -608,8 +609,17 @@ function Sequences({
   async function toggle(seq: Sequence) {
     if (seq.status !== "active" && !seq.mailbox_ids.length)
       return toast.error("Pick at least one mailbox first.");
-    await setSequenceStatus(seq.id, seq.status === "active" ? "paused" : "active");
+    const starting = seq.status !== "active";
+    await setSequenceStatus(seq.id, starting ? "active" : "paused");
     await refresh();
+    if (starting) {
+      // Pressing play sends the first batch right now; the scheduler takes it from there.
+      toast.message("Sequence started — sending the first batch…");
+      const r = await sendNow({ sequenceId: seq.id });
+      if (r.ok) toastDispatch(r.report, `"${seq.name}": `);
+      else toast.error(r.error || "Could not send");
+      await refresh();
+    }
   }
 
   return (
@@ -640,7 +650,8 @@ function Sequences({
                 <p className="mt-1 text-xs text-muted-foreground">
                   {s.mailbox_ids.length} mailbox{s.mailbox_ids.length === 1 ? "" : "es"} ·{" "}
                   {s.stop_on_reply ? "stops on reply" : "continues after reply"} · {s.gap_min_sec}–
-                  {s.gap_max_sec}s between sends
+                  {s.gap_max_sec}s between sends ·{" "}
+                  {s.send_anytime ? "sends any time" : "business hours only"}
                 </p>
                 <AbStrip sequenceId={s.id} />
                 <SeqPeople c={counts[s.id]} onClick={() => showPeople(s.id)} />
@@ -773,6 +784,27 @@ function Sequences({
                 Stop when they reply
               </label>
             </div>
+            <label className="flex items-start gap-2 rounded-xl border border-border px-3 py-2.5 text-sm">
+              <input
+                type="checkbox"
+                checked={editing.seq.send_anytime ?? true}
+                onChange={(e) =>
+                  setEditing({
+                    ...editing,
+                    seq: { ...editing.seq, send_anytime: e.target.checked },
+                  })
+                }
+                className="mt-0.5 accent-[var(--brand-violet)]"
+              />
+              <span>
+                <b>Send any time.</b>{" "}
+                <span className="text-muted-foreground">
+                  Ignore the mailbox's sending hours and days. Pressing ▶ or adding people sends the
+                  first batch immediately; follow-ups go out exactly N days later. Untick to keep
+                  sends inside business hours (slightly better open rates).
+                </span>
+              </span>
+            </label>
 
             <div className="rounded-xl border border-dashed border-[var(--brand-violet)]/40 bg-[var(--brand-violet)]/5 p-3">
               <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
@@ -951,6 +983,8 @@ function Sequences({
             const sq = sequences.find((x) => x.id === seqId);
             if (sq && sq.status !== "active" && sq.mailbox_ids.length)
               await setSequenceStatus(seqId, "active");
+            const r = await sendNow({ sequenceId: seqId });
+            if (r.ok) toastDispatch(r.report);
           }
           await refresh();
         }}

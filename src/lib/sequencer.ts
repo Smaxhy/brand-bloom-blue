@@ -78,6 +78,8 @@ export interface Sequence {
   stop_on_reply: boolean;
   gap_min_sec: number;
   gap_max_sec: number;
+  /** Ignore the mailbox's sending hours/days for this sequence. */
+  send_anytime?: boolean | null;
 }
 
 export interface Step {
@@ -254,7 +256,11 @@ export async function runDispatch(
       if (!force) entry.synced = await syncMailbox(env, db, mb);
 
       if (opts.syncOnly) continue;
-      if (!force && !inWindow(mb)) {
+      const anytimeSeqIds = activeSequences
+        .filter((s) => s.send_anytime && s.mailbox_ids.includes(mb.id))
+        .map((s) => s.id);
+      const outsideHours = !force && !inWindow(mb);
+      if (outsideHours && !anytimeSeqIds.length) {
         entry.skipped = `outside send hours (${String(mb.window_start).padStart(2, "0")}:00–${String(mb.window_end).padStart(2, "0")}:00 ${mb.timezone}${mb.send_days.length < 7 ? ", " + ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].filter((_, i) => mb.send_days.includes(i)).join("/") : ""}) — use "Send now" to override`;
         continue;
       }
@@ -286,9 +292,15 @@ export async function runDispatch(
                 : `&next_send_at=lte.${enc(new Date().toISOString())}`
           }`
         : `status=in.(queued,active)&next_send_at=lte.${enc(new Date().toISOString())}`;
+      // Outside the mailbox's hours only "send any time" sequences may go out.
+      const dueSeqIds = outsideHours ? seqIds.filter((id) => anytimeSeqIds.includes(id)) : seqIds;
+      if (!dueSeqIds.length) {
+        entry.skipped = "outside send hours";
+        continue;
+      }
       const due = await db.select<Enrollment>(
         "enrollments",
-        `${dueFilter}&sequence_id=in.(${seqIds.join(",")})&or=(mailbox_id.eq.${mb.id},mailbox_id.is.null)&select=*&order=next_send_at.asc&limit=${Math.min(remaining, maxPerRun)}`,
+        `${dueFilter}&sequence_id=in.(${dueSeqIds.join(",")})&or=(mailbox_id.eq.${mb.id},mailbox_id.is.null)&select=*&order=next_send_at.asc&limit=${Math.min(remaining, maxPerRun)}`,
       );
 
       if (due.length && !isGhl(mb)) await accessTokenFor(env, db, mb.id); // fail fast on a dead Google connection
@@ -401,7 +413,9 @@ export async function runDispatch(
           };
           if (nextStep) {
             const delayMs = Math.max(1, nextStep.delay_days) * 86_400_000 + rand(0, 3 * 3600_000);
-            patch.next_send_at = nextWindowTime(mb, delayMs).toISOString();
+            patch.next_send_at = (
+              seq.send_anytime ? new Date(Date.now() + delayMs) : nextWindowTime(mb, delayMs)
+            ).toISOString();
           } else {
             patch.completed_at = new Date().toISOString();
           }

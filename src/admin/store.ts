@@ -382,6 +382,9 @@ export async function loadDataRemote(): Promise<AdminData> {
   }
 }
 
+/** updated_at of our own last save — its realtime echo is ignored (no flicker). */
+let lastPushedStamp = "";
+
 async function pushRemote(
   data: AdminData,
   opts: { allowScraperClear?: boolean } = {},
@@ -402,11 +405,13 @@ async function pushRemote(
     if (existingData.scraper)
       nextData = compactForRemote({ ...data, scraper: existingData.scraper });
   }
+  const stamp = new Date().toISOString();
+  lastPushedStamp = stamp;
   const { error } = await supabase.from("admin_state").upsert({
     user_id: userId,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     data: nextData as any,
-    updated_at: new Date().toISOString(),
+    updated_at: stamp,
   });
   if (error) console.warn("[admin] cloud save failed", error);
 }
@@ -467,7 +472,10 @@ export function subscribeRemote(cb: (data: AdminData) => void): () => void {
         "postgres_changes",
         { event: "*", schema: "public", table: "admin_state", filter: `user_id=eq.${userId}` },
         (payload) => {
-          const next = (payload.new as { data?: Partial<AdminData> } | null)?.data;
+          const row = payload.new as { data?: Partial<AdminData>; updated_at?: string } | null;
+          // Our own save coming back — the screen already shows it.
+          if (row?.updated_at && row.updated_at === lastPushedStamp) return;
+          const next = row?.data;
           if (!next) return;
           const merged = withSchemaDefaults(next);
           cb(merged);
