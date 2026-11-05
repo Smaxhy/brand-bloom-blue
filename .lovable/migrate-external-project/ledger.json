@@ -102,9 +102,9 @@
     {
       "capability": "admin-engine-9-update",
       "source": "inspirova-admin-engine_9.zip",
-      "outcome": "Apply seasonal lighting niches, provider warnings and cleaned search result extraction. Preserve secure Settings, server credential resolution, private-address crawler guard and Outreach CSV/accessibility fixes. All archived schema additions already exist in managed migrations; no replay needed.",
-      "status": "in_progress",
-      "next_action": "Run safety tests and signed-in scraper verification without paid calls or email sends."
+      "outcome": "Apply seasonal lighting niches, provider warnings and cleaned search result extraction. Preserve secure Settings, server credential resolution, private-address crawler guard and Outreach CSV/accessibility fixes. All archived schema additions already exist in managed migrations; no replay needed. Signed-in preview verified Christmas preset selection and niche group, retained Google/GHL mailbox controls and secure credential form, and accessible Outreach People. All 12 tests passed; build OK; protected-file hashes unchanged.",
+      "status": "verified",
+      "next_action": "Live provider searches, email sends and schedules remain unverified; no live calls or sends performed."
     }
   ]
 }
