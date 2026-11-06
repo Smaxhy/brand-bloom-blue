@@ -1503,11 +1503,45 @@ function Queue({
   ) {
     setSending(key);
     try {
-      const r = await sendNow(target);
-      if (!r.ok) throw new Error(r.error || "Could not send");
-      toastDispatch(r.report);
+      // Each call sends up to 20 (short gaps). For a whole sequence keep calling
+      // until nothing more goes out, so 250 waiting people don't need 13 clicks.
+      let total = 0;
+      let blocked = 0;
+      let last: DispatchSummary | undefined;
+      const rounds = target.sequenceId ? 25 : 1;
+      for (let i = 0; i < rounds; i++) {
+        const r = await sendNow(target);
+        if (!r.ok) throw new Error(r.error || "Could not send");
+        last = r.report;
+        const sent = r.report?.mailboxes?.reduce((a, m) => a + m.sent, 0) ?? 0;
+        blocked += r.report?.mailboxes?.reduce((a, m) => a + (m.bounce_blocked ?? 0), 0) ?? 0;
+        total += sent;
+        if (target.sequenceId && sent > 0)
+          toast.message(`Sending… ${total} out so far`, {
+            id: "sendnow-progress",
+            duration: 60000,
+          });
+        if (sent === 0) break;
+        await load();
+      }
+      toast.dismiss("sendnow-progress");
+      if (target.sequenceId) {
+        const skips = (last?.mailboxes ?? [])
+          .filter((m) => m.skipped)
+          .map((m) => `${m.email}: ${m.skipped}`);
+        const msg = [
+          `Sent ${total}`,
+          blocked ? `${blocked} held back by the bounce check` : "",
+          ...skips,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        if (total > 0) toast.success(msg, { duration: 8000 });
+        else toast.warning(msg, { duration: 10000 });
+      } else toastDispatch(last);
       await Promise.all([load(), refresh()]);
     } catch (e) {
+      toast.dismiss("sendnow-progress");
       toast.error((e as Error).message);
     } finally {
       setSending(null);
