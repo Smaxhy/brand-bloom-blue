@@ -368,6 +368,34 @@
   @media (prefers-reduced-motion:reduce){*{animation:none!important}html{scroll-behavior:auto}}
 .sr-skip{position:absolute;left:-9999px}.sr-skip:focus{left:16px;top:16px;z-index:100;background:var(--ink);color:var(--mist);padding:12px}
 @media(prefers-reduced-motion:reduce){.step{opacity:1;transform:none}*{transition:none!important}}
+
+  /* ---------- contact + faq ---------- */
+  .contact{padding:40px 0 90px}
+  .contact-grid{display:grid;grid-template-columns:1fr 1.15fr;gap:28px;align-items:start}
+  .c-eyebrow{font-family:var(--mono);font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;color:var(--violet-bright)}
+  .contact h2,.faq h2{font-family:var(--display);font-size:clamp(1.9rem,3.6vw,2.7rem);line-height:1.12;margin:10px 0 14px}
+  .contact p.lead{color:var(--muted);max-width:46ch}
+  .c-cards{display:grid;gap:12px;margin-top:24px}
+  .c-card{display:flex;flex-direction:column;gap:2px;padding:18px 20px;border:1px solid var(--line-strong);border-radius:18px;background:rgba(255,255,255,.03);transition:border-color .25s,background .25s}
+  .c-card:hover{border-color:var(--violet-bright);background:var(--violet-soft)}
+  .c-card small{color:var(--muted-2);font-size:.78rem;text-transform:uppercase;letter-spacing:.1em}
+  .c-card strong{font-family:var(--display);font-size:1.05rem;word-break:break-all}
+  .c-form{padding:26px;border:1px solid var(--line-strong);border-radius:24px;background:linear-gradient(160deg,rgba(124,92,255,.12),rgba(12,8,32,.6));display:grid;gap:12px}
+  .c-form .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .c-form label{display:grid;gap:6px;font-size:.85rem;color:var(--muted)}
+  .c-form input,.c-form textarea{font:inherit;color:#fff;background:rgba(8,6,15,.6);border:1px solid var(--line-strong);border-radius:12px;padding:12px 14px}
+  .c-form textarea{min-height:120px;resize:vertical}
+  .c-form input:focus,.c-form textarea:focus{outline:none;border-color:var(--violet-bright)}
+  .c-hp{position:absolute;left:-9999px}
+  .faq{padding:20px 0 100px}
+  .faq-list{display:grid;gap:10px;margin-top:22px;max-width:860px}
+  .faq details{border:1px solid var(--line-strong);border-radius:16px;background:rgba(255,255,255,.03);padding:4px 20px}
+  .faq summary{cursor:pointer;list-style:none;padding:16px 0;font-family:var(--display);font-weight:600;display:flex;justify-content:space-between;gap:16px}
+  .faq summary::-webkit-details-marker{display:none}
+  .faq summary::after{content:"+";color:var(--violet-bright);font-size:1.3rem;line-height:1}
+  .faq details[open] summary::after{content:"–"}
+  .faq details p{color:var(--muted);padding:0 0 18px}
+  @media(max-width:860px){.contact-grid{grid-template-columns:1fr}.c-form .row{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -385,6 +413,7 @@
         <a href="#services" class="active">Marketing</a>
         <a href="#how">How it works</a>
         <a href="#pricing">Pricing</a>
+        <a href="#contact">Contact</a>
         <a href="/results" target="_top">Results</a>
       </nav>
       <div class="nav-cta" style="margin-left:auto">
@@ -418,6 +447,50 @@
         <div class="orbit-core"><img src="/__l5e/assets-v1/5e8d02ac-71b5-43d0-ad47-62b721da5ff0/logo-new-transparent.png" alt="Inspirova"></div>
         <!-- nodes positioned by JS -->
       </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CONTACT ============ -->
+<section class="contact" id="contact" aria-labelledby="contact-title">
+  <div class="wrap contact-grid">
+    <div>
+      <span class="c-eyebrow">Contact</span>
+      <h2 id="contact-title">Small agency. <span class="grad">High intensity.</span></h2>
+      <p class="lead">Got a question? Reach us directly or drop a message. You talk to the people doing the work, not an account manager.</p>
+      <div class="c-cards">
+        <a class="c-card" href="mailto:Management@inspirovamarketing.com"><small>Business</small><strong>Management@inspirovamarketing.com</strong></a>
+        <a class="c-card" href="mailto:max@inspirovamarketing.com"><small>CEO, Max</small><strong>max@inspirovamarketing.com</strong></a>
+        <div class="c-card"><small>Based in</small><strong>Belgium</strong></div>
+      </div>
+    </div>
+    <form class="c-form" id="contactForm" novalidate>
+      <div class="row">
+        <label>Name<input id="cName" name="name" required maxlength="100" autocomplete="name"></label>
+        <label>E-mail<input id="cEmail" name="email" type="email" required maxlength="255" autocomplete="email"></label>
+      </div>
+      <label>Company (optional)<input id="cCompany" name="company" maxlength="120" autocomplete="organization"></label>
+      <label>Your question<textarea id="cMessage" name="message" required maxlength="2000"></textarea></label>
+      <input class="c-hp" id="cWebsite" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <button type="submit" class="btn btn-primary" id="cSubmit">Send message <span class="arr">→</span></button>
+      <div id="cMsg" role="status" aria-live="polite" style="font-size:.85rem;min-height:1.2em"></div>
+    </form>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section class="faq" id="faq" aria-labelledby="faq-title">
+  <div class="wrap">
+    <span class="c-eyebrow">FAQ</span>
+    <h2 id="faq-title">Questions we get a lot.</h2>
+    <div class="faq-list">
+      <details><summary>Where are you located?</summary><p>Inspirova is based in Belgium. We work remotely with businesses across Belgium, Europe and beyond.</p></details>
+      <details><summary>How long has Inspirova been around?</summary><p>Inspirova has managed marketing for smaller companies for 2 years now.</p></details>
+      <details><summary>How big is your team?</summary><p>We're a small agency on purpose. Fewer clients means more focus, faster execution and direct contact with the people running your campaigns.</p></details>
+      <details><summary>What kind of businesses do you work with?</summary><p>Mostly small and growing service-based businesses and e-commerce brands that want measurable growth from ads, websites, email and automation.</p></details>
+      <details><summary>Are the prices on the site final?</summary><p>No. Prices shown are estimates only and may change based on your business and the services we agree on.</p></details>
+      <details><summary>Do I pay per lead?</summary><p>No. You don't pay per lead, only a management fee.</p></details>
+      <details><summary>How fast will I hear back?</summary><p>We read every message ourselves. Send a question through the form or e-mail us directly.</p></details>
     </div>
   </div>
 </section>
@@ -958,6 +1031,25 @@
   })();
 
 
+</script>
+<script>
+  (function(){
+    var f=document.getElementById("contactForm"); if(!f) return;
+    var msg=document.getElementById("cMsg"), btn=document.getElementById("cSubmit");
+    function v(id){return document.getElementById(id).value.trim();}
+    function say(t,ok){msg.textContent=t;msg.style.color=ok?"var(--violet-bright)":"var(--coral)";}
+    f.addEventListener("submit",function(e){
+      e.preventDefault();
+      var d={name:v("cName"),email:v("cEmail"),company:v("cCompany"),message:v("cMessage"),website:v("cWebsite")};
+      if(!d.name||!d.message||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email)){say("Please fill in your name, a valid e-mail and your question.",false);return;}
+      btn.disabled=true; say("Sending…",true);
+      fetch("/api/public/contact",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(d)})
+        .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
+        .then(function(res){ if(res.ok){f.reset();say("Thanks! Your message was received. We'll get back to you soon.",true);} else say(res.j.error||"Something went wrong.",false); })
+        .catch(function(){say("Network error. Please e-mail us directly.",false);})
+        .finally(function(){btn.disabled=false;});
+    });
+  })();
 </script>
 </body>
 </html>
