@@ -554,6 +554,63 @@ export type Database = {
           },
         ]
       }
+      scan_jobs: {
+        Row: {
+          created_at: string
+          created_by: string
+          cursor: number
+          finished_at: string | null
+          id: string
+          label: string
+          last_error: string | null
+          lease_token: string | null
+          lease_until: string | null
+          options: Json
+          people: Json
+          results: Json
+          status: string
+          total: number
+          updated_at: string
+          warnings: string[]
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          cursor?: number
+          finished_at?: string | null
+          id?: string
+          label?: string
+          last_error?: string | null
+          lease_token?: string | null
+          lease_until?: string | null
+          options?: Json
+          people?: Json
+          results?: Json
+          status?: string
+          total?: number
+          updated_at?: string
+          warnings?: string[]
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          cursor?: number
+          finished_at?: string | null
+          id?: string
+          label?: string
+          last_error?: string | null
+          lease_token?: string | null
+          lease_until?: string | null
+          options?: Json
+          people?: Json
+          results?: Json
+          status?: string
+          total?: number
+          updated_at?: string
+          warnings?: string[]
+        }
+        Relationships: []
+      }
       search_seen: {
         Row: {
           company: string

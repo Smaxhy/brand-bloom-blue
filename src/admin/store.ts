@@ -1,3 +1,4 @@
+import { scanJobAction } from "@/lib/scan-jobs.functions";
 import type { LeadAi } from "@/lib/lead-filters";
 /** Inspirova Admin — per-account Lovable Cloud data layer. */
 
@@ -925,6 +926,82 @@ export interface EnrichResult {
  * waterfall on the server: Apollo enrichment first, then Hunter.io for anyone
  * still missing. Process at most 10 people per call (Apollo bulk limit).
  */
+/* ----------------------------------------------------------- scan jobs */
+/** What a background scan needs per business (enough to rebuild the row later). */
+export interface ScanPerson {
+  id: string;
+  name: string;
+  domain: string;
+  organizationName: string;
+  linkedin?: string;
+  rating?: number;
+  reviews?: number;
+  phone?: string;
+  city?: string;
+  industry?: string;
+}
+export interface ScanJobLite {
+  id: string;
+  label: string;
+  status: "queued" | "running" | "done" | "failed" | "cancelled";
+  cursor: number;
+  total: number;
+  warnings: string[];
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+  finished_at: string | null;
+}
+export interface ScanJobFull extends ScanJobLite {
+  people: ScanPerson[];
+  results: Record<string, EnrichResult>;
+  options: { useClaude?: boolean; usePaid?: boolean; revealPhone?: boolean };
+}
+
+async function scanCall<T>(data: unknown): Promise<T> {
+  return await scanJobAction({ data }) as T;
+}
+export function startScan(people: ScanPerson[], options: ScanJobFull["options"], label: string): Promise<{ job: ScanJobLite; produced: EnrichResult[] }> {
+  return scanCall({ action: "start", people, options, label: label.slice(0, 120) });
+}
+export function stepScan(id: string): Promise<{ job: ScanJobLite | null; produced: EnrichResult[]; claimed: boolean }> {
+  return scanCall({ action: "step", id });
+}
+export async function scanStatus(id: string, full: true): Promise<ScanJobFull | null>;
+export async function scanStatus(id: string, full?: false): Promise<ScanJobLite | null>;
+export async function scanStatus(id: string, full = false) {
+  return (await scanCall<{ job: ScanJobFull | ScanJobLite | null }>({ action: "status", id, full })).job;
+}
+export async function listScans(): Promise<ScanJobLite[]> {
+  return (await scanCall<{ jobs: ScanJobLite[] }>({ action: "list" })).jobs;
+}
+export function cancelScan(id: string): Promise<unknown> { return scanCall({ action: "cancel", id }); }
+/** Rebuild scraper rows from a stored job (reopening a scan after a reload). */
+export function rowsFromScan(job: ScanJobFull): ScrapedPerson[] {
+  return job.people.map((p) => {
+    const r = job.results[p.id];
+    return {
+      id: p.id,
+      name: p.name || r?.name || "",
+      title: r?.title || "",
+      seniority: "",
+      email: r?.email || "",
+      emailLocked: !r?.email,
+      emailSource: r?.email ? (r.guessed ? "Guess" : r.source || "Website") : undefined,
+      phone: p.phone || r?.phone || "",
+      linkedin: p.linkedin || r?.linkedin || "",
+      company: p.organizationName,
+      website: r?.website || p.domain,
+      city: p.city || "",
+      industry: p.industry || "",
+      rating: p.rating,
+      reviews: p.reviews,
+      score: r?.score,
+      scoreWhy: r?.scoreReasons,
+    };
+  });
+}
+
 /** Provider problems reported by /api/enrich (quota used up, bad key). */
 const enrichWarnings = new Set<string>();
 export function takeEnrichWarnings(): string[] {

@@ -37,9 +37,16 @@ import {
   type ScrapeSource,
   SENIORITIES,
   geocodeLocation,
-  enrichContacts,
   discoverLeads,
-  takeEnrichWarnings,
+  startScan,
+  stepScan,
+  scanStatus,
+  listScans,
+  cancelScan,
+  rowsFromScan,
+  type ScanJobLite,
+  type ScanJobFull,
+  type EnrichResult,
   addToDenylist,
   restoreFromDenylist,
   denylistEntries,
@@ -536,6 +543,18 @@ export function Scraper({
   const [revealPhone, setRevealPhone] = useState(false);
   const [enrichBusy, setEnrichBusy] = useState(false);
   const [enrichProgress, setEnrichProgress] = useState({ done: 0, total: 0 });
+  // Background scan job currently being driven/watched by this tab, and recent ones.
+  const [scanJob, setScanJob] = useState<ScanJobLite | null>(null);
+  const [recentScans, setRecentScans] = useState<ScanJobLite[]>([]);
+  const refreshScans = () =>
+    listScans()
+      .then(setRecentScans)
+      .catch(() => {});
+  useEffect(() => {
+    void refreshScans();
+    const t = setInterval(() => void refreshScans(), 30_000);
+    return () => clearInterval(t);
+  }, []);
   // id -> which source revealed the email ("Apollo" | "Hunter" | "Google" | "demo")
   const [emailSource, setEmailSource] = useState<Record<string, string>>(saved?.emailSource ?? {});
   // id -> URL where the email was found (Hunter source / Google result link)
@@ -822,33 +841,11 @@ export function Scraper({
         ai?: LeadAi | null;
       }
     > = {};
-    // Batches of 8, three in flight at once: each batch is its own Worker
-    // invocation (own connection budget), so this is ~3x faster than serial.
-    const BATCH = 8;
-    const PARALLEL = 3;
-    const chunks: ScrapedPerson[][] = [];
-    for (let i = 0; i < list.length; i += BATCH) chunks.push(list.slice(i, i + BATCH));
-    let done = 0;
-    const runChunk = async (chunk: ScrapedPerson[]) => {
-      const payload = chunk.map((p) => {
-        const { first, last } = splitName(p.name);
-        return {
-          id: p.id,
-          name: p.name,
-          firstName: first,
-          lastName: last,
-          domain: p.website,
-          organizationName: p.company,
-          linkedin: p.linkedin,
-          rating: p.rating,
-          reviews: p.reviews,
-          phone: p.phone,
-        };
-      });
-      const res = await enrichContacts(payload, revealPhone, usePaid, sources.claude).catch(
-        () => [] as Awaited<ReturnType<typeof enrichContacts>>,
-      );
-      res.forEach((r) => {
+    // BACKGROUND JOB. The server reads sites in ~20 s slices; this tab keeps
+    // asking for the next slice while open and paints rows as they land. If the
+    // tab closes, the 10-minute cron finishes the job and "Recent scans" shows it.
+    const apply = (rows: EnrichResult[]) => {
+      rows.forEach((r) => {
         if (r.id)
           updates[r.id] = {
             email: r.email,
@@ -865,61 +862,142 @@ export function Scraper({
             ai: r.ai ?? null,
           };
       });
-      done += chunk.length;
-      setEnrichProgress({ done: Math.min(done, list.length), total: list.length });
+      if (rows.length) paint();
     };
-    let next = 0;
-    await Promise.all(
-      Array.from({ length: Math.min(PARALLEL, chunks.length) }, async () => {
-        while (next < chunks.length) await runChunk(chunks[next++]);
-      }),
-    );
-    const warnings = takeEnrichWarnings();
+    const paint = () => {
+      setResults((prev) =>
+        prev.map((p) => {
+          const u = updates[p.id];
+          if (!u) return p;
+          return {
+            ...p,
+            email: u.email || p.email,
+            emailLocked: u.email ? false : p.emailLocked,
+            phone: u.phone || p.phone,
+            website: u.website || p.website,
+            name: p.name || u.name,
+            title: p.title || u.title,
+            linkedin: p.linkedin || u.linkedin,
+          };
+        }),
+      );
+      setEmailSource((prev) => {
+        const next = { ...prev };
+        Object.entries(updates).forEach(([id, u]) => {
+          if (u.email) next[id] = u.guessed ? "Guess" : u.source || "Website";
+        });
+        return next;
+      });
+      setScores((prev) => {
+        const next = { ...prev };
+        Object.entries(updates).forEach(([id, u]) => {
+          if (typeof u.score === "number")
+            next[id] = { score: u.score, why: u.scoreReasons ?? [], ai: u.ai ?? null };
+        });
+        return next;
+      });
+      setEmailSourceUrl((prev) => {
+        const next = { ...prev };
+        Object.entries(updates).forEach(([id, u]) => {
+          if (u.email && u.sourceUrl) next[id] = u.sourceUrl;
+        });
+        return next;
+      });
+    };
+    const people = list.map((p) => ({
+      id: p.id,
+      name: p.name,
+      domain: p.website,
+      organizationName: p.company,
+      linkedin: p.linkedin,
+      rating: p.rating,
+      reviews: p.reviews,
+      phone: p.phone,
+      city: p.city,
+      industry: p.industry,
+    }));
+    let warnings: string[] = [];
+    try {
+      const started = await startScan(
+        people,
+        { useClaude: sources.claude, usePaid, revealPhone },
+        `${filters.industry || "scan"} · ${filters.location} · ${list.length}`,
+      );
+      let job: ScanJobLite | null = started.job;
+      setScanJob(job);
+      apply(started.produced);
+      setEnrichProgress({ done: job.cursor, total: job.total });
+      let idle = 0;
+      while (job && (job.status === "running" || job.status === "queued")) {
+        await new Promise((resolve) => setTimeout(resolve, 2200));
+        const r = await stepScan(job.id);
+        if (r.claimed) {
+          apply(r.produced);
+          idle = 0;
+        } else {
+          // The cron grabbed it (we were slow / another tab): watch instead.
+          await new Promise((res) => setTimeout(res, 4000));
+          if (++idle % 3 === 0) {
+            const full: ScanJobFull | null = await scanStatus(job.id, true);
+            if (full) {
+              apply(Object.values(full.results));
+              job = full;
+              setScanJob(full);
+              setEnrichProgress({ done: full.cursor, total: full.total });
+              continue;
+            }
+          }
+        }
+        job = r.job ?? job;
+        setScanJob(job);
+        if (job) setEnrichProgress({ done: job.cursor, total: job.total });
+      }
+      warnings = job?.warnings ?? [];
+      if (job?.last_error) warnings = [...warnings, job.last_error];
+      void refreshScans();
+    } catch (e) {
+      warnings = [(e as Error).message];
+    }
     if (warnings.length)
       setBanner((b) => ({
         live: b?.live ?? true,
         text: `${b?.text ?? ""} · ⚠ ${warnings.join(" · ")}`.replace(/^ · /, ""),
       }));
 
-    setResults((prev) =>
-      prev.map((p) => {
-        const u = updates[p.id];
-        if (!u) return p;
-        return {
-          ...p,
-          email: u.email || p.email,
-          emailLocked: u.email ? false : p.emailLocked,
-          phone: u.phone || p.phone,
-          website: u.website || p.website,
-          name: p.name || u.name,
-          title: p.title || u.title,
-          linkedin: p.linkedin || u.linkedin,
-        };
-      }),
-    );
-    setEmailSource((prev) => {
-      const next = { ...prev };
-      Object.entries(updates).forEach(([id, u]) => {
-        if (u.email) next[id] = u.guessed ? "Guess" : u.source || "Website";
-      });
-      return next;
-    });
-    setScores((prev) => {
-      const next = { ...prev };
-      Object.entries(updates).forEach(([id, u]) => {
-        if (typeof u.score === "number")
-          next[id] = { score: u.score, why: u.scoreReasons ?? [], ai: u.ai ?? null };
-      });
-      return next;
-    });
-    setEmailSourceUrl((prev) => {
-      const next = { ...prev };
-      Object.entries(updates).forEach(([id, u]) => {
-        if (u.email && u.sourceUrl) next[id] = u.sourceUrl;
-      });
-      return next;
-    });
+    paint();
     setEnrichBusy(false);
+    setScanJob(null);
+  }
+
+  /** Reopen a stored scan: rebuild the rows from what the job read. */
+  async function openScan(id: string) {
+    const full = await scanStatus(id, true).catch(() => null);
+    if (!full) return;
+    const rows = rowsFromScan(full);
+    setResults(rows);
+    setSelected(Object.fromEntries(rows.map((p) => [p.id, true])));
+    setDiscoverSources({});
+    const src: Record<string, string> = {};
+    const srcUrl: Record<string, string> = {};
+    const sc: Record<string, { score: number; why: string[]; ai: LeadAi | null }> = {};
+    Object.values(full.results).forEach((r) => {
+      if (!r.id) return;
+      if (r.email) src[r.id] = r.guessed ? "Guess" : r.source || "Website";
+      if (r.email && r.sourceUrl) srcUrl[r.id] = r.sourceUrl;
+      if (typeof r.score === "number")
+        sc[r.id] = { score: r.score, why: r.scoreReasons ?? [], ai: r.ai ?? null };
+    });
+    setEmailSource(src);
+    setEmailSourceUrl(srcUrl);
+    setScores(sc);
+    setBanner({
+      live: true,
+      text: `Reopened scan "${full.label}" — ${full.cursor}/${full.total} read${
+        full.status === "running" || full.status === "queued"
+          ? " (still running in the background)"
+          : ""
+      }`,
+    });
   }
 
   function toggleSeniority(id: string) {
@@ -1699,6 +1777,58 @@ export function Scraper({
         )}
       </Panel>
 
+      {(scanJob || recentScans.some((j) => j.status === "running" || j.status === "queued")) && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          {scanJob ? (
+            <>
+              <span>
+                Reading websites in the background — <b>{scanJob.cursor}</b> / {scanJob.total}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Progress is saved. Automatic continuation depends on the scheduler.
+              </span>
+              <Btn variant="ghost"
+                className="ml-auto text-xs"
+                onClick={() => void cancelScan(scanJob.id).then(refreshScans).catch((error) => setBanner({ live: false, text: error.message }))}
+              >
+                Stop
+              </Btn>
+            </>
+          ) : (
+            <span>
+              A scan is still running in the background —{" "}
+              {recentScans
+                .filter((j) => j.status === "running" || j.status === "queued")
+                .map((j) => `${j.label} (${j.cursor}/${j.total})`)
+                .join(", ")}
+              . Progress saved.
+            </span>
+          )}
+        </div>
+      )}
+      {recentScans.length > 0 && !scanJob && (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-muted-foreground">Recent scans</span>
+          {recentScans.slice(0, 6).map((j) => (
+            <Btn variant="ghost"
+              key={j.id}
+              onClick={() => void openScan(j.id)}
+              title={`${j.status} · ${new Date(j.created_at).toLocaleString()}${j.last_error ? ` · ${j.last_error}` : ""}`}
+              className={`rounded-full border px-2.5 py-1 hover:bg-secondary ${
+                j.status === "running" || j.status === "queued"
+                  ? "border-primary/50"
+                  : j.status === "failed"
+                    ? "border-destructive/50 text-destructive"
+                    : "border-border"
+              }`}
+            >
+              {j.label.length > 40 ? j.label.slice(0, 40) + "…" : j.label} · {j.cursor}/{j.total}
+              {j.status === "running" || j.status === "queued" ? " · running" : ""}
+            </Btn>
+          ))}
+        </div>
+      )}
       {banner && (
         <div
           className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm ${

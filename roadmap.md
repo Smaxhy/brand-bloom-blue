@@ -50,3 +50,8 @@
 - [x] Apply safe admin archive differences and five new Results screenshots.
 - [x] Verify signed-in diagnostics and Results on desktop/mobile without sending emails.
 - [ ] Live own Maps scraper: blocked by missing hosted scraper connection; no external service supplied.
+
+# Admin engine 20 update
+- [x] Add secure resumable scans, progress, Stop and Recent scans.
+- [x] Verify persistence, cancellation, ownership and unchanged Results; remove temporary scan.
+- [ ] Closed-tab scan continuation: blocked by unverified automatic scheduler; live enrichment not exercised.

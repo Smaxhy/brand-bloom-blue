@@ -85,6 +85,13 @@
       "when": 1793935397377,
       "tag": "0011_outreach_cron_heartbeat",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793935709110,
+      "tag": "0012_resumable_scan_jobs",
+      "breakpoints": true
     }
   ]
 }
