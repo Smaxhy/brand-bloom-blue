@@ -980,9 +980,10 @@ export function Scraper({
           }
           continue;
         }
+        // Keep completed rows even when Stop lands during the request.
+        if (r.claimed) apply(r.produced);
         if (!(await control.canContinue())) break;
         if (r.claimed) {
-          apply(r.produced);
           idle = 0;
         } else {
           // The cron grabbed it (we were slow / another tab): watch instead.
