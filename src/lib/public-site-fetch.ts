@@ -24,7 +24,7 @@ export function publicAddress(ip: string): boolean {
     (a === 203 && b === 0 && c === 113));
 }
 
-async function publicHost(host: string, signal: AbortSignal): Promise<boolean> {
+export async function publicHost(host: string, signal: AbortSignal): Promise<boolean> {
   if (/^[\d.]+$/.test(host)) return publicAddress(host);
   const records = await Promise.all(['A', 'AAAA'].map(async (type) => {
     const res = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=${type}`, {

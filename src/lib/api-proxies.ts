@@ -27,6 +27,14 @@ import {
   apifyRunAndWait,
   apifyAbort,
 } from "./providers/apify";
+import {
+  gmapsSelfAvailable,
+  gmapsSelfStart,
+  gmapsSelfStatus,
+  gmapsSelfItems,
+  gmapsSelfRunAndWait,
+  GMAPS_DONE,
+} from "./providers/gmaps-self";
 import { enrichSite, enrichMany } from "./enrich-site";
 import { publicCheck, publicConfig } from "./public-check";
 import { freeEnrich, hasMx, scoreLead, type SiteSignals } from "./providers/free-enrich";
@@ -114,6 +122,8 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   if (path === "/api/discover/apify/start") return apifyStartRoute(request, env);
   if (path === "/api/discover/apify/abort") return apifyAbortRoute(request, env);
   if (path === "/api/discover/apify/status") return apifyStatusRoute(request, env);
+  if (path === "/api/discover/gmaps/start") return gmapsStartRoute(request, env);
+  if (path === "/api/discover/gmaps/status") return gmapsStatusRoute(request, env);
   if (path === "/api/apollo/search") return apolloSearch(request, env);
   if (path === "/api/enrich") return enrich(request, env);
   if (path === "/api/hunter/domain") return hunterDomain(url, env);
@@ -142,6 +152,7 @@ async function diag(env: Env): Promise<Response> {
     ghlKeyPresent: !!secret(env, "GHL_API_KEY"),
     placesKeyPresent: !!secret(env, "GOOGLE_PLACES_API_KEY"),
     apifyKeyPresent: apifyAvailable(env),
+    gmapsSelfPresent: gmapsSelfAvailable(env),
     serperKeyPresent: !!secret(env, "SERPER_API_KEY"),
     anthropicKeyPresent: !!secret(env, "ANTHROPIC_API_KEY"),
   };
@@ -1111,7 +1122,7 @@ async function ghlSend(request: Request, env: Env): Promise<Response> {
 /*   OpenStreetMap         → free, patchier coverage                         */
 /* --------------------------------------------------------------------- */
 
-type DiscoverProvider = "places" | "serper" | "serpapi" | "osm" | "apify";
+type DiscoverProvider = "places" | "serper" | "serpapi" | "osm" | "apify" | "selfhost";
 
 export interface DiscoverFilters {
   location?: string;
@@ -1258,6 +1269,63 @@ async function apifyStartRoute(request: Request, env: Env): Promise<Response> {
   });
   if ("error" in r) return json({ ok: false, error: r.error }, 502);
   return json({ ok: true, runId: r.run.id, datasetId: r.run.defaultDatasetId });
+}
+
+/** Self-hosted Maps scraper: start a job, the browser polls /status. */
+async function gmapsStartRoute(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") return json({ error: "POST only" }, 405);
+  if (!gmapsSelfAvailable(env))
+    return json({ ok: false, error: "Connect your own Maps scraper before searching." }, 400);
+  const f = (await request.json().catch(() => ({}))) as DiscoverFilters;
+  if (typeof f.location !== "string" || f.location.length > 200 ||
+      (f.industry != null && (typeof f.industry !== "string" || f.industry.length > 2000)) ||
+      (f.perPage != null && !Number.isFinite(f.perPage))) return json({ ok: false, error: "Invalid search details." }, 400);
+  const queries = (f.industry || "")
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean);
+  const location = (f.location || "").trim();
+  if (!location) return json({ ok: false, error: "location required" }, 400);
+  const r = await gmapsSelfStart(env, {
+    queries: queries.length ? queries : ["business"],
+    location,
+    max: Math.max(20, Math.min(f.perPage || 100, 2000)),
+    lat: f.lat,
+    lng: f.lng,
+    radiusKm: f.radiusKm || undefined,
+  });
+  if ("error" in r) return json({ ok: false, error: r.error }, 502);
+  return json({ ok: true, jobId: r.job.id });
+}
+
+async function gmapsStatusRoute(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "GET") return json({ error: "GET only" }, 405);
+  const u = new URL(request.url);
+  const id = u.searchParams.get("job") || "";
+  if (!/^[a-zA-Z0-9_-]{1,100}$/.test(id)) return json({ ok: false, error: "Valid job required" }, 400);
+  const st = await gmapsSelfStatus(env, id);
+  const status = st?.status || "unknown";
+  if (!GMAPS_DONE.has(status)) return json({ ok: true, status, done: false });
+  if (status === "failed" || status === "error")
+    return json({
+      ok: true,
+      status,
+      done: true,
+      businesses: [],
+      error: `Maps scraper job ${status}`,
+    });
+  const businesses = await gmapsSelfItems(
+    env,
+    id,
+    u.searchParams.get("city") || "",
+    u.searchParams.get("industry") || "",
+  );
+  return json({
+    ok: true,
+    status,
+    done: true,
+    businesses: businesses.map((b) => ({ ...b, source: "Google Maps" })),
+  });
 }
 
 /** Stop a run the browser gave up waiting for, so it stops costing credits. */
@@ -1555,6 +1623,18 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
 
   // Bulk: Apify walks the map for hundreds per query. Only in "wait" mode (cron /
   // saved searches); the browser starts a run and polls via /api/discover/apify/*.
+  if (want.includes("selfhost") && gmapsSelfAvailable(env) && f.apifyWait) {
+    const r = await gmapsSelfRunAndWait(env, {
+      queries,
+      location: f.location || city,
+      max: wanted,
+      lat: f.lat,
+      lng: f.lng,
+      radiusKm: f.radiusKm || undefined,
+    });
+    if (r.error) errors.push(r.error);
+    for (const b of r.businesses) add({ ...b, source: "Google Maps" }, "selfhost");
+  }
   if (want.includes("apify") && apifyAvailable(env) && f.apifyWait) {
     const r = await apifyRunAndWait(env, { queries, location: f.location || city, max: wanted });
     if (r.error) errors.push(r.error);
@@ -1656,6 +1736,7 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
     serpapi: !!serpapiKey,
     osm: true,
     apify: apifyAvailable(env),
+    selfhost: gmapsSelfAvailable(env),
   };
   const reason = businesses.length
     ? undefined
@@ -1739,6 +1820,8 @@ interface DiscoveredBusiness {
   reviews?: number;
   lat?: number;
   lng?: number;
+  /** Pre-found address (the self-hosted Maps scraper reads sites itself). */
+  email?: string;
   source: "Google Maps" | "Google";
 }
 

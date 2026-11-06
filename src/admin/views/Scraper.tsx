@@ -554,6 +554,7 @@ export function Scraper({
     osm: true, // OpenStreetMap, free
     claude: true, // reads each website (fractions of a cent)
     apify: false, // bulk Google Maps walk — hundreds per search, a few $ per 1,000
+    selfhost: false, // your own gosom/google-maps-scraper server — free, unlimited, finds emails
   });
   // Paid reveal sources (Apollo / Hunter / SerpApi) are opt-in per run.
   const [usePaid, setUsePaid] = useState(false);
@@ -950,7 +951,7 @@ export function Scraper({
 
   async function runScrape() {
     if (!filters.location.trim()) return;
-    if (!sources.apollo && !sources.google && !sources.osm && !sources.apify) {
+    if (!sources.apollo && !sources.google && !sources.osm && !sources.apify && !sources.selfhost) {
       setBanner({ live: false, text: "Pick at least one discovery source." });
       return;
     }
@@ -980,7 +981,7 @@ export function Scraper({
         geo: g,
         onProgress: (phase, done, total) => {
           if (phase === "ai") setAiProgress({ done, total });
-          if (phase === "apify") setApifySeconds(done);
+          if (phase === "apify" || phase === "selfhost") setApifySeconds(done);
         },
       },
     );
@@ -1282,7 +1283,7 @@ export function Scraper({
               )}
               {scrapeBusy
                 ? apifySeconds
-                  ? `Apify walking the map… ${apifySeconds}s`
+                  ? `${sources.selfhost && !sources.apify ? "Your scraper" : "Apify"} walking the map… ${apifySeconds}s`
                   : aiProgress.total
                     ? `Reading sites ${aiProgress.done}/${aiProgress.total}`
                     : "Finding…"
@@ -1413,6 +1414,7 @@ export function Scraper({
               { id: "google", label: "Google Maps" },
               { id: "osm", label: "OpenStreetMap" },
               { id: "claude", label: "Read each website" },
+              { id: "selfhost", label: "Own Maps scraper" },
               { id: "apify", label: "Apify bulk (paid · ≈ $4 per 1,000)" },
               { id: "apollo", label: "Apollo (paid)" },
             ] as { id: ScrapeSource; label: string }[]
@@ -1937,7 +1939,9 @@ export function Scraper({
                                         ? "Maps"
                                         : s === "apify"
                                           ? "Bulk"
-                                          : s}
+                                          : s === "selfhost"
+                                            ? "Own"
+                                            : s}
                                   </span>
                                 ))}
                               </div>

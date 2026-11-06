@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { getSendingStatus } from "@/lib/sending-status.functions";
+import { eligibleSendBatches } from "../send-batches";
 type SendingStatus = Awaited<ReturnType<typeof getSendingStatus>>;
 import {
   Plus,
@@ -1503,11 +1504,50 @@ function Queue({
   ) {
     setSending(key);
     try {
-      const r = await sendNow(target);
-      if (!r.ok) throw new Error(r.error || "Could not send");
-      toastDispatch(r.report);
+      // Each call sends up to 20 (short gaps). For a whole sequence keep calling
+      // until nothing more goes out, so 250 waiting people don't need 13 clicks.
+      let total = 0;
+      let blocked = 0;
+      let last: DispatchSummary | undefined;
+      // Freeze eligible people before the first batch so later rounds never
+      // immediately send a newly scheduled follow-up to the same person.
+      const waiting = target.sequenceId ? await listEnrollments({ sequenceId: target.sequenceId, limit: 500 }) : [];
+      const batches = eligibleSendBatches(waiting);
+      const rounds = target.sequenceId ? batches.length : 1;
+      for (let i = 0; i < rounds; i++) {
+        const batch = target.sequenceId ? { enrollmentIds: batches[i] } : target;
+        const r = await sendNow(batch);
+        if (!r.ok) throw new Error(r.error || "Could not send");
+        last = r.report;
+        const sent = r.report?.mailboxes?.reduce((a, m) => a + m.sent, 0) ?? 0;
+        blocked += r.report?.mailboxes?.reduce((a, m) => a + (m.bounce_blocked ?? 0), 0) ?? 0;
+        total += sent;
+        if (target.sequenceId && sent > 0)
+          toast.message(`Sending… ${total} out so far`, {
+            id: "sendnow-progress",
+            duration: 60000,
+          });
+        if (sent === 0) break;
+        await load();
+      }
+      toast.dismiss("sendnow-progress");
+      if (target.sequenceId) {
+        const skips = (last?.mailboxes ?? [])
+          .filter((m) => m.skipped)
+          .map((m) => `${m.email}: ${m.skipped}`);
+        const msg = [
+          `Sent ${total}`,
+          blocked ? `${blocked} held back by the bounce check` : "",
+          ...skips,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        if (total > 0) toast.success(msg, { duration: 8000 });
+        else toast.warning(msg, { duration: 10000 });
+      } else toastDispatch(last);
       await Promise.all([load(), refresh()]);
     } catch (e) {
+      toast.dismiss("sendnow-progress");
       toast.error((e as Error).message);
     } finally {
       setSending(null);

@@ -1,5 +1,8 @@
 {
-  "source_archive": "inspirova-admin-engine_18.zip",
+  "source_archive": [
+    "inspirova-admin-engine_19.zip",
+    "inspirova-results-page.zip"
+  ],
   "capabilities": [
     {
       "capability": "code",
@@ -119,6 +122,13 @@
       "outcome": "Applied read-only sending diagnostics through an authenticated admin/CEO-only, rate-limited server function; stricter email syntax and provider-recipient rejection handling. Signed-in real Cloud data and Re-check verified, 21 tests pass, build OK. Retained safe GHL HTML, secure key entry/resolution, crawler guard, homepage and existing migrations/data. Restored formula-safe CSV mapping required by project convention.",
       "status": "verified",
       "next_action": "Real sending and automatic scheduling remain unverified; mailbox sync was last seen around 7 hours ago. Existing narrow-screen sidebar obstruction remains outside archive scope."
+    },
+    {
+      "capability": "admin19-and-results",
+      "source": "uploaded archives",
+      "outcome": "Applied own Maps scraper with public HTTPS/DNS validation, no credential redirects and bounded CSV; bulk sends snapshot eligible IDs to preserve follow-up delays; dedicated scheduler heartbeat migration and read-only status; five supplied Results images added. Preserve saved Cloud records/accounts, credentials, SSRF, GHL escaping, metadata and homepage. Kept fail-closed inbox sync because continuing after a failed reply/opt-out check could send unwanted follow-ups. Signed-in scraper/status and mobile Results verified with no runtime errors; live services not invoked.",
+      "status": "code_verified",
+      "next_action": "Own Maps scraper requires a hosted public HTTPS service and optional server-only credentials; real bulk delivery and automatic scheduling remain unverified. No emails sent."
     }
   ]
 }

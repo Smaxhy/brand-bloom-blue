@@ -8,6 +8,11 @@ import proof4 from "@/assets/proof-4.png";
 import proof5 from "@/assets/proof-5.png";
 import proof6 from "@/assets/proof-6.png";
 import proof7 from "@/assets/proof-7.png";
+import proof8 from "@/assets/proof-8.jpg.asset.json";
+import proof9 from "@/assets/proof-9.jpg.asset.json";
+import proof10 from "@/assets/proof-10.jpg.asset.json";
+import proof11 from "@/assets/proof-11.jpg.asset.json";
+import proof12 from "@/assets/proof-12.jpg.asset.json";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, TrendingUp, Target, Megaphone, Sparkles, Mail, ShoppingBag, Camera, BadgeCheck } from "lucide-react";
 
@@ -19,6 +24,11 @@ const proofs = [
   { src: proof1, caption: "Scaling individual campaigns to 89× purchase ROAS." },
   { src: proof2, caption: "1,508× return on a single hero ad — $18.8K conversion value." },
   { src: proof6, caption: "Shopify store green for 4 straight months under our system." },
+  { src: proof8.url, caption: "$116,355 in sales and 1,300 orders in 30 days — up 79% and 74% on the period before." },
+  { src: proof9.url, caption: "$72,804 generated from ads alone in 60 days — individual campaigns at 74×, 78× and 89× purchase ROAS." },
+  { src: proof10.url, caption: "$49,834 in 7 days — 370 orders at a 12.84% conversion rate, +171% week over week." },
+  { src: proof11.url, caption: "Client shoutout: $71,595 gross sales (+165%) to open Q4, plus 115 qualified website leads at $21.51 each." },
+  { src: proof12.url, caption: "Lead-gen client closing a $4,000 job from a single lead." },
 ];
 
 const REVENUE_TOTAL = 1037785;

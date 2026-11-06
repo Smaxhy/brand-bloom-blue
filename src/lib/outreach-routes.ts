@@ -5,7 +5,7 @@
 
 import type { LeadAi } from "@/lib/lead-filters";
 import { Db, enc } from "./db";
-import type { ApiUser } from "./api-auth";
+import { hasCronSecret, type ApiUser } from "./api-auth";
 import { makeState, readState, consentUrl, exchangeCode, userEmail } from "./google-oauth";
 import { sendVia } from "./channel";
 import { ghlVerify } from "./ghl";
@@ -43,6 +43,7 @@ export async function handleOutreachRoute(
     const report = await runDispatch(e, {
       origin: url.origin,
       syncOnly: url.searchParams.get("sync") === "1",
+      source: hasCronSecret(request, e) ? "cron" : "manual",
     });
     return json({ ok: true, report });
   }

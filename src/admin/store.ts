@@ -714,6 +714,8 @@ export interface ScrapedPerson {
   seniority: string;
   email: string; // may be "" or a locked placeholder until enriched
   emailLocked: boolean;
+  /** Where the address came from when it arrived with discovery ("Website"). */
+  emailSource?: string;
   phone: string;
   linkedin: string;
   company: string;
@@ -1116,10 +1118,12 @@ export interface DiscoveredBusiness {
   industry: string;
   rating?: number;
   reviews?: number;
+  /** Pre-found address (self-hosted Maps scraper reads sites itself). */
+  email?: string;
   source: "Google Maps" | "Google";
 }
 
-export type DiscoverProvider = "places" | "serper" | "serpapi" | "osm" | "apify";
+export type DiscoverProvider = "places" | "serper" | "serpapi" | "osm" | "apify" | "selfhost";
 
 export async function businessDiscovery(filters: {
   location: string;
@@ -1251,7 +1255,7 @@ export async function claudeExtractFromSite(input: {
 /* Unified discovery — fan-out across Apollo + Google + Claude              */
 /* ----------------------------------------------------------------------- */
 
-export type ScrapeSource = "apollo" | "google" | "osm" | "claude" | "apify";
+export type ScrapeSource = "apollo" | "google" | "osm" | "claude" | "apify" | "selfhost";
 
 export interface DiscoverOptions {
   sources: Record<ScrapeSource, boolean>;
@@ -1268,8 +1272,10 @@ function googleToPerson(b: DiscoveredBusiness, kw: string): ScrapedPerson {
     name: "",
     title: "",
     seniority: "",
-    email: "",
-    emailLocked: true,
+    // The self-hosted Maps scraper reads sites itself and may hand us an address.
+    email: b.email || "",
+    emailSource: b.email ? "Website" : undefined,
+    emailLocked: !b.email,
     phone: b.phone,
     linkedin: "",
     company: b.company,
@@ -1352,6 +1358,74 @@ export async function discoverLeads(
       const person = googleToPerson(b, kw);
       merged.set(key, person);
       sourcesById[person.id] = [b.id.startsWith("osm_") ? "osm" : "google"];
+    }
+  }
+
+  // Self-hosted Google Maps scraper (your own server). Start,
+  // then poll up to 10 minutes; everything it finds merges in like Google Maps.
+  let selfNote = "";
+  if (sources.selfhost) {
+    try {
+      const startRes = await authFetch("/api/discover/gmaps/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          location: filters.location,
+          industry: filters.industry,
+          perPage: wanted,
+          lat: opts.geo?.lat,
+          lng: opts.geo?.lng,
+          radiusKm: filters.radiusKm || undefined,
+        }),
+      });
+      const st = (await startRes.json()) as { ok: boolean; jobId?: string; error?: string };
+      if (!st.ok || !st.jobId) selfNote = `Own Maps scraper: ${st.error || "could not start"}`;
+      else {
+        let result: {
+          done: boolean;
+          status: string;
+          businesses?: DiscoveredBusiness[];
+          error?: string;
+        } = { done: false, status: "pending" };
+        const t0 = Date.now();
+        while (Date.now() - t0 < 10 * 60_000) {
+          await new Promise((r) => setTimeout(r, 6000));
+          opts.onProgress?.("selfhost", Math.round((Date.now() - t0) / 1000), 0);
+          const q = new URLSearchParams({ job: st.jobId, city: filters.location, industry: kw });
+          const r = await authFetch(`/api/discover/gmaps/status?${q}`);
+          result = (await r.json()) as typeof result;
+          if (result.done) break;
+        }
+        let n = 0;
+        let withEmail = 0;
+        for (const b of result.businesses ?? []) {
+          const key = cleanDomain(b.website) || norm(b.company) || b.id;
+          const existing = merged.get(key);
+          if (existing) {
+            if (!existing.phone && b.phone) existing.phone = b.phone;
+            if (!existing.website && b.website) existing.website = b.website;
+            if (!existing.email && b.email) {
+              existing.email = b.email;
+              existing.emailSource = "Website";
+              existing.emailLocked = false;
+            }
+            sourcesById[existing.id] = [...(sourcesById[existing.id] ?? []), "selfhost"];
+          } else {
+            const person = googleToPerson(b, kw);
+            merged.set(key, person);
+            sourcesById[person.id] = ["selfhost"];
+            n++;
+          }
+          if (b.email) withEmail++;
+        }
+        selfNote = result.error
+          ? `Own Maps scraper: ${result.error}`
+          : result.done
+            ? `Own Maps scraper: ${n} new (${withEmail} with email)`
+            : `Own Maps scraper: still running after 10 min — ${n} so far`;
+      }
+    } catch (e) {
+      selfNote = `Own Maps scraper: ${(e as Error).message}`;
     }
   }
 
@@ -1480,6 +1554,7 @@ export async function discoverLeads(
         : `Local: ${googleRes.reason ?? "off"}`,
     );
   }
+  if (selfNote) bits.push(selfNote);
   if (apifyNote) bits.push(apifyNote);
   // Why fewer than asked: filters, "seen before", provider errors, area exhausted.
   const notes = ((googleRes as { errors?: string[] }).errors ?? []).filter(Boolean);
@@ -1491,7 +1566,7 @@ export async function discoverLeads(
     people,
     sources: sourcesById,
     liveApollo: apolloRes.live,
-    liveGoogle: googleRes.live,
+    liveGoogle: googleRes.live || Object.values(sourcesById).some((used) => used.includes("selfhost")),
     message,
     skippedDenied,
   };

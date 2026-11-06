@@ -1,0 +1,1 @@
+ALTER TABLE public.outreach_settings ADD COLUMN IF NOT EXISTS last_cron_at timestamptz;

@@ -424,6 +424,7 @@ export type Database = {
           eu_notice: string
           footer_style: string
           id: string
+          last_cron_at: string | null
           optout_line_eu: string
           optout_line_us: string
           plain_text: boolean
@@ -438,6 +439,7 @@ export type Database = {
           eu_notice?: string
           footer_style?: string
           id?: string
+          last_cron_at?: string | null
           optout_line_eu?: string
           optout_line_us?: string
           plain_text?: boolean
@@ -452,6 +454,7 @@ export type Database = {
           eu_notice?: string
           footer_style?: string
           id?: string
+          last_cron_at?: string | null
           optout_line_eu?: string
           optout_line_us?: string
           plain_text?: boolean
