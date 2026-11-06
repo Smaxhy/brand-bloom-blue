@@ -54,22 +54,19 @@ export async function sendingStatus(db: Pick<Db, "select">): Promise<SendingStat
   const sequences = await db.select<Sequence>("sequences", "status=neq.archived&select=*");
   const active = sequences.filter((s) => s.status === "active");
 
-  // Scheduler health: the cron syncs every mailbox and stamps last_sync_at.
-  const lastSeen = mailboxes
-    .map((m) => m.last_sync_at)
-    .filter(Boolean)
-    .sort()
-    .pop() as string | undefined;
+  // Only a scheduled dispatch stamps this heartbeat; manual inbox sync is not proof.
+  const settings = await db.select<{ last_cron_at: string | null }>("outreach_settings", "id=eq.singleton&select=last_cron_at");
+  const lastSeen = settings[0]?.last_cron_at;
   const ageMin = lastSeen ? (now.getTime() - Date.parse(lastSeen)) / 60000 : Infinity;
   out.scheduler = {
     ok: ageMin <= 25,
     last_seen: lastSeen ?? null,
     note:
       ageMin <= 25
-        ? `Mailbox sync was seen recently ( ${Math.round(ageMin)} min ago). Automatic scheduling is not confirmed by a mailbox sync alone.`
+        ? `Automatic scheduler ran ${Math.round(ageMin)} min ago.`
         : lastSeen
-          ? `No mailbox sync recorded for ${Math.round(ageMin / 60)} h. Automatic scheduling needs checking; manual sending may still work.`
-          : "No mailbox sync recorded yet. Automatic scheduling is unverified; manual sending may still work.",
+          ? `Automatic scheduler has not run for ${Math.round(ageMin / 60)} h. Manual sending may still work.`
+          : "No automatic scheduler run recorded yet. Manual sending may still work.",
   };
 
   if (!mailboxes.some((m) => m.status === "active"))

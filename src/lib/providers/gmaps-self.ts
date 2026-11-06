@@ -17,6 +17,7 @@
  */
 
 import type { PlaceBusiness } from "./places";
+import { publicSiteUrl, publicHost } from "../public-site-fetch";
 
 type Env = Record<string, string | undefined>;
 const secret = (e: Env, k: string) => e[k] || process.env?.[k];
@@ -35,6 +36,38 @@ function headers(env: Env): Record<string, string> {
   if (auth) h.Authorization = `Basic ${btoa(auth)}`;
   return h;
 }
+
+export async function scraperFetch(env: Env, path: string, init: RequestInit = {}): Promise<Response> {
+  const url = publicSiteUrl(`${base(env)}${path}`);
+  if (!url || url.protocol !== "https:") throw new Error("Configure a public HTTPS Maps scraper address.");
+  const signal = init.signal ?? AbortSignal.timeout(20000);
+  if (!(await publicHost(url.hostname, signal))) throw new Error("Maps scraper address is not public.");
+  const response = await fetch(url, { ...init, redirect: "manual", signal });
+  if (response.status >= 300 && response.status < 400) {
+    await response.body?.cancel();
+    throw new Error("Maps scraper redirects are not allowed.");
+  }
+  return response;
+}
+
+export async function boundedText(response: Response, limit = 2000000): Promise<string> {
+  const reader = response.body?.getReader();
+  if (!reader) return "";
+  let text = "", size = 0;
+  const decoder = new TextDecoder();
+  try {
+    while (true) {
+      const part = await reader.read();
+      if (part.done) break;
+      size += part.value.length;
+      if (size > limit) throw new Error("Maps scraper response is too large.");
+      text += decoder.decode(part.value, { stream: true });
+    }
+    return text + decoder.decode();
+  } finally { await reader.cancel(); }
+}
+
+const validJobId = (id: string) => /^[a-zA-Z0-9_-]{1,100}$/.test(id);
 
 export interface GmapsJob {
   id: string;
@@ -78,31 +111,32 @@ export async function gmapsSelfStart(
     body.radius = Math.round((p.radiusKm || 25) * 1000);
   }
   try {
-    const res = await fetch(`${url}/api/v1/jobs`, {
+    const res = await scraperFetch(env, "/api/v1/jobs", {
       method: "POST",
       headers: { ...headers(env), "Content-Type": "application/json" },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(20000),
     });
     if (!res.ok)
-      return { error: `Maps scraper ${res.status}: ${(await res.text()).slice(0, 200)}` };
-    const j = (await res.json()) as { id?: string; ID?: string; status?: string };
+      return { error: `Maps scraper request failed (${res.status}). Check its connection.` };
+    const j = JSON.parse(await boundedText(res, 64000)) as { id?: string; ID?: string; status?: string };
     const id = j.id || j.ID;
-    if (!id) return { error: "Maps scraper returned no job id" };
+    if (!id || !validJobId(id)) return { error: "Maps scraper returned an invalid job id" };
     return { job: { id, status: (j.status || "pending").toLowerCase() } };
   } catch (e) {
-    return { error: `Maps scraper unreachable: ${(e as Error).message}` };
+    return { error: "Maps scraper unavailable. Check its public HTTPS address and connection." };
   }
 }
 
 export async function gmapsSelfStatus(env: Env, id: string): Promise<GmapsJob | null> {
+  if (!validJobId(id)) return null;
   try {
-    const res = await fetch(`${base(env)}/api/v1/jobs/${encodeURIComponent(id)}`, {
+    const res = await scraperFetch(env, `/api/v1/jobs/${encodeURIComponent(id)}`, {
       headers: headers(env),
       signal: AbortSignal.timeout(15000),
     });
     if (!res.ok) return null;
-    const j = (await res.json()) as { id?: string; status?: string; Status?: string };
+    const j = JSON.parse(await boundedText(res, 64000)) as { id?: string; status?: string; Status?: string };
     return { id, status: String(j.status || j.Status || "").toLowerCase() };
   } catch {
     return null;
@@ -118,13 +152,14 @@ export async function gmapsSelfItems(
   fallbackCity: string,
   fallbackIndustry: string,
 ): Promise<(PlaceBusiness & { email?: string })[]> {
+  if (!validJobId(id)) return [];
   try {
-    const res = await fetch(`${base(env)}/api/v1/jobs/${encodeURIComponent(id)}/download`, {
+    const res = await scraperFetch(env, `/api/v1/jobs/${encodeURIComponent(id)}/download`, {
       headers: { ...headers(env), Accept: "text/csv" },
       signal: AbortSignal.timeout(60000),
     });
     if (!res.ok) return [];
-    return parseGmapsCsv(await res.text(), fallbackCity, fallbackIndustry);
+    return parseGmapsCsv(await boundedText(res), fallbackCity, fallbackIndustry);
   } catch {
     return [];
   }
@@ -132,11 +167,13 @@ export async function gmapsSelfItems(
 
 /** RFC-4180-ish CSV parser (quoted fields, embedded newlines). */
 export function parseCsv(text: string): string[][] {
+  if (text.length > 2000000) throw new Error("Maps CSV is too large.");
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = "";
   let q = false;
   for (let i = 0; i < text.length; i++) {
+    if (cell.length > 16000 || row.length > 100 || rows.length > 2001) throw new Error("Maps CSV exceeds processing limits.");
     const c = text[i];
     if (q) {
       if (c === '"') {
@@ -174,7 +211,9 @@ export function parseGmapsCsv(
 ): (PlaceBusiness & { email?: string })[] {
   const rows = parseCsv(csv);
   if (rows.length < 2) return [];
-  const head = rows[0].map((h) => h.trim().toLowerCase());
+  const first = rows[0];
+  if (!first) return [];
+  const head = first.map((h) => h.trim().toLowerCase());
   const col = (name: string) => head.indexOf(name);
   const iTitle = col("title");
   const iWeb = col("website");
@@ -191,13 +230,13 @@ export function parseGmapsCsv(
   const iComplete = col("complete_address");
   const out: (PlaceBusiness & { email?: string })[] = [];
   const seen = new Set<string>();
-  for (const r of rows.slice(1)) {
+  for (const r of rows.slice(1, 2001)) {
     const title = (r[iTitle] || "").trim();
     if (!title) continue;
     const status = (iStatus >= 0 ? r[iStatus] : "").toLowerCase();
     if (/permanently closed/.test(status)) continue;
     const rawWeb = (iWeb >= 0 ? r[iWeb] : "").trim();
-    const website = rawWeb && !AGGREGATOR.test(rawWeb) ? rawWeb : "";
+    const website = rawWeb && !AGGREGATOR.test(rawWeb) && publicSiteUrl(rawWeb) ? rawWeb : "";
     const cid = iCid >= 0 ? r[iCid] : "";
     const id = cid ? `gmaps_${cid}` : `gmaps_${title.toLowerCase()}|${website}`;
     if (seen.has(id)) continue;

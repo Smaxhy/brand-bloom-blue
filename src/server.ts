@@ -78,7 +78,7 @@ export default {
   ) {
     const e = (env ?? {}) as Record<string, string | undefined>;
     ctx.waitUntil(
-      resolveIntegrationEnv(e).then((configured) => runDispatch(configured, { origin: e.PUBLIC_ORIGIN }))
+      resolveIntegrationEnv(e).then((configured) => runDispatch(configured, { origin: e.PUBLIC_ORIGIN, source: "cron" }))
         .then((r) => console.log("[outreach] dispatch", JSON.stringify(r)))
         .catch((err) => console.error("[outreach] dispatch failed", err)),
     );

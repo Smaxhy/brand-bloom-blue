@@ -207,11 +207,14 @@ export interface ForceSend {
 
 export async function runDispatch(
   env: Env,
-  opts: { maxPerRun?: number; origin?: string; syncOnly?: boolean; force?: ForceSend } = {},
+  opts: { maxPerRun?: number; origin?: string; syncOnly?: boolean; force?: ForceSend; source?: "cron" | "manual" } = {},
 ): Promise<DispatchReport> {
   const db = new Db(env);
   const report: DispatchReport = { ran_at: new Date().toISOString(), mailboxes: [], errors: [] };
   const force = opts.force;
+  if (opts.source === "cron") {
+    await db.update("outreach_settings", "id=eq.singleton", { last_cron_at: report.ran_at });
+  }
   // A forced run is a person waiting at the screen: short gaps, small batch.
   const maxPerRun = opts.maxPerRun ?? (force ? 20 : 40);
 
