@@ -15,6 +15,7 @@ import {
   Check,
   CheckSquare,
   Square,
+  SquareStop,
   Building2,
   Download,
   X,
@@ -55,6 +56,7 @@ import {
 } from "../store";
 import { Panel, Field, inputCls, Btn } from "../ui";
 import { Button } from "@/components/ui/button";
+import { createRevealScanControl } from "../reveal-scan-control";
 import { SavedSearchesPanel, SaveSearchModal } from "./SavedSearches";
 import { leadFilterReason, TEAM_SIZE_BANDS, REVENUE_BANDS } from "@/lib/lead-filters";
 
@@ -543,6 +545,8 @@ export function Scraper({
   const [pushed, setPushed] = useState(0);
   const [revealPhone, setRevealPhone] = useState(false);
   const [enrichBusy, setEnrichBusy] = useState(false);
+  const [stopBusy, setStopBusy] = useState(false);
+  const revealControl = useRef<ReturnType<typeof createRevealScanControl> | null>(null);
   const [enrichProgress, setEnrichProgress] = useState({ done: 0, total: 0 });
   // Background scan job currently being driven/watched by this tab, and recent ones.
   const [scanJob, setScanJob] = useState<ScanJobLite | null>(null);
@@ -819,10 +823,31 @@ export function Scraper({
     setFilters({ ...filters, industry: next.join(", ") });
   }
 
+  async function stopRevealScan() {
+    if (!scanJob || stopBusy) return;
+    const id = scanJob.id;
+    setStopBusy(true);
+    try {
+      const cancel = () => cancelScan(id);
+      if (revealControl.current) await revealControl.current.stop(cancel);
+      else await cancel();
+      setScanJob((job) => job?.id === id ? { ...job, status: "cancelled" } : job);
+      setBanner({ live: true, text: "Reveal scan stopped. Completed results are saved." });
+      void refreshScans();
+    } catch (error) {
+      setBanner({ live: false, text: `Could not stop the scan: ${(error as Error).message}. Try again.` });
+    } finally {
+      setStopBusy(false);
+    }
+  }
+
   async function revealEmails(targets: ScrapedPerson[], everything = false) {
+    if (revealControl.current) return;
     // Enrich anyone missing an email OR a website (Apollo finds both; Google/Hunter fill gaps).
     const list = everything ? targets.filter((p) => p.website || !p.email) : targets.filter((p) => p.emailLocked || !p.email || !p.website);
     if (!list.length) return;
+    const control = createRevealScanControl();
+    revealControl.current = control;
     setEnrichBusy(true);
     setEnrichProgress({ done: 0, total: list.length });
 
@@ -933,16 +958,19 @@ export function Scraper({
       let failures = 0;
       while (job && (job.status === "running" || job.status === "queued")) {
         await new Promise((resolve) => setTimeout(resolve, 2200));
+        if (!(await control.canContinue())) break;
         let r: Awaited<ReturnType<typeof stepScan>>;
         try {
           r = await stepScan(job.id);
           failures = 0;
         } catch {
+          if (!(await control.canContinue())) break;
           if (++failures >= 4) {
             warnings.push("Lost contact with the scan. Progress is saved; reopen it from Recent scans to continue.");
             break;
           }
           await new Promise((resolve) => setTimeout(resolve, 5000));
+          if (!(await control.canContinue())) break;
           const saved: ScanJobFull | null = await scanStatus(job.id, true).catch(() => null);
           if (saved) {
             apply(Object.values(saved.results));
@@ -952,12 +980,15 @@ export function Scraper({
           }
           continue;
         }
+        // Keep completed rows even when Stop lands during the request.
+        if (r.claimed) apply(r.produced);
+        if (!(await control.canContinue())) break;
         if (r.claimed) {
-          apply(r.produced);
           idle = 0;
         } else {
           // The cron grabbed it (we were slow / another tab): watch instead.
           await new Promise((res) => setTimeout(res, 4000));
+          if (!(await control.canContinue())) break;
           if (++idle % 3 === 0) {
             const full: ScanJobFull | null = await scanStatus(job.id, true);
             if (full) {
@@ -988,6 +1019,7 @@ export function Scraper({
     paint();
     setEnrichBusy(false);
     setScanJob(null);
+    revealControl.current = null;
   }
 
   /** Reopen a stored scan: rebuild the rows from what the job read. */
@@ -1797,7 +1829,7 @@ export function Scraper({
         )}
       </Panel>
 
-      {(scanJob || recentScans.some((j) => j.status === "running" || j.status === "queued")) && (
+      {((scanJob && (scanJob.status === "running" || scanJob.status === "queued")) || recentScans.some((j) => j.status === "running" || j.status === "queued")) && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm">
           <Loader2 className="h-4 w-4 animate-spin text-primary" />
           {scanJob ? (
@@ -1810,9 +1842,11 @@ export function Scraper({
               </span>
               <Btn variant="ghost"
                 className="ml-auto text-xs"
-                onClick={() => void cancelScan(scanJob.id).then(refreshScans).catch((error) => setBanner({ live: false, text: error.message }))}
+                onClick={() => void stopRevealScan()}
+                disabled={stopBusy}
               >
-                Stop
+                {stopBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquareStop className="h-4 w-4" />}
+                {stopBusy ? "Stopping…" : "Stop reveal"}
               </Btn>
             </>
           ) : (
@@ -1959,6 +1993,18 @@ export function Scraper({
                       </>
                     )}
                   </Btn>
+                  {enrichBusy && (
+                    <Btn
+                      variant="ghost"
+                      onClick={() => void stopRevealScan()}
+                      disabled={stopBusy || !scanJob}
+                      title="Stop reveal scan"
+                      className="text-destructive"
+                    >
+                      {stopBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquareStop className="h-4 w-4" />}
+                      {stopBusy ? "Stopping…" : "Stop reveal"}
+                    </Btn>
+                  )}
                   <Btn
                     variant="ghost"
                     onClick={() => exportCSV(selectedPeople)}

@@ -15,3 +15,4 @@
 - Bulk manual sequence sends freeze eligible enrollment IDs and send each once per action, preserving follow-up delays and server-side caps/claims.
 - Persisted enrichment scans are owner-scoped through authenticated admin/CEO server functions; every worker write requires its claim token and running status so cancellation cannot be undone by stale work.
 - Scraper owner LinkedIn searches are an explicit scan option passed through validation and persisted job options; disabling it must suppress fresh and cached-profile lookups to avoid unexpected search credits.
+- Reveal polling waits for server cancellation before issuing another slice; failed cancellation remains retryable and completed results stay saved.

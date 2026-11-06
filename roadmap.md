@@ -67,3 +67,8 @@
 - [x] Add top quote access and non-final price estimate notices; verify form navigation.
 - [x] Inspect and apply safe admin engine 21 changes while preserving data and protections.
 - [x] Verify changed admin flows without paid searches or real email sends; 34 tests passed and signed-in lookup toggle checked.
+
+# Reveal scan control
+- [x] Add visible Stop beside Reveal and stop further scan steps while retaining saved results.
+- [x] Verify cancellation with five passing tests and preview compilation.
+- [ ] Signed-in Stop flow: blocked because the requesting user has no matching managed session; sign in to verify without paid searches.
