@@ -5,6 +5,7 @@ import { renderErrorPage } from "./lib/error-page";
 import { handleApiRequest } from "./lib/api-proxies";
 import { runDispatch } from "./lib/sequencer";
 import { resolveIntegrationEnv } from "./lib/integration-settings.server";
+import { continueScanJobs } from "./lib/scan-jobs.server";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -77,6 +78,7 @@ export default {
     ctx: { waitUntil: (p: Promise<unknown>) => void },
   ) {
     const e = (env ?? {}) as Record<string, string | undefined>;
+    ctx.waitUntil(resolveIntegrationEnv(e).then(continueScanJobs).catch((error) => console.error("Scan continuation failed", error)));
     ctx.waitUntil(
       resolveIntegrationEnv(e).then((configured) => runDispatch(configured, { origin: e.PUBLIC_ORIGIN, source: "cron" }))
         .then((r) => console.log("[outreach] dispatch", JSON.stringify(r)))
