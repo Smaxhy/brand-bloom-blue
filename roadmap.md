@@ -5,6 +5,7 @@
 - [x] Apply required package security update and check preview errors.
 
 # Quote and admin security
+- [ ] Inspect and safely merge inspirova-admin-engine-3.zip email/admin fixes without replacing current security or data.
 - [ ] Add approved custom quote/contact request limits and real private quote submission.
 - [ ] Require successful server-side admin verification and reject oversized requests.
 - [ ] Verify abuse rejection, private storage and existing admin access; CAPTCHA excluded by user choice.
