@@ -4,6 +4,11 @@
 - [x] Verify navigation, calculator, and narrow-screen layout.
 - [x] Apply required package security update and check preview errors.
 
+# Quote and admin security
+- [ ] Add approved custom quote/contact request limits and real private quote submission.
+- [ ] Require successful server-side admin verification and reject oversized requests.
+- [ ] Verify abuse rejection, private storage and existing admin access; CAPTCHA excluded by user choice.
+
 # Replacement archive
 - [x] Apply inspected inspirova-rebuilt-2.zip differences without replacing Cloud configuration or saved data.
 - [x] Verify homepage calculator, navigation, and existing public pages.
