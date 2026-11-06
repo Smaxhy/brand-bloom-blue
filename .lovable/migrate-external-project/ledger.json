@@ -6,9 +6,9 @@
     {
       "capability": "admin21-incremental-update",
       "source": "inspirova-admin-engine_21.zip",
-      "outcome": "Inspect incremental differences; preserve existing Cloud accounts/data, managed migrations, encrypted credentials, safe fetching, claim-fenced scan jobs and protected dispatch.",
-      "status": "in_progress",
-      "next_action": "Merge only safe new behavior and verify without paid searches or email sends."
+      "outcome": "Expanded automatic post-discovery website enrichment across sources; added optional owner LinkedIn lookup through persisted validated scan options, disabled by default. Retained scan ownership/claim fences, pacing, secure credentials, HTTPS/DNS fetch guards, dispatch protections and existing managed schema/data. All 34 regression tests passed; signed-in lookup toggle verified both states with no runtime errors; build OK. Quote buttons and non-final estimate notices also verified on public pages.",
+      "status": "code_verified",
+      "next_action": "Live enrichment and automatic closed-tab continuation remain unverified; provider/scheduler setup required. No paid searches or real emails sent."
     },
     {
       "capability": "code",
