@@ -57,6 +57,6 @@
 - [ ] Closed-tab scan continuation: blocked by unverified automatic scheduler; live enrichment not exercised.
 
 # Quote access and admin engine 21
-- [ ] Add top quote access and non-final price estimate notices; verify form navigation.
-- [ ] Inspect and apply safe admin engine 21 changes while preserving data and protections.
-- [ ] Verify changed admin flows without paid searches or real email sends.
+- [x] Add top quote access and non-final price estimate notices; verify form navigation.
+- [x] Inspect and apply safe admin engine 21 changes while preserving data and protections.
+- [x] Verify changed admin flows without paid searches or real email sends; 34 tests passed and signed-in lookup toggle checked.
