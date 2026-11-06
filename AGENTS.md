@@ -9,3 +9,5 @@
 - GHL plain-text sends must populate its HTML email-body field with escaped text; URL attributes must also be escaped to prevent injection.
 
 - Sending diagnostics use an authenticated, rate-limited server function with verified admin/CEO roles; the diagnostic helper only reads records and never triggers delivery.
+- Own Maps scraper connections use server-only configuration, public HTTPS/DNS validation, no redirects, and bounded downloads; never forward credentials to an unvalidated destination.
+- Bulk manual sequence sends freeze eligible enrollment IDs and send each once per action, preserving follow-up delays and server-side caps/claims.

@@ -1566,7 +1566,7 @@ export async function discoverLeads(
     people,
     sources: sourcesById,
     liveApollo: apolloRes.live,
-    liveGoogle: googleRes.live,
+    liveGoogle: googleRes.live || Object.values(sourcesById).some((used) => used.includes("selfhost")),
     message,
     skippedDenied,
   };

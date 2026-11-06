@@ -1275,8 +1275,11 @@ async function apifyStartRoute(request: Request, env: Env): Promise<Response> {
 async function gmapsStartRoute(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") return json({ error: "POST only" }, 405);
   if (!gmapsSelfAvailable(env))
-    return json({ ok: false, error: "GMAPS_SCRAPER_URL is not set" }, 400);
+    return json({ ok: false, error: "Connect your own Maps scraper before searching." }, 400);
   const f = (await request.json().catch(() => ({}))) as DiscoverFilters;
+  if (typeof f.location !== "string" || f.location.length > 200 ||
+      (f.industry != null && (typeof f.industry !== "string" || f.industry.length > 2000)) ||
+      (f.perPage != null && !Number.isFinite(f.perPage))) return json({ ok: false, error: "Invalid search details." }, 400);
   const queries = (f.industry || "")
     .split(",")
     .map((k) => k.trim())
@@ -1296,9 +1299,10 @@ async function gmapsStartRoute(request: Request, env: Env): Promise<Response> {
 }
 
 async function gmapsStatusRoute(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "GET") return json({ error: "GET only" }, 405);
   const u = new URL(request.url);
   const id = u.searchParams.get("job") || "";
-  if (!id) return json({ ok: false, error: "job required" }, 400);
+  if (!/^[a-zA-Z0-9_-]{1,100}$/.test(id)) return json({ ok: false, error: "Valid job required" }, 400);
   const st = await gmapsSelfStatus(env, id);
   const status = st?.status || "unknown";
   if (!GMAPS_DONE.has(status)) return json({ ok: true, status, done: false });

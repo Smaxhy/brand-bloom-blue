@@ -1508,9 +1508,17 @@ function Queue({
       let total = 0;
       let blocked = 0;
       let last: DispatchSummary | undefined;
-      const rounds = target.sequenceId ? 25 : 1;
+      // Freeze eligible people before the first batch so later rounds never
+      // immediately send a newly scheduled follow-up to the same person.
+      const waiting = target.sequenceId ? await listEnrollments({ sequenceId: target.sequenceId, limit: 500 }) : [];
+      const eligibleIds = waiting.filter((person) =>
+        ["queued", "active", "paused"].includes(person.status) &&
+        (person.current_step === 0 || (person.next_send_at && Date.parse(person.next_send_at) <= Date.now()))
+      ).map((person) => person.id);
+      const rounds = target.sequenceId ? Math.ceil(eligibleIds.length / 20) : 1;
       for (let i = 0; i < rounds; i++) {
-        const r = await sendNow(target);
+        const batch = target.sequenceId ? { enrollmentIds: eligibleIds.slice(i * 20, (i + 1) * 20) } : target;
+        const r = await sendNow(batch);
         if (!r.ok) throw new Error(r.error || "Could not send");
         last = r.report;
         const sent = r.report?.mailboxes?.reduce((a, m) => a + m.sent, 0) ?? 0;
