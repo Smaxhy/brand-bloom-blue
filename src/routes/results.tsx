@@ -176,6 +176,12 @@ function ResultsPage() {
         <p className="mt-5 max-w-xl text-base text-muted-foreground">
           In tracked client revenue. Shopify, Meta Ads and GHL — the numbers, straight from client dashboards.
         </p>
+        <div className="mt-6 flex flex-col items-start gap-3">
+          <Button asChild className="min-h-12 rounded-md px-6">
+            <a href="/#quoteForm">Request your quote <span aria-hidden="true">↗</span></a>
+          </Button>
+          <p className="max-w-xl text-sm text-muted-foreground"><strong className="text-foreground">Estimate only.</strong> Prices shown are not final and may change based on your business and agreed services.</p>
+        </div>
         <div className="mt-8 grid grid-cols-2 border-y border-border md:grid-cols-4">
           {headlineStats.map((stat) => (
             <div key={stat.v} className="py-6 pr-4">
@@ -230,7 +236,7 @@ function ResultsPage() {
             <p className="mt-4 max-w-lg text-sm text-muted-foreground">Tell us about your brand. We'll build a growth plan around your business.</p>
           </div>
           <Button asChild className="min-h-12 rounded-md bg-primary px-6 text-primary-foreground shadow-none hover:bg-primary/90">
-            <a href="/#pricing">Request your quote <span aria-hidden="true">↗</span></a>
+            <a href="/#quoteForm">Request your quote <span aria-hidden="true">↗</span></a>
           </Button>
         </div>
       </section>
