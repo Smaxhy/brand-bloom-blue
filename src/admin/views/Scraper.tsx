@@ -54,6 +54,7 @@ import {
   authFetch,
 } from "../store";
 import { Panel, Field, inputCls, Btn } from "../ui";
+import { Button } from "@/components/ui/button";
 import { SavedSearchesPanel, SaveSearchModal } from "./SavedSearches";
 import { leadFilterReason, TEAM_SIZE_BANDS, REVENUE_BANDS } from "@/lib/lead-filters";
 
@@ -1502,9 +1503,9 @@ export function Scraper({
               {s.label}
             </button>
           ))}
-          <Btn variant="ghost" aria-pressed={findLinkedin} onClick={() => setFindLinkedin((value) => !value)} className={pill(findLinkedin)} title="Optional owner lookup; uses one search credit per uncached business">
+          <Button variant="ghost" aria-pressed={findLinkedin} onClick={() => setFindLinkedin((value) => !value)} className={pill(findLinkedin)} title="Optional owner lookup; uses one search credit per uncached business">
             Owner LinkedIn (search credits)
-          </Btn>
+          </Button>
           <span className="mx-1 h-4 w-px bg-border" />
           <button
             onClick={() => setRevealPhone((v) => !v)}
