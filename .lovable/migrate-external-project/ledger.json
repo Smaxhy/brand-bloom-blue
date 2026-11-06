@@ -1,5 +1,8 @@
 {
-  "source_archive": "inspirova-admin-engine_18.zip",
+  "source_archive": [
+    "inspirova-admin-engine_19.zip",
+    "inspirova-results-page.zip"
+  ],
   "capabilities": [
     {
       "capability": "code",
@@ -119,6 +122,13 @@
       "outcome": "Applied read-only sending diagnostics through an authenticated admin/CEO-only, rate-limited server function; stricter email syntax and provider-recipient rejection handling. Signed-in real Cloud data and Re-check verified, 21 tests pass, build OK. Retained safe GHL HTML, secure key entry/resolution, crawler guard, homepage and existing migrations/data. Restored formula-safe CSV mapping required by project convention.",
       "status": "verified",
       "next_action": "Real sending and automatic scheduling remain unverified; mailbox sync was last seen around 7 hours ago. Existing narrow-screen sidebar obstruction remains outside archive scope."
+    },
+    {
+      "capability": "admin19-and-results",
+      "source": "uploaded archives",
+      "outcome": "Review and selectively apply updates while preserving existing Cloud records, accounts and security protections",
+      "status": "in_progress",
+      "next_action": "Verify new heartbeat diagnostics and five Results screenshots"
     }
   ]
 }

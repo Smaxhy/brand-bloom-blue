@@ -45,3 +45,7 @@
 # Admin engine 18 update
 - [x] Apply read-only sending status and invalid-address improvements while retaining security and existing data.
 - [x] Verify authenticated status and Re-check against real Cloud data; 21 regression tests passed, build OK; no emails sent.
+
+# Admin engine 19 and Results update
+- [ ] Apply safe admin archive differences and five new Results screenshots.
+- [ ] Verify signed-in diagnostics and Results on desktop/mobile without sending emails.
