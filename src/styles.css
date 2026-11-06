@@ -69,6 +69,19 @@
 .public-site a { transition: color .2s, background-color .2s; }
 .public-site a:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; }
 
+.results-site {
+  --background: #08060F; --foreground: #FFFFFF;
+  --card: #120A2C; --card-foreground: var(--foreground);
+  --primary: #7C5CFF; --primary-foreground: #FFFFFF;
+  --secondary: #0C0820; --secondary-foreground: var(--foreground);
+  --muted: var(--secondary); --muted-foreground: rgba(255,255,255,.7);
+  --border: rgba(255,255,255,.12); --input: var(--border); --ring: #A88BFF;
+  --accent: #A88BFF; --accent-foreground: var(--background);
+  --font-display: "Poppins", "Inter", sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
+}
+.results-site h1,.results-site h2,.results-site h3 { font-family: var(--font-display); font-weight: 700; }
+
 @utility shadow-brand { box-shadow: var(--shadow-brand); }
 @utility shadow-soft { box-shadow: var(--shadow-soft); }
 @utility bg-brand-gradient { background: linear-gradient(135deg, var(--brand-violet), var(--brand-coral)); }

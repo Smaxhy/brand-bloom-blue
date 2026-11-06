@@ -154,13 +154,13 @@ const caseStudies = [
 function ResultsPage() {
   const animated = useCountUp(REVENUE_TOTAL);
   return (
-    <main id="main-content" className="public-site min-h-screen">
+    <main id="main-content" className="public-site results-site min-h-screen">
       <header className="sticky top-0 z-50 border-b border-border bg-background">
         <div className="mx-auto flex min-h-20 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
           <Link to="/" className="flex items-center gap-2 text-lg font-medium">
             <img src={logo} alt="" className="h-7 w-7 object-contain" /> Inspirova®
           </Link>
-          <Button asChild variant="outline" className="min-h-11 rounded-none shadow-none">
+          <Button asChild variant="outline" className="min-h-11 rounded-md shadow-none">
             <Link to="/"><ArrowLeft /> Back home</Link>
           </Button>
         </div>
@@ -185,23 +185,23 @@ function ResultsPage() {
           ))}
         </div>
       </section>
-      <section className="bg-editorial-paper py-12 text-editorial-ink sm:py-16">
+      <section className="bg-secondary py-12 text-foreground sm:py-16">
         <div className="mx-auto max-w-6xl px-5 sm:px-8">
-          <p className="text-xs text-editorial-subtle">SELECTED CLIENT WORK</p>
+          <p className="text-xs text-accent">SELECTED CLIENT WORK</p>
           <h2 className="mt-4 text-3xl font-medium">Behind the numbers.</h2>
           <div className="mt-8">
             {caseStudies.map((study, index) => (
-              <article key={study.title} className="grid gap-5 border-t border-editorial-rule py-7 md:grid-cols-[180px_1fr_1fr] md:gap-8">
-                <div className="text-xs text-editorial-subtle">0{index + 1} / {study.tag}</div>
+              <article key={study.title} className="grid gap-5 border-t border-border py-7 md:grid-cols-[180px_1fr_1fr] md:gap-8">
+                <div className="text-xs text-accent">0{index + 1} / {study.tag}</div>
                 <div>
                   <h3 className="text-xl font-medium">{study.title}</h3>
-                  <p className="mt-3 text-sm leading-relaxed text-editorial-subtle">{study.body}</p>
+                  <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{study.body}</p>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   {study.metrics.map((metric) => (
                     <div key={metric.v}>
                       <div className="text-lg font-medium">{metric.k}</div>
-                      <div className="mt-2 text-xs text-editorial-subtle">{metric.v}</div>
+                      <div className="mt-2 text-xs text-muted-foreground">{metric.v}</div>
                     </div>
                   ))}
                 </div>
@@ -223,13 +223,13 @@ function ResultsPage() {
           ))}
         </div>
       </section>
-      <section className="bg-editorial-secondary py-12 text-editorial-ink sm:py-16">
+      <section className="bg-secondary py-12 text-foreground sm:py-16">
         <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-8 px-5 sm:px-8 md:flex-row md:items-center">
           <div>
             <h2 className="text-3xl font-medium">Let's get to work.</h2>
-            <p className="mt-4 max-w-lg text-sm text-editorial-subtle">Tell us about your brand. We'll build a growth plan around your business.</p>
+            <p className="mt-4 max-w-lg text-sm text-muted-foreground">Tell us about your brand. We'll build a growth plan around your business.</p>
           </div>
-          <Button asChild className="min-h-12 rounded-none bg-editorial-ink px-6 text-editorial-paper shadow-none hover:bg-editorial-subtle">
+          <Button asChild className="min-h-12 rounded-md bg-primary px-6 text-primary-foreground shadow-none hover:bg-primary/90">
             <a href="/#pricing">Request your quote <span aria-hidden="true">↗</span></a>
           </Button>
         </div>
