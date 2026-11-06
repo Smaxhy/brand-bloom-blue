@@ -5,10 +5,11 @@
 - [x] Apply required package security update and check preview errors.
 
 # Quote and admin security
-- [ ] Inspect and safely merge inspirova-admin-engine-3.zip email/admin fixes without replacing current security or data.
-- [ ] Add approved custom quote/contact request limits and real private quote submission.
-- [ ] Require successful server-side admin verification and reject oversized requests.
-- [ ] Verify abuse rejection, private storage and existing admin access; CAPTCHA excluded by user choice.
+- [x] Inspect and safely merge inspirova-admin-engine-3.zip pacing, enrollment and scan recovery fixes without replacing current security or data.
+- [x] Add approved custom quote/contact request limits and real private quote submission.
+- [x] Require successful server-side admin verification and reject oversized requests.
+- [x] Verify abuse rejection, private quote storage, protected RPC grants and signed-out admin denial; CAPTCHA excluded by user choice.
+- [ ] Signed-in admin/email verification: blocked by unavailable matching managed session; user must sign in. No emails sent.
 
 # Replacement archive
 - [x] Apply inspected inspirova-rebuilt-2.zip differences without replacing Cloud configuration or saved data.

@@ -943,7 +943,7 @@ export function Scraper({
             break;
           }
           await new Promise((resolve) => setTimeout(resolve, 5000));
-          const saved = await scanStatus(job.id, true).catch(() => null);
+          const saved: ScanJobFull | null = await scanStatus(job.id, true).catch(() => null);
           if (saved) {
             apply(Object.values(saved.results));
             job = saved;

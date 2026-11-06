@@ -6,9 +6,9 @@
     {
       "capability": "admin3-email-fixes",
       "source": "inspirova-admin-engine-3.zip",
-      "outcome": "Incremental email fix merge; preserve existing Cloud records, identities, providers, protected functions, escaping, claim fences, owner-scoped scans and managed migration history. Archive contains no replacement records or packages.",
-      "status": "in_progress",
-      "next_action": "Merge safe pacing and duplicate-enrollment changes; verify without real delivery. Signed-in check requires the user to sign in because self-session mint has no matching account."
+      "outcome": "Applied bounded email dispatch pacing, existing-enrollment picker exclusion, database-trigger duplicate enrollment protection and scan network recovery. Preserved fail-closed inbox sync, safe HTML/CSV, frozen send batches, secure credentials, owner-scoped scans, Cloud data/accounts and managed migrations. Thirty-three tests passed; public quote create/read/remove verified, malicious requests rejected and basic security checks clean.",
+      "status": "code_verified",
+      "next_action": "Signed-in check requires the user to sign in because self-session mint has no matching account. Real email delivery and scheduler remain unverified; no emails sent."
     },
     {
       "capability": "admin21-incremental-update",
