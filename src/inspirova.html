@@ -422,6 +422,26 @@
     .contact-panel{margin:12px;padding:56px 18px 24px;border-radius:22px}
   }
 
+
+  /* ---------- mobile polish ---------- */
+  .hero-grid>*{min-width:0}
+  .hero h1,.hero p{overflow-wrap:break-word}
+  @media (max-width:880px){
+    .hero-grid{grid-template-columns:minmax(0,1fr)!important}
+    .nav-shell{display:grid!important;grid-template-columns:auto 1fr;align-items:center;padding:10px 12px 8px 16px;border-radius:20px;row-gap:6px}
+    .nav-brand{font-size:1.05rem}
+    .nav-cta{width:auto;justify-content:flex-end;grid-column:2}
+    .nav-cta .btn{padding:8px 14px;font-size:.85rem}
+    .nav-links,.nav-links.open{grid-column:1/-1;justify-content:space-between;gap:0;flex-wrap:nowrap;border-top:1px solid rgba(255,255,255,.08);padding-top:8px}
+    .nav-links a{background:none!important;padding:6px 2px;font-size:.8rem;min-height:32px;color:rgba(255,255,255,.72)}
+    .nav-links a.active{color:#fff}
+    .hero{padding-top:150px!important}
+    .hero h1{font-size:clamp(1.9rem,8.6vw,2.6rem);line-height:1.08}
+    .hero p.sub{font-size:1rem}
+    .hero-cta{flex-direction:column;gap:10px}
+    .hero-cta .btn{width:100%;justify-content:center}
+  }
+  @media (max-width:360px){.nav-links a{font-size:.74rem}}
 </style>
 </head>
 <body>
@@ -434,7 +454,7 @@
 <header>
   <div class="wrap">
     <div class="nav-shell">
-      
+      <a href="#main-content" class="brand nav-brand" aria-label="Inspirova home"><img class="logo-mark" src="/__l5e/assets-v1/5e8d02ac-71b5-43d0-ad47-62b721da5ff0/logo-new-transparent.png" alt="">Inspirova</a>
       <nav class="nav-links" id="navlinks">
         <a href="#services" class="active">Marketing</a>
         <a href="#how">How it works</a>
