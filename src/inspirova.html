@@ -88,30 +88,6 @@
   .menu-btn span+span{margin-top:4px}
 
 
-  /* ---------- contact as separate panel + mobile nav ---------- */
-  .nav-contact{padding:10px 18px}
-  .contact[hidden]{display:none}
-  .contact{position:fixed;inset:0;z-index:80;padding:24px 0;background:rgba(6,4,18,.78);backdrop-filter:blur(10px);overflow-y:auto;display:flex;align-items:flex-start}
-  .contact-panel{position:relative;margin:60px auto 24px;background:var(--surface-dark,#0c0820);border:1px solid rgba(255,255,255,.12);border-radius:28px;padding:36px 28px;box-shadow:0 30px 80px -30px rgba(0,0,0,.8);max-width:1040px;animation:cpIn .3s ease}
-  @keyframes cpIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
-  .contact-close{position:absolute;top:14px;right:14px;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#fff;font-size:1.6rem;line-height:1;cursor:pointer}
-  .contact-close:hover{background:rgba(255,255,255,.14)}
-  body.contact-open{overflow:hidden}
-  @media (max-width:880px){
-    header{top:8px}
-    .nav-shell{flex-wrap:wrap;height:auto;padding:10px 12px;border-radius:22px;row-gap:8px}
-    .nav-links,.nav-links.open{display:flex;position:static;order:3;width:100%;flex-direction:row;gap:6px;overflow-x:auto;
-      background:none;border:0;padding:2px 0 0;box-shadow:none;backdrop-filter:none;scrollbar-width:none;-webkit-overflow-scrolling:touch}
-    .nav-links::-webkit-scrollbar{display:none}
-    .nav-links a{white-space:nowrap;padding:8px 14px;border-radius:999px;background:rgba(255,255,255,.07);font-size:.88rem;min-height:36px;display:inline-flex;align-items:center}
-    .nav-links a::after{display:none}
-    .nav-links a.active{background:rgba(168,139,255,.25);color:#fff}
-    .nav-cta{width:100%;justify-content:flex-end;gap:8px}
-    .nav-cta .btn{padding:9px 16px;font-size:.9rem}
-    .hero{padding-top:150px}
-    .contact-panel{margin:12px;padding:56px 18px 24px;border-radius:22px}
-  }
-
   /* ---------- hero ---------- */
   .hero{background:var(--surface-dark);color:#fff;
     padding:130px 0 100px;position:relative;overflow:hidden}
@@ -421,6 +397,30 @@
   .faq details[open] summary::after{content:"–"}
   .faq details p{color:var(--muted);padding:0 0 18px}
   @media(max-width:860px){.contact-grid{grid-template-columns:1fr}.c-form .row{grid-template-columns:1fr}}
+  /* ---------- contact as separate panel + mobile nav ---------- */
+  .nav-contact{padding:10px 18px}
+  .contact[hidden]{display:none}
+  .contact{position:fixed;inset:0;z-index:80;padding:24px 0;background:rgba(6,4,18,.78);backdrop-filter:blur(10px);overflow-y:auto;display:flex;align-items:flex-start}
+  .contact-panel{position:relative;margin:60px auto 24px;background:var(--surface-dark,#0c0820);border:1px solid rgba(255,255,255,.12);border-radius:28px;padding:36px 28px;box-shadow:0 30px 80px -30px rgba(0,0,0,.8);max-width:1040px;animation:cpIn .3s ease}
+  @keyframes cpIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+  .contact-close{position:absolute;top:14px;right:14px;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#fff;font-size:1.6rem;line-height:1;cursor:pointer}
+  .contact-close:hover{background:rgba(255,255,255,.14)}
+  body.contact-open{overflow:hidden}
+  @media (max-width:880px){
+    header{top:8px}
+    .nav-shell{flex-wrap:wrap;height:auto;padding:10px 12px;border-radius:22px;row-gap:8px}
+    .nav-links,.nav-links.open{display:flex;position:static;order:3;width:100%;flex-direction:row;gap:6px;overflow-x:auto;
+      background:none;border:0;padding:2px 0 0;box-shadow:none;backdrop-filter:none;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+    .nav-links::-webkit-scrollbar{display:none}
+    .nav-links a{white-space:nowrap;padding:8px 14px;border-radius:999px;background:rgba(255,255,255,.07);font-size:.88rem;min-height:36px;display:inline-flex;align-items:center}
+    .nav-links a::after{display:none}
+    .nav-links a.active{background:rgba(168,139,255,.25);color:#fff}
+    .nav-cta{width:100%;justify-content:flex-end;gap:8px}
+    .nav-cta .btn{padding:9px 16px;font-size:.9rem}
+    .hero{padding-top:150px}
+    .contact-panel{margin:12px;padding:56px 18px 24px;border-radius:22px}
+  }
+
 </style>
 </head>
 <body>
