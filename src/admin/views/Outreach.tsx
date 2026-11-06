@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { getSendingStatus } from "@/lib/sending-status.functions";
+import { eligibleSendBatches } from "../send-batches";
 type SendingStatus = Awaited<ReturnType<typeof getSendingStatus>>;
 import {
   Plus,
@@ -1511,13 +1512,10 @@ function Queue({
       // Freeze eligible people before the first batch so later rounds never
       // immediately send a newly scheduled follow-up to the same person.
       const waiting = target.sequenceId ? await listEnrollments({ sequenceId: target.sequenceId, limit: 500 }) : [];
-      const eligibleIds = waiting.filter((person) =>
-        ["queued", "active", "paused"].includes(person.status) &&
-        (person.current_step === 0 || (person.next_send_at && Date.parse(person.next_send_at) <= Date.now()))
-      ).map((person) => person.id);
-      const rounds = target.sequenceId ? Math.ceil(eligibleIds.length / 20) : 1;
+      const batches = eligibleSendBatches(waiting);
+      const rounds = target.sequenceId ? batches.length : 1;
       for (let i = 0; i < rounds; i++) {
-        const batch = target.sequenceId ? { enrollmentIds: eligibleIds.slice(i * 20, (i + 1) * 20) } : target;
+        const batch = target.sequenceId ? { enrollmentIds: batches[i] } : target;
         const r = await sendNow(batch);
         if (!r.ok) throw new Error(r.error || "Could not send");
         last = r.report;
