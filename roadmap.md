@@ -55,3 +55,8 @@
 - [x] Add secure resumable scans, progress, Stop and Recent scans.
 - [x] Verify persistence, cancellation, ownership and unchanged Results; remove temporary scan.
 - [ ] Closed-tab scan continuation: blocked by unverified automatic scheduler; live enrichment not exercised.
+
+# Quote access and admin engine 21
+- [x] Add top quote access and non-final price estimate notices; verify form navigation.
+- [x] Inspect and apply safe admin engine 21 changes while preserving data and protections.
+- [x] Verify changed admin flows without paid searches or real email sends; 34 tests passed and signed-in lookup toggle checked.

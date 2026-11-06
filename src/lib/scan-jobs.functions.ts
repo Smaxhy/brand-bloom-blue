@@ -5,7 +5,7 @@ import { z } from "zod";
 
 const person = z.object({ id: z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/), name: z.string().max(200).default(""), domain: z.string().max(2048).default(""), organizationName: z.string().max(200).default(""), linkedin: z.string().max(2048).optional(), rating: z.number().min(0).max(5).optional(), reviews: z.number().min(0).optional(), phone: z.string().max(100).optional(), city: z.string().max(200).optional(), industry: z.string().max(200).optional() });
 const input = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("start"), people: z.array(person).min(1).max(2000), label: z.string().max(120), options: z.object({ useClaude: z.boolean().optional(), usePaid: z.boolean().optional(), revealPhone: z.boolean().optional() }) }),
+  z.object({ action: z.literal("start"), people: z.array(person).min(1).max(2000), label: z.string().max(120), options: z.object({ useClaude: z.boolean().optional(), usePaid: z.boolean().optional(), revealPhone: z.boolean().optional(), findLinkedin: z.boolean().optional() }) }),
   z.object({ action: z.enum(["step", "status", "cancel"]), id: z.string().uuid(), full: z.boolean().optional() }),
   z.object({ action: z.literal("list") }),
 ]);

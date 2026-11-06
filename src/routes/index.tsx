@@ -22,6 +22,18 @@ function HomePage() {
   const renderedHtml = siteHtml.replaceAll("__LOGO__", logo).replaceAll("__PROOF__", proof).replaceAll("__PUBLIC_CSS__", publicCss).replace(
     "</body>",
     `<script>
+      document.querySelectorAll('a[href^="#"]').forEach(function(link) {
+        link.addEventListener('click', function(event) {
+          var target = document.getElementById(link.getAttribute('href').slice(1));
+          if (target) { event.preventDefault(); target.scrollIntoView({ block: 'start' }); }
+        });
+      });
+      var initialAnchor = window.parent.location.hash.slice(1);
+      if (initialAnchor === 'quoteForm' || initialAnchor === 'pricing') {
+        window.addEventListener('load', function() {
+          setTimeout(function() { document.getElementById(initialAnchor)?.scrollIntoView({ block: 'start' }); }, 100);
+        });
+      }
       // Route any internal link (e.g. /results, /admin) through the parent SPA
       // so navigation is instant. The target="_top" on the anchors is a fallback
       // if JavaScript is unavailable.
