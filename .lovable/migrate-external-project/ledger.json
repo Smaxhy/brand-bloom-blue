@@ -133,9 +133,9 @@
     {
       "capability": "admin20-background-scans",
       "source": "uploaded archives",
-      "outcome": "Results archive is byte-identical to the previous Results upload; add resumable owner-scoped enrichment jobs preserving current protections.",
-      "status": "in_progress",
-      "next_action": "Verify persisted scan create/read/cancel/reopen and authorization without provider calls."
+      "outcome": "Results ZIP is byte-identical to previous upload; all 12 images and mobile quote navigation verified. Added owner-scoped authenticated admin/CEO scan functions, validated inputs and rate limits, persisted jobs with token-fenced cancellation and bounded storage, saved progress/Recent scans/reopen and scheduled continuation with secure integration resolution. Thirty tests pass; signed-in real Cloud create/list/cancel/cancelled-step/reload/reopen verified without provider calls; temporary records removed. Build OK and no runtime errors.",
+      "status": "code_verified",
+      "next_action": "Live enrichment and closed-tab automatic continuation remain unverified; scheduler availability and provider connection required. Existing own Maps hosted connection remains missing."
     }
   ]
 }

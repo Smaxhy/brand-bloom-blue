@@ -52,5 +52,6 @@
 - [ ] Live own Maps scraper: blocked by missing hosted scraper connection; no external service supplied.
 
 # Admin engine 20 update
-- [ ] Add secure resumable scans, progress, Stop and Recent scans.
-- [ ] Verify persistence, cancellation, ownership and unchanged Results.
+- [x] Add secure resumable scans, progress, Stop and Recent scans.
+- [x] Verify persistence, cancellation, ownership and unchanged Results; remove temporary scan.
+- [ ] Closed-tab scan continuation: blocked by unverified automatic scheduler; live enrichment not exercised.
