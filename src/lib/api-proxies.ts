@@ -62,6 +62,8 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   const url = new URL(request.url);
   const path = url.pathname;
   if (!path.startsWith("/api/")) return null;
+  // Public contact form is handled by its own route (validated + rate-limited there).
+  if (path === "/api/public/contact") return null;
 
   // Public endpoints (no login): unsubscribe links + health. Everything else
   // costs money or acts on your behalf, so it needs a signed-in admin — or the
