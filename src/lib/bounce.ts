@@ -17,9 +17,26 @@ type Env = Record<string, string | undefined>;
 
 export type VerifyStatus = "valid" | "invalid" | "risky" | "mx_ok" | "unknown";
 
+/** Trim, lowercase, drop stray trailing punctuation scraped from a page. */
+export function normalizeEmail(email: string): string {
+  return (email || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^mailto:/, "")
+    .replace(/[.,;:)\]]+$/, "");
+}
+
+const EMAIL_SYNTAX = /^[a-z0-9._%+'-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/i;
+/** Cheap syntax check — what GHL/Gmail will refuse outright. */
+export function looksLikeEmail(email: string): boolean {
+  return EMAIL_SYNTAX.test(normalizeEmail(email)) && !/\.\./.test(email);
+}
+
 /** Reoon when configured (power mode = real SMTP check), else MX only. */
 export async function verifyEmail(env: Env, email: string): Promise<VerifyStatus> {
   const key = env.REOON_API_KEY;
+  email = normalizeEmail(email);
+  if (!looksLikeEmail(email)) return "invalid";
   const domain = email.split("@")[1] || "";
   if (!domain || !domain.includes(".")) return "invalid";
   if (key) {
@@ -135,6 +152,7 @@ export async function preSendCheck(
 ): Promise<{ ok: true; status: VerifyStatus } | { ok: false; reason: string }> {
   const current = (lead.email_verified || "unknown") as VerifyStatus;
   if (current === "invalid") return { ok: false, reason: "email marked invalid" };
+  if (!looksLikeEmail(lead.email)) return { ok: false, reason: "not a valid email address" };
   if (current === "valid" || current === "mx_ok" || current === "risky")
     return { ok: true, status: current };
   const status = await verifyEmail(env, lead.email);
@@ -147,6 +165,10 @@ export async function preSendCheck(
         : "domain has no mail server",
     };
   return { ok: true, status };
+}
+
+export function isInvalidRecipientError(message: string): boolean {
+  return /INVALID_EMAIL|e-mail is invalid|email is invalid|invalid (to|recipient|address)|address not found|no such recipient/i.test(message);
 }
 
 export { enc };

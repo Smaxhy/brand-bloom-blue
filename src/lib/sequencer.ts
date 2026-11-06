@@ -33,11 +33,12 @@ import { renderStep } from "./templates";
 import { gmailGetFull } from "./gmail";
 import { runDueSavedSearches } from "./saved-searches";
 import { classifyReply } from "./reply-ai";
-import { preSendCheck, classifyBounce, applyHardBounce, applySoftBounce } from "./bounce";
+import { preSendCheck, classifyBounce, applyHardBounce, applySoftBounce, isInvalidRecipientError } from "./bounce";
 
 type Env = Record<string, string | undefined>;
 
 export interface Mailbox {
+  last_error?: string | null;
   id: string;
   email: string;
   display_name: string;
@@ -123,7 +124,7 @@ export interface OutreachSettings {
 }
 
 /** Local time parts for a timezone without any library. */
-function localParts(tz: string, d = new Date()): { hour: number; day: number; ymd: string } {
+export function localParts(tz: string, d = new Date()): { hour: number; day: number; ymd: string } {
   try {
     const parts = new Intl.DateTimeFormat("en-US", {
       timeZone: tz,
@@ -147,7 +148,7 @@ function localParts(tz: string, d = new Date()): { hour: number; day: number; ym
 }
 
 /** Start of the mailbox's local day, as an ISO instant (approximate via offset probing). */
-function startOfLocalDayIso(tz: string): string {
+export function startOfLocalDayIso(tz: string): string {
   const now = new Date();
   const { ymd } = localParts(tz, now);
   // Find the UTC instant where the local date flips to `ymd` by stepping back hour by hour.
@@ -163,13 +164,13 @@ function startOfLocalDayIso(tz: string): string {
   return snapped.toISOString();
 }
 
-function inWindow(mb: Mailbox): boolean {
+export function inWindow(mb: Mailbox): boolean {
   const { hour, day } = localParts(mb.timezone);
   return mb.send_days.includes(day) && hour >= mb.window_start && hour < mb.window_end;
 }
 
 /** Next instant that's inside the mailbox window, at least `afterMs` from now, plus jitter. */
-function nextWindowTime(mb: Mailbox, afterMs: number): Date {
+export function nextWindowTime(mb: Mailbox, afterMs: number): Date {
   let t = new Date(Date.now() + afterMs);
   for (let i = 0; i < 24 * 14; i++) {
     const { hour, day } = localParts(mb.timezone, t);
@@ -444,18 +445,24 @@ export async function runDispatch(
             status: "failed",
             error: msg.slice(0, 500),
           });
-          // Hard failures on the address → skip; transient → retry in an hour.
-          const hard = /invalid|address not found|recipient/i.test(msg);
-          await db.update(
-            "enrollments",
-            `id=eq.${en.id}`,
-            hard
-              ? { status: "failed", last_error: msg.slice(0, 500) }
-              : {
-                  next_send_at: new Date(Date.now() + 3600_000).toISOString(),
-                  last_error: msg.slice(0, 500),
-                },
-          );
+          // The provider refused the ADDRESS (GHL CONVERSATIONS_MSG_INVALID_EMAIL,
+          // Gmail "Invalid To header"…) → that address is dead: blacklist it, stop
+          // every sequence it's in. Anything else is transient → retry in an hour.
+          const badAddress = isInvalidRecipientError(msg);
+          if (badAddress) {
+            await applyHardBounce(db, {
+              email: lead.email,
+              lead,
+              enrollmentId: en.id,
+              reason: "bounce",
+              note: `rejected by ${isGhl(mb) ? "GHL" : "Gmail"}: ${msg.slice(0, 150)}`,
+            });
+          } else {
+            await db.update("enrollments", `id=eq.${en.id}`, {
+              next_send_at: new Date(Date.now() + 3600_000).toISOString(),
+              last_error: msg.slice(0, 500),
+            });
+          }
           if (/401|403|invalid_grant/i.test(msg)) break; // mailbox auth problem — stop this mailbox for now
         }
         // Human-looking gap between sends (short when someone is waiting at the screen).

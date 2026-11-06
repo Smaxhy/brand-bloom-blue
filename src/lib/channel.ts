@@ -11,6 +11,7 @@
  * hold the GHL conversation id.
  */
 
+import { normalizeEmail } from "./bounce";
 import { Db, enc } from "./db";
 import { accessTokenFor } from "./google-oauth";
 import { gmailSend, newMessageId } from "./gmail";
@@ -76,7 +77,7 @@ export async function sendVia(
     const creds = await ghlCredsFor(db, mb.id);
     const token = await ghlToken(creds);
     const contactId = await ghlUpsertContact(token, creds.locationId, {
-      email: m.to.email,
+      email: normalizeEmail(m.to.email),
       name: m.to.name,
       company: m.company,
       phone: m.phone,
