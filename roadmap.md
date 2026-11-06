@@ -43,5 +43,5 @@
 - [x] Verify email payloads and signed-in Settings without sending real emails; 15 tests passed and build OK.
 
 # Admin engine 18 update
-- [ ] Apply read-only sending status and invalid-address improvements while retaining security and existing data.
-- [ ] Verify authenticated status, access protection and tests without sending emails.
+- [x] Apply read-only sending status and invalid-address improvements while retaining security and existing data.
+- [x] Verify authenticated status and Re-check against real Cloud data; 21 regression tests passed, build OK; no emails sent.

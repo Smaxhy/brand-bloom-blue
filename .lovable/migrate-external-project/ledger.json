@@ -116,9 +116,9 @@
     {
       "capability": "admin-engine-18-update",
       "source": "inspirova-admin-engine_18.zip",
-      "outcome": "Add read-only sending diagnostics and stricter invalid-address protection; preserve secure credentials, safe GHL HTML, homepage, existing data and managed migrations.",
-      "status": "in_progress",
-      "next_action": "Verify authenticated diagnostics and regression tests without sending emails."
+      "outcome": "Applied read-only sending diagnostics through an authenticated admin/CEO-only, rate-limited server function; stricter email syntax and provider-recipient rejection handling. Signed-in real Cloud data and Re-check verified, 21 tests pass, build OK. Retained safe GHL HTML, secure key entry/resolution, crawler guard, homepage and existing migrations/data. Restored formula-safe CSV mapping required by project convention.",
+      "status": "verified",
+      "next_action": "Real sending and automatic scheduling remain unverified; mailbox sync was last seen around 7 hours ago. Existing narrow-screen sidebar obstruction remains outside archive scope."
     }
   ]
 }
