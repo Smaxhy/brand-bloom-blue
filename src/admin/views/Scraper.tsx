@@ -930,9 +930,28 @@ export function Scraper({
       apply(started.produced);
       setEnrichProgress({ done: job.cursor, total: job.total });
       let idle = 0;
+      let failures = 0;
       while (job && (job.status === "running" || job.status === "queued")) {
         await new Promise((resolve) => setTimeout(resolve, 2200));
-        const r = await stepScan(job.id);
+        let r: Awaited<ReturnType<typeof stepScan>>;
+        try {
+          r = await stepScan(job.id);
+          failures = 0;
+        } catch {
+          if (++failures >= 4) {
+            warnings.push("Lost contact with the scan. Progress is saved; reopen it from Recent scans to continue.");
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+          const saved = await scanStatus(job.id, true).catch(() => null);
+          if (saved) {
+            apply(Object.values(saved.results));
+            job = saved;
+            setScanJob(saved);
+            setEnrichProgress({ done: saved.cursor, total: saved.total });
+          }
+          continue;
+        }
         if (r.claimed) {
           apply(r.produced);
           idle = 0;
@@ -954,7 +973,7 @@ export function Scraper({
         setScanJob(job);
         if (job) setEnrichProgress({ done: job.cursor, total: job.total });
       }
-      warnings = job?.warnings ?? [];
+      warnings = [...warnings, ...(job?.warnings ?? [])];
       if (job?.last_error) warnings = [...warnings, job.last_error];
       void refreshScans();
     } catch (e) {
