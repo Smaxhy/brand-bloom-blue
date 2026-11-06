@@ -41,6 +41,7 @@ import { freeEnrich, hasMx, scoreLead, type SiteSignals } from "./providers/free
 import { handleOutreachRoute } from "./outreach-routes";
 import { Db } from "./db";
 import { resolveIntegrationEnv } from "./integration-settings.server";
+import { requestIpHash, securityJson } from "./request-security";
 
 type Env = Record<string, string | undefined>;
 
@@ -79,6 +80,16 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   if (path === "/api/public/config") return publicConfig(env);
   let user = null as Awaited<ReturnType<typeof getApiUser>>;
   if (!isPublic) {
+    if (!hasCronSecret(request, env)) {
+      try {
+        const permitted = await new Db(env).rpc<boolean>("check_rate_limit", {
+          _key: `admin:attempts:${await requestIpHash(request)}`, _max: 120, _window_seconds: 60,
+        });
+        if (permitted !== true) return securityJson({ error: "Too many requests. Please wait a minute." }, 429, 60);
+      } catch {
+        return securityJson({ error: "Request protection is temporarily unavailable." }, 503, 60);
+      }
+    }
     user = await getApiUser(request, env);
     if (!user && !hasCronSecret(request, env)) return unauthorized();
   }
