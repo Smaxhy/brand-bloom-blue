@@ -1,7 +1,7 @@
 {
   "source_archive": [
-    "inspirova-admin-engine_19.zip",
-    "inspirova-results-page.zip"
+    "inspirova-admin-engine_20.zip",
+    "inspirova-results-page_1.zip"
   ],
   "capabilities": [
     {
@@ -129,6 +129,13 @@
       "outcome": "Applied own Maps scraper with public HTTPS/DNS validation, no credential redirects and bounded CSV; bulk sends snapshot eligible IDs to preserve follow-up delays; dedicated scheduler heartbeat migration and read-only status; five supplied Results images added. Preserve saved Cloud records/accounts, credentials, SSRF, GHL escaping, metadata and homepage. Kept fail-closed inbox sync because continuing after a failed reply/opt-out check could send unwanted follow-ups. Signed-in scraper/status and mobile Results verified with no runtime errors; live services not invoked.",
       "status": "code_verified",
       "next_action": "Own Maps scraper requires a hosted public HTTPS service and optional server-only credentials; real bulk delivery and automatic scheduling remain unverified. No emails sent."
+    },
+    {
+      "capability": "admin20-background-scans",
+      "source": "uploaded archives",
+      "outcome": "Results archive is byte-identical to the previous Results upload; add resumable owner-scoped enrichment jobs preserving current protections.",
+      "status": "in_progress",
+      "next_action": "Verify persisted scan create/read/cancel/reopen and authorization without provider calls."
     }
   ]
 }
