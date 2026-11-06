@@ -14,6 +14,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ResultsRouteImport } from './routes/results'
+import { Route as ApiPublicContactRouteImport } from './routes/api/public/contact'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,6 +41,11 @@ const ResultsRoute = ResultsRouteImport.update({
   path: '/results',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicContactRoute = ApiPublicContactRouteImport.update({
+  id: '/api/public/contact',
+  path: '/api/public/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -47,6 +53,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
+  '/api/public/contact': typeof ApiPublicContactRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -54,6 +61,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
+  '/api/public/contact': typeof ApiPublicContactRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -62,13 +70,33 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
+  '/api/public/contact': typeof ApiPublicContactRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/privacy' | '/reset-password' | '/results'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/privacy'
+    | '/reset-password'
+    | '/results'
+    | '/api/public/contact'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/privacy' | '/reset-password' | '/results'
-  id: '__root__' | '/' | '/admin' | '/privacy' | '/reset-password' | '/results'
+  to:
+    | '/'
+    | '/admin'
+    | '/privacy'
+    | '/reset-password'
+    | '/results'
+    | '/api/public/contact'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/privacy'
+    | '/reset-password'
+    | '/results'
+    | '/api/public/contact'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -77,6 +105,7 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ResultsRoute: typeof ResultsRoute
+  ApiPublicContactRoute: typeof ApiPublicContactRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -116,6 +145,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResultsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/contact': {
+      id: '/api/public/contact'
+      path: '/api/public/contact'
+      fullPath: '/api/public/contact'
+      preLoaderRoute: typeof ApiPublicContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -125,6 +161,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ResultsRoute: ResultsRoute,
+  ApiPublicContactRoute: ApiPublicContactRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
