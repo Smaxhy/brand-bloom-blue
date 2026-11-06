@@ -1,5 +1,8 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
+import { getSendingStatus } from "@/lib/sending-status.functions";
+type SendingStatus = Awaited<ReturnType<typeof getSendingStatus>>;
 import {
   Plus,
   Play,
@@ -29,6 +32,7 @@ import {
   Search,
 } from "lucide-react";
 import { type AdminData, type Deal, type RawBusiness, uid } from "../store";
+import { csvCell } from "../outreach-people-utils";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Panel, StatCard, Modal, Field, inputCls, Btn } from "../ui";
 import {
@@ -330,6 +334,7 @@ function Overview({
   const nothingQueued = !(counts.queued || counts.active);
   return (
     <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+      <div className="lg:col-span-2"><SendingStatusPanel /></div>
       <Panel>
         <h3 className="font-display text-lg font-bold">Sent per day</h3>
         <p className="text-xs text-muted-foreground">
@@ -1028,6 +1033,121 @@ function Sequences({
   );
 }
 
+/** "Is it sending right now, and if not, why?" — the dispatcher's own checks, in words. */
+function SendingStatusPanel() {
+  const checkStatus = useServerFn(getSendingStatus);
+  const checking = useRef(false);
+  const [st, setSt] = useState<SendingStatus | null>(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => {
+    if (checking.current) return;
+    checking.current = true;
+    setBusy(true);
+    try {
+      setSt(await checkStatus());
+      setErr("");
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      checking.current = false;
+      setBusy(false);
+    }
+  }, [checkStatus]);
+  useEffect(() => {
+    void load();
+    const t = setInterval(() => void load(), 60_000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  const allGood = st && st.blockers.length === 0 && st.mailboxes.some((m) => m.can_send_now);
+  return (
+    <Panel>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="font-display text-lg font-bold">Is it sending?</h3>
+          
+        </div>
+        <Btn variant="ghost" onClick={() => void load()} disabled={busy}>
+          <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} /> Re-check
+        </Btn>
+      </div>
+      {err && <p className="mt-3 text-sm text-destructive">Could not check: {err}</p>}
+      {st && (
+        <div className="mt-3 space-y-3" aria-live="polite">
+          <div
+            className={`rounded-lg border px-3 py-2 text-sm ${
+              allGood
+                ? "border-primary/30 bg-primary/5"
+                : "border-border bg-secondary/50"
+            }`}
+          >
+            <div className="flex items-center gap-2 font-semibold">
+              {allGood ? (
+                <CheckCircle2 className="h-4 w-4 text-primary" />
+              ) : (
+                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+              )}
+              {allGood
+                ? "At least one mailbox is eligible to send now."
+                : "Sending may be waiting. Check the details below:"}
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">{st.scheduler.note}</div>
+            {st.blockers.length > 0 && (
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
+                {st.blockers.map((b, i) => (
+                  <li key={i}>{b}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            {st.mailboxes.map((m) => (
+              <div key={m.email} className="rounded-lg border border-border p-3 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 break-all font-mono text-sm font-semibold">{m.email}</div>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[.65rem] font-semibold ${
+                      m.can_send_now
+                        ? "bg-primary/10 text-primary"
+                        : "bg-secondary text-muted-foreground"
+                    }`}
+                  >
+                    {m.can_send_now ? "can send now" : "waiting"}
+                  </span>
+                </div>
+                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
+                  <span>
+                    sent today <b className="text-foreground">{m.sent_today}</b> / {m.daily_cap}
+                  </span>
+                  <span>
+                    due now <b className="text-foreground">{m.due_now}</b> · waiting{" "}
+                    <b className="text-foreground">{m.waiting_total}</b>
+                  </span>
+                  <span>
+                    hours {m.hours} · now {m.local_time}
+                  </span>
+                  <span>
+                    {m.provider === "ghl" ? "GoHighLevel" : "Google"} ·{" "}
+                    {m.sequences.length ? m.sequences.join(", ") : "no active sequence"}
+                  </span>
+                </div>
+                {m.reasons.length > 0 && (
+                  <ul className="mt-2 list-disc space-y-1 pl-4">
+                    {m.reasons.map((r, i) => (
+                      <li key={i}>{r}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 /** Small per-sequence summary of who is in it. */
 function SeqPeople({ c, onClick }: { c?: Record<string, number>; onClick: () => void }) {
   const total = c?.total ?? 0;
@@ -1486,7 +1606,7 @@ function Queue({
         e.replied_at || "",
         e.last_error || "",
       ]
-        .map((c) => `"${String(c).replace(/"/g, '""')}"`)
+        .map(csvCell)
         .join(","),
     );
     const blob = new Blob([[header.join(","), ...lines].join("\r\n")], {

@@ -41,3 +41,7 @@
 # Admin engine 15 update
 - [x] Apply GHL plain-text body fallback with safe escaping; retain homepage, data and security protections.
 - [x] Verify email payloads and signed-in Settings without sending real emails; 15 tests passed and build OK.
+
+# Admin engine 18 update
+- [x] Apply read-only sending status and invalid-address improvements while retaining security and existing data.
+- [x] Verify authenticated status and Re-check against real Cloud data; 21 regression tests passed, build OK; no emails sent.
