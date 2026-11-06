@@ -5,7 +5,7 @@ const env = { SUPABASE_URL: "https://auth.example.test", SUPABASE_PUBLISHABLE_KE
 const request = () => new Request("https://site.test/api/diag", { headers: { Authorization: "Bearer test-token" } });
 afterEach(() => vi.unstubAllGlobals());
 describe("admin server authorization", () => {
-  it.each([[], [{ role: "user" }]])("denies signed-in accounts without an explicit admin role: %j", async (roles) => {
+  it.each([{ roles: [] }, { roles: [{ role: "user" }] }])("denies signed-in accounts without an explicit admin role: $roles", async ({ roles }) => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(Response.json({ id: "user-id" })).mockResolvedValueOnce(Response.json(roles)));
     expect(await getApiUser(request(), env)).toBeNull();
   });
