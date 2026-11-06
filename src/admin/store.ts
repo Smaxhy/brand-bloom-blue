@@ -958,7 +958,7 @@ export interface ScanJobFull extends ScanJobLite {
   options: { useClaude?: boolean; usePaid?: boolean; revealPhone?: boolean };
 }
 
-async function scanCall<T>(data: Parameters<typeof scanJobAction>[0]["data"]): Promise<T> {
+async function scanCall<T>(data: unknown): Promise<T> {
   return await scanJobAction({ data }) as T;
 }
 export function startScan(people: ScanPerson[], options: ScanJobFull["options"], label: string): Promise<{ job: ScanJobLite; produced: EnrichResult[] }> {

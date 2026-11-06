@@ -3,7 +3,8 @@ import { stepScanJob, listScanJobs, cancelScanJob } from "./scan-jobs.server";
 import type { Db } from "./db";
 describe("persisted scan protections", () => {
   it("scopes listing and cancellation to the authenticated owner", async () => {
-    const select = vi.fn(async () => []); const update = vi.fn(async () => []);
+    const select = vi.fn(async (_table: string, _query: string) => []);
+    const update = vi.fn(async (_table: string, _query: string, _patch: Record<string, unknown>) => []);
     const db = { select, update } as unknown as Db;
     await listScanJobs(db, "owner-a"); await cancelScanJob(db, "scan", "owner-a");
     expect(select.mock.calls[0]?.[1]).toContain("created_by=eq.owner-a");
