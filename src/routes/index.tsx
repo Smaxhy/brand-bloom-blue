@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import siteHtml from "../inspirova.html?raw";
 import logo from "@/assets/inspirova-logo.png";
 import proof from "@/assets/proof-1.png";
@@ -18,6 +18,7 @@ export const Route = createFileRoute("/")({
 });
 
 function HomePage() {
+  const frame = useRef<HTMLIFrameElement>(null);
   const navigate = useNavigate({ from: "/" });
   const renderedHtml = siteHtml.replaceAll("__LOGO__", logo).replaceAll("__PROOF__", proof).replaceAll("__PUBLIC_CSS__", publicCss).replace(
     "</body>",
@@ -41,7 +42,7 @@ function HomePage() {
         var path = link.getAttribute('href');
         link.addEventListener('click', function(event) {
           event.preventDefault();
-          window.parent.postMessage({ type: 'inspirova:navigate', path: path }, '*');
+          window.parent.postMessage({ type: 'inspirova:navigate', path: path }, window.location.origin);
         });
       });
     </script></body>`,
@@ -51,6 +52,8 @@ function HomePage() {
     const allowedPaths = ["/results", "/admin", "/privacy"];
     const handleMessage = (event: MessageEvent) => {
       if (
+        event.source === frame.current?.contentWindow &&
+        event.origin === window.location.origin &&
         event.data?.type === "inspirova:navigate" &&
         typeof event.data.path === "string" &&
         allowedPaths.includes(event.data.path)
@@ -65,6 +68,7 @@ function HomePage() {
 
   return (
     <iframe
+      ref={frame}
       title="Inspirova"
       id="main-content"
       srcDoc={renderedHtml}

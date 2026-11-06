@@ -4,6 +4,13 @@
 - [x] Verify navigation, calculator, and narrow-screen layout.
 - [x] Apply required package security update and check preview errors.
 
+# Quote and admin security
+- [x] Inspect and safely merge inspirova-admin-engine-3.zip pacing, enrollment and scan recovery fixes without replacing current security or data.
+- [x] Add approved custom quote/contact request limits and real private quote submission.
+- [x] Require successful server-side admin verification and reject oversized requests.
+- [x] Verify abuse rejection, private quote storage, protected RPC grants and signed-out admin denial; CAPTCHA excluded by user choice.
+- [ ] Signed-in admin/email verification: blocked by unavailable matching managed session; user must sign in. No emails sent.
+
 # Replacement archive
 - [x] Apply inspected inspirova-rebuilt-2.zip differences without replacing Cloud configuration or saved data.
 - [x] Verify homepage calculator, navigation, and existing public pages.

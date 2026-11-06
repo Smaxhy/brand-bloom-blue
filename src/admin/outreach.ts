@@ -342,6 +342,13 @@ export async function listEnrollments(
   if (opts.status) q = q.eq("status", opts.status);
   return must(await q);
 }
+/** Existing running enrollment emails, read through the authenticated RLS client. */
+export async function liveEnrolledEmails(): Promise<Set<string>> {
+  const rows = must<{ leads: { email: string | null } | null }[]>(
+    await (await tbl("enrollments")).select("leads(email)").in("status", ["queued", "active", "paused"]).limit(10000),
+  );
+  return new Set(rows.map((row) => (row.leads?.email || "").toLowerCase()).filter(Boolean));
+}
 /** A/B results per sequence: how many enrolments per subject variant, and how many replied. */
 export async function abStats(
   sequenceId: string,

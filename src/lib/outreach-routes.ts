@@ -589,6 +589,13 @@ async function enroll(request: Request, e: Env, user: ApiUser): Promise<Response
       result.skipped.push({ email, reason: `already in sequence (${existing.status})` });
       continue;
     }
+    const elsewhere = await db.one<{ id: string }>(
+      "enrollments", `lead_id=eq.${lead.id}&status=in.(queued,active,paused)&select=id&limit=1`,
+    );
+    if (elsewhere) {
+      result.skipped.push({ email, reason: "already in another running sequence" });
+      continue;
+    }
     await db.insert("enrollments", {
       sequence_id: seq.id,
       lead_id: lead.id,

@@ -34,6 +34,7 @@ import { gmailGetFull } from "./gmail";
 import { runDueSavedSearches } from "./saved-searches";
 import { classifyReply } from "./reply-ai";
 import { preSendCheck, classifyBounce, applyHardBounce, applySoftBounce, isInvalidRecipientError } from "./bounce";
+import { dispatchBudgetMs, fitsDispatchBudget, gapElapsed } from "./dispatch-pacing";
 
 type Env = Record<string, string | undefined>;
 
@@ -212,6 +213,8 @@ export async function runDispatch(
   const db = new Db(env);
   const report: DispatchReport = { ran_at: new Date().toISOString(), mailboxes: [], errors: [] };
   const force = opts.force;
+  const runStart = Date.now();
+  const tickBudget = dispatchBudgetMs(opts.source);
   if (opts.source === "cron") {
     await db.update("outreach_settings", "id=eq.singleton", { last_cron_at: report.ran_at });
   }
@@ -249,6 +252,7 @@ export async function runDispatch(
   }
 
   for (const mb of mailboxes) {
+    if (!fitsDispatchBudget(runStart, tickBudget, 0)) break;
     const entry: DispatchReport["mailboxes"][number] = {
       email: mb.email,
       sent: 0,
@@ -309,7 +313,16 @@ export async function runDispatch(
 
       if (due.length && !isGhl(mb)) await accessTokenFor(env, db, mb.id); // fail fast on a dead Google connection
 
+      const lastSent = force || !due.length ? null : await db.one<{ sent_at: string }>(
+        "messages", `mailbox_id=eq.${mb.id}&direction=eq.out&status=eq.sent&select=sent_at&order=sent_at.desc&limit=1`,
+      );
       for (const en of due) {
+        if (!fitsDispatchBudget(runStart, tickBudget, 0)) break;
+        const dueSequence = seqById.get(en.sequence_id);
+        if (!force && dueSequence && !gapElapsed(lastSent?.sent_at, dueSequence.gap_min_sec)) {
+          entry.skipped = "Waiting for the sequence sending gap.";
+          continue;
+        }
         // ATOMIC CLAIM. Two dispatchers can run at once (the 10-minute cron and a
         // "Send now" click, or two clicks) and both used to pick the same row and
         // send it twice. The claim only succeeds if the row is still exactly as we
@@ -468,9 +481,12 @@ export async function runDispatch(
           }
           if (/401|403|invalid_grant/i.test(msg)) break; // mailbox auth problem — stop this mailbox for now
         }
-        // Human-looking gap between sends (short when someone is waiting at the screen).
-        if (due.indexOf(en) < due.length - 1)
-          await sleep(force ? rand(3, 8) * 1000 : rand(seq.gap_min_sec, seq.gap_max_sec) * 1000);
+        // Leave unsent rows due for the next run rather than sleeping past the runtime budget.
+        if (due.indexOf(en) < due.length - 1) {
+          const gap = force ? rand(3, 8) * 1000 : rand(seq.gap_min_sec, seq.gap_max_sec) * 1000;
+          if (!fitsDispatchBudget(runStart, tickBudget, gap)) break;
+          await sleep(gap);
+        }
       }
     } catch (err) {
       const msg = (err as Error).message;

@@ -4,6 +4,13 @@
   ],
   "capabilities": [
     {
+      "capability": "admin3-email-fixes",
+      "source": "inspirova-admin-engine-3.zip",
+      "outcome": "Applied bounded email dispatch pacing, existing-enrollment picker exclusion, database-trigger duplicate enrollment protection and scan network recovery. Preserved fail-closed inbox sync, safe HTML/CSV, frozen send batches, secure credentials, owner-scoped scans, Cloud data/accounts and managed migrations. Thirty-three tests passed; public quote create/read/remove verified, malicious requests rejected and basic security checks clean.",
+      "status": "code_verified",
+      "next_action": "Signed-in check requires the user to sign in because self-session mint has no matching account. Real email delivery and scheduler remain unverified; no emails sent."
+    },
+    {
       "capability": "admin21-incremental-update",
       "source": "inspirova-admin-engine_21.zip",
       "outcome": "Expanded automatic post-discovery website enrichment across sources; added optional owner LinkedIn lookup through persisted validated scan options, disabled by default. Retained scan ownership/claim fences, pacing, secure credentials, HTTPS/DNS fetch guards, dispatch protections and existing managed schema/data. All 34 regression tests passed; signed-in lookup toggle verified both states with no runtime errors; build OK. Quote buttons and non-final estimate notices also verified on public pages.",

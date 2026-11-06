@@ -6,6 +6,7 @@ import { handleApiRequest } from "./lib/api-proxies";
 import { runDispatch } from "./lib/sequencer";
 import { resolveIntegrationEnv } from "./lib/integration-settings.server";
 import { continueScanJobs } from "./lib/scan-jobs.server";
+import { MAX_API_BODY_BYTES, MAX_CONTACT_BODY_BYTES, readBoundedBody, securityJson } from "./lib/request-security";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -88,12 +89,19 @@ export default {
 
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      const path = new URL(request.url).pathname;
+      if (request.body && (path.startsWith("/api/") || path.startsWith("/_serverFn/"))) {
+        try {
+          await readBoundedBody(request.clone(), path === "/api/public/contact" ? MAX_CONTACT_BODY_BYTES : MAX_API_BODY_BYTES);
+        } catch (error) {
+          console.error("Request body protection failed:", error instanceof Error ? error.message : "read failure");
+          return securityJson({ error: "Request is too large or could not be read." }, 413);
+        }
+      }
       // Same-origin API proxies (Apollo scraper, geocoding, GHL) run first.
       const apiResponse = await handleApiRequest(
         request,
-        new URL(request.url).pathname.startsWith("/api/") && new URL(request.url).pathname !== "/api/health"
-          ? await resolveIntegrationEnv((env ?? {}) as Record<string, string | undefined>)
-          : (env ?? {}) as Record<string, string | undefined>,
+        (env ?? {}) as Record<string, string | undefined>,
       );
       if (apiResponse) return apiResponse;
 

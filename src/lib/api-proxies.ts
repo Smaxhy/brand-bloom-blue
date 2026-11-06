@@ -40,6 +40,8 @@ import { publicCheck, publicConfig } from "./public-check";
 import { freeEnrich, hasMx, scoreLead, type SiteSignals } from "./providers/free-enrich";
 import { handleOutreachRoute } from "./outreach-routes";
 import { Db } from "./db";
+import { resolveIntegrationEnv } from "./integration-settings.server";
+import { requestIpHash, securityJson } from "./request-security";
 
 type Env = Record<string, string | undefined>;
 
@@ -78,6 +80,16 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   if (path === "/api/public/config") return publicConfig(env);
   let user = null as Awaited<ReturnType<typeof getApiUser>>;
   if (!isPublic) {
+    if (!hasCronSecret(request, env)) {
+      try {
+        const permitted = await new Db(env).rpc<boolean>("check_rate_limit", {
+          _key: `admin:attempts:${await requestIpHash(request)}`, _max: 120, _window_seconds: 60,
+        });
+        if (permitted !== true) return securityJson({ error: "Too many requests. Please wait a minute." }, 429, 60);
+      } catch {
+        return securityJson({ error: "Request protection is temporarily unavailable." }, 503, 60);
+      }
+    }
     user = await getApiUser(request, env);
     if (!user && !hasCronSecret(request, env)) return unauthorized();
   }
@@ -86,7 +98,8 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
 
   // Rate limits per signed-in user (cron and public routes are exempt).
   // Expensive routes: 30/min. Everything else: 120/min.
-  if (user && Db.available(env)) {
+  if (user) {
+    if (!Db.available(env)) return json({ error: "Request protection is temporarily unavailable." }, 503);
     const heavy =
       /^\/api\/(discover|enrich|apollo|claude|scrape-site|outreach\/(enroll|test-send|verify|search))/.test(
         path,
@@ -97,7 +110,7 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         _max: heavy ? 30 : 120,
         _window_seconds: 60,
       });
-      if (ok === false) {
+      if (ok !== true) {
         return new Response(
           JSON.stringify({
             error: "rate_limited",
@@ -110,10 +123,12 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
         );
       }
     } catch {
-      /* limiter unavailable (migration not applied yet) — allow */
+      return json({ error: "Request protection is temporarily unavailable. Try again later." }, 503);
     }
   }
 
+  // Load shared encrypted credentials only after caller verification and rate checks.
+  env = await resolveIntegrationEnv(env);
   const outreach = await handleOutreachRoute(path, request, env, user);
   if (outreach) return outreach;
   if (path === "/api/geocode") return geocode(url, env);

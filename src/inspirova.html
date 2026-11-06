@@ -743,12 +743,13 @@
           <div class="form-grid" id="quoteForm">
             <h4>Request your quote</h4>
             <p>Prices are estimates, not final offers. Your final price will be confirmed with you before work begins.</p>
-            <input type="text"  id="qCompany" aria-label="Company" placeholder="Company">
-            <input type="text"  id="qFirst" aria-label="First name"   placeholder="First name">
-            <input type="text"  id="qLast" aria-label="Last name"    placeholder="Last name">
-            <input type="email" id="qEmail" aria-label="Email address"   placeholder="E-mail">
-            <input type="tel"   id="qPhone" aria-label="Phone number"   placeholder="Phone">
+            <input type="text"  id="qCompany" maxlength="120" aria-label="Company" placeholder="Company">
+            <input type="text"  id="qFirst" maxlength="50" aria-label="First name"   placeholder="First name">
+            <input type="text"  id="qLast" maxlength="49" aria-label="Last name"    placeholder="Last name">
+            <input type="email" id="qEmail" maxlength="255" aria-label="Email address"   placeholder="E-mail">
+            <input type="tel"   id="qPhone" maxlength="40" aria-label="Phone number"   placeholder="Phone">
             
+            <input class="c-hp" id="qWebsite" tabindex="-1" autocomplete="off" aria-hidden="true">
             <label class="chk"><input type="checkbox" id="qConsent"> Yes, I'd like more information and agree to the privacy policy.</label>
           </div>
         </div>
@@ -1044,59 +1045,33 @@
     updateSliders(); renderBundles(); render(); calc();
   })();
 
-  /* ---- quote submission → admin pipeline (localStorage) ---- */
+  /* ---- quote submission → protected private inbox ---- */
   (function(){
     var btn=document.getElementById("quoteBtn"); if(!btn) return;
     var msg=document.getElementById("quoteMsg");
-    var STORE_KEY="inspirova.admin.data";
-
-    function uid(p){ return (p||"d")+"_"+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3); }
     function val(id){ var el=document.getElementById(id); return el?el.value.trim():""; }
-    function setMsg(t,ok){ if(!msg) return; msg.textContent=t; msg.style.color = ok ? "var(--violet-bright)" : "var(--coral)"; }
-
-    btn.addEventListener("click", function(){
-      var company=val("qCompany"), first=val("qFirst"), last=val("qLast"),
-          email=val("qEmail"), phone=val("qPhone"), notes=val("qNotes");
-      var consent=document.getElementById("qConsent");
-      if(!company||!first||!email){ setMsg("Please fill in at least company, first name and e-mail.",false); return; }
-      if(consent && !consent.checked){ setMsg("Please tick the consent box so we can contact you.",false); return; }
-
-      var q = window.__inspQuote || { selected:[], monthly:0, setup:0, total:0, names:[] };
-      var now = Date.now();
-      var deal = {
-        id: uid("d"),
-        name: company,
-        contact: (first+" "+last).trim(),
-        email: email,
-        phone: phone,
-        value: q.total,
-        stage: "new",
-        source: "Website, Quote Request",
-        services: q.selected,
-        template: q.selected.length ? "Custom selection" : "Quote request",
-        notes: "Personal quote requested from inspirovamarketing.com."
-              + (q.names.length ? "\nServices: " + q.names.join(", ") : "")
-              + "\nMonthly: €"+q.monthly+" · First month: €"+q.upfront+" · Total: €"+q.total
-              + (notes ? "\n\nClient note: "+notes : ""),
-        createdAt: now,
-        updatedAt: now
-      };
-
-      try{
-        var raw = localStorage.getItem(STORE_KEY);
-        var data = raw ? JSON.parse(raw) : { deals:[], raw:[], clients:[], transactions:[], templates:[], campaigns:[], settings:{} };
-        if(!Array.isArray(data.deals)) data.deals=[];
-        data.deals.unshift(deal);
-        localStorage.setItem(STORE_KEY, JSON.stringify(data));
-        setMsg("Thanks! Your quote request has been sent, we'll be in touch within 24h.",true);
-        ["qCompany","qFirst","qLast","qEmail","qPhone","qNotes"].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=""; });
-        if(consent) consent.checked=false;
-      }catch(err){
-        setMsg("Something went wrong saving your request. Please e-mail hello@inspirova.com instead.",false);
-      }
+    function say(t,ok){msg.textContent=t;msg.style.color=ok?"var(--violet-bright)":"var(--coral)";}
+    btn.addEventListener("click",function(){
+      if(btn.disabled) return;
+      var company=val("qCompany"), first=val("qFirst"), last=val("qLast"), email=val("qEmail"), consent=document.getElementById("qConsent");
+      if(!company||!first||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){say("Please fill in your company, first name and a valid e-mail.",false);return;}
+      if(!consent||!consent.checked){say("Please tick the consent box so we can contact you.",false);return;}
+      var q=window.__inspQuote||{names:[],monthly:0,upfront:0,total:0};
+      var message="Services requested: "+q.names.join(", ")+"\nEstimated monthly: €"+q.monthly+" · One-time: €"+q.upfront+" · First month: €"+q.total+"\nPhone: "+val("qPhone")+(val("qNotes")?"\nNote: "+val("qNotes"):"");
+      var data={kind:"quote",name:(first+" "+last).trim(),company:company,email:email,message:message,consent:true,website:val("qWebsite")};
+      if(data.name.length>100||message.length>2000){say("Please shorten your name or note.",false);return;}
+      btn.disabled=true;say("Sending…",true);
+      fetch("/api/public/contact",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(data)})
+        .then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})
+        .then(function(res){
+          if(!res.ok){say(res.j.error||"Your request could not be sent.",false);return;}
+          say("Thanks! Your quote request was received. We'll be in touch soon.",true);
+          ["qCompany","qFirst","qLast","qEmail","qPhone","qNotes"].forEach(function(id){var el=document.getElementById(id);if(el)el.value="";});consent.checked=false;
+        })
+        .catch(function(){say("Network error. Please e-mail Management@inspirovamarketing.com.",false);})
+        .finally(function(){btn.disabled=false;});
     });
   })();
-
 
 </script>
 <script>

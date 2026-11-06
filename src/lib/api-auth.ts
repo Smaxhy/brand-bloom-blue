@@ -56,8 +56,7 @@ export async function getApiUser(request: Request, e: Env): Promise<ApiUser | nu
       }
     }
 
-    // Role check (admin / ceo) via the public.has_role() function when present.
-    // If the RPC doesn't exist yet we fall back to "any signed-in user".
+    // Require an explicit verified role; missing roles or lookup failures deny access.
     try {
       const roleRes = await fetch(
         `${url.replace(/\/$/, "")}/rest/v1/user_roles?select=role&user_id=eq.${u.id}`,
@@ -65,18 +64,11 @@ export async function getApiUser(request: Request, e: Env): Promise<ApiUser | nu
           headers: { apikey: anon, Authorization: `Bearer ${token}` },
         },
       );
-      if (roleRes.ok) {
-        const rows = (await roleRes.json()) as { role?: string }[];
-        if (
-          Array.isArray(rows) &&
-          rows.length &&
-          !rows.some((r) => r.role === "admin" || r.role === "ceo")
-        ) {
-          return null;
-        }
-      }
+      if (!roleRes.ok) return null;
+      const rows = (await roleRes.json()) as { role?: string }[];
+      if (!Array.isArray(rows) || !rows.some((r) => r.role === "admin" || r.role === "ceo")) return null;
     } catch {
-      /* roles table unavailable — allow signed-in user */
+      return null;
     }
 
     return { id: u.id, email: u.email || "" };
