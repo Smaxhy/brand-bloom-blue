@@ -955,7 +955,7 @@ export interface ScanJobLite {
 export interface ScanJobFull extends ScanJobLite {
   people: ScanPerson[];
   results: Record<string, EnrichResult>;
-  options: { useClaude?: boolean; usePaid?: boolean; revealPhone?: boolean };
+  options: { useClaude?: boolean; usePaid?: boolean; revealPhone?: boolean; findLinkedin?: boolean };
 }
 
 async function scanCall<T>(data: unknown): Promise<T> {

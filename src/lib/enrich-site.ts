@@ -92,6 +92,7 @@ export interface EnrichSiteOpts {
   onWarn?: (w: string) => void;
   /** Owner's AI instructions (Settings → AI instructions) — shapes the pitch line. */
   instructions?: string;
+  findLinkedin?: boolean;
 }
 
 function cleanDomain(u: string): string {
@@ -337,7 +338,7 @@ export async function enrichSite(env: Env, o: EnrichSiteOpts): Promise<SiteProfi
   if (hit) {
     // Cached before the LinkedIn lookup existed (or it found nothing then):
     // one targeted search now, written back so it's not repeated.
-    if (!hit.linkedin && hit.name && !hit.linkedinTried) {
+    if (!hit.linkedin && hit.name && !hit.linkedinTried && o.findLinkedin !== false) {
       const so = await serperOwner(env, o.company || "", o.city || "", domain, hit.name);
       const next: SiteProfile = { ...hit, linkedin: so?.linkedin || "", linkedinTried: true };
       if (!hit.title && so?.title) next.title = so.title;
@@ -406,7 +407,7 @@ export async function enrichSite(env: Env, o: EnrichSiteOpts): Promise<SiteProfi
   // LinkedIn of the owner: one cheap search. With a name we look that person
   // up directly; with no name we search for the company's owner/founder.
   let linkedinTried = false;
-  if (!linkedin || !name) {
+  if ((!linkedin || !name) && o.findLinkedin !== false) {
     linkedinTried = true;
     const so = await serperOwner(env, o.company || "", o.city || "", fe.website, name || undefined);
     if (so) {

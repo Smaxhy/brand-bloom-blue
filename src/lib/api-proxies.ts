@@ -381,7 +381,7 @@ export type EnrichRow = {
   ai: { need: number; reasons: string[]; pitch: string; gap: string; siteQuality: string } | null;
 };
 
-export async function enrichPeople(env: Env, people: EnrichInput[], opts: { usePaid?: boolean; useClaude?: boolean; revealPhone?: boolean } = {}): Promise<{ results: EnrichRow[]; warnings: string[] }> {
+export async function enrichPeople(env: Env, people: EnrichInput[], opts: { usePaid?: boolean; useClaude?: boolean; revealPhone?: boolean; findLinkedin?: boolean } = {}): Promise<{ results: EnrichRow[]; warnings: string[] }> {
   if (!people.length) return { results: [], warnings: [] };
   // Paid sources are OPT-IN per call. Default is free only.
   const usePaid = opts.usePaid === true;
@@ -438,6 +438,7 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
     const prof = await enrichSite(env, {
       onWarn: warn,
       instructions: aiInstructions,
+      findLinkedin: opts.findLinkedin,
       website: r.website,
       company: p.organizationName || "",
       industry: (p as { industry?: string }).industry || "",
@@ -622,6 +623,7 @@ async function enrich(request: Request, env: Env): Promise<Response> {
     revealPhone?: boolean;
     usePaid?: boolean;
     useClaude?: boolean;
+    findLinkedin?: boolean;
   } = {};
   try {
     payload = (await request.json()) as typeof payload;

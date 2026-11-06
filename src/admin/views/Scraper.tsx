@@ -577,6 +577,7 @@ export function Scraper({
   });
   // Paid reveal sources (Apollo / Hunter / SerpApi) are opt-in per run.
   const [usePaid, setUsePaid] = useState(false);
+  const [findLinkedin, setFindLinkedin] = useState(false);
   const [scores, setScores] = useState<
     Record<
       string,
@@ -817,9 +818,9 @@ export function Scraper({
     setFilters({ ...filters, industry: next.join(", ") });
   }
 
-  async function revealEmails(targets: ScrapedPerson[]) {
+  async function revealEmails(targets: ScrapedPerson[], everything = false) {
     // Enrich anyone missing an email OR a website (Apollo finds both; Google/Hunter fill gaps).
-    const list = targets.filter((p) => p.emailLocked || !p.email || !p.website);
+    const list = everything ? targets.filter((p) => p.website || !p.email) : targets.filter((p) => p.emailLocked || !p.email || !p.website);
     if (!list.length) return;
     setEnrichBusy(true);
     setEnrichProgress({ done: 0, total: list.length });
@@ -920,7 +921,7 @@ export function Scraper({
     try {
       const started = await startScan(
         people,
-        { useClaude: sources.claude, usePaid, revealPhone },
+        { useClaude: sources.claude, usePaid, revealPhone, findLinkedin },
         `${filters.industry || "scan"} · ${filters.location} · ${list.length}`,
       );
       let job: ScanJobLite | null = started.job;
@@ -1070,11 +1071,7 @@ export function Scraper({
     setScrapeBusy(false);
     setAiProgress({ done: 0, total: 0 });
     setApifySeconds(0);
-    // Reveal emails for Apollo-discovered rows that don't yet have one
-    const needsReveal = res.people.filter((p) => p.emailLocked || !p.email || !p.website);
-    if ((res.liveApollo || res.liveGoogle) && needsReveal.length) {
-      await revealEmails(needsReveal);
-    }
+    if (res.people.length) await revealEmails(res.people, true);
   }
 
   const selectedPeople = results.filter((p) => selected[p.id]);
@@ -1491,7 +1488,7 @@ export function Scraper({
             [
               { id: "google", label: "Google Maps" },
               { id: "osm", label: "OpenStreetMap" },
-              { id: "claude", label: "Read each website" },
+              { id: "claude", label: "AI website rating (paid)" },
               { id: "selfhost", label: "Own Maps scraper" },
               { id: "apify", label: "Apify bulk (paid · ≈ $4 per 1,000)" },
               { id: "apollo", label: "Apollo (paid)" },
@@ -1505,6 +1502,9 @@ export function Scraper({
               {s.label}
             </button>
           ))}
+          <Btn variant="ghost" aria-pressed={findLinkedin} onClick={() => setFindLinkedin((value) => !value)} className={pill(findLinkedin)} title="Optional owner lookup; uses one search credit per uncached business">
+            Owner LinkedIn (search credits)
+          </Btn>
           <span className="mx-1 h-4 w-px bg-border" />
           <button
             onClick={() => setRevealPhone((v) => !v)}
