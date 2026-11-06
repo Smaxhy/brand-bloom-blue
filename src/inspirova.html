@@ -87,6 +87,7 @@
   .menu-btn span{display:block;width:18px;height:2px;background:#fff;margin:0 auto;transition:.25s}
   .menu-btn span+span{margin-top:4px}
 
+
   /* ---------- hero ---------- */
   .hero{background:var(--surface-dark);color:#fff;
     padding:130px 0 100px;position:relative;overflow:hidden}
@@ -359,7 +360,7 @@
   }
   @media (max-width:520px){
     .cards{grid-template-columns:1fr}
-    .nav-cta .btn-outline,.nav-cta .btn-primary{display:none}
+    .nav-cta .btn{display:inline-flex}
     .nav-shell{padding:0 10px 0 14px;height:58px}
     .brand .logo-mark{width:28px;height:28px}
     .hero h1{font-size:clamp(2rem,9vw,2.6rem)}
@@ -396,6 +397,30 @@
   .faq details[open] summary::after{content:"–"}
   .faq details p{color:var(--muted);padding:0 0 18px}
   @media(max-width:860px){.contact-grid{grid-template-columns:1fr}.c-form .row{grid-template-columns:1fr}}
+  /* ---------- contact as separate panel + mobile nav ---------- */
+  .nav-contact{padding:10px 18px}
+  .contact[hidden]{display:none}
+  .contact{position:fixed;inset:0;z-index:80;padding:24px 0;background:rgba(6,4,18,.78);backdrop-filter:blur(10px);overflow-y:auto;display:flex;align-items:flex-start}
+  .contact-panel{position:relative;margin:60px auto 24px;background:var(--surface-dark,#0c0820);border:1px solid rgba(255,255,255,.12);border-radius:28px;padding:36px 28px;box-shadow:0 30px 80px -30px rgba(0,0,0,.8);max-width:1040px;animation:cpIn .3s ease}
+  @keyframes cpIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+  .contact-close{position:absolute;top:14px;right:14px;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#fff;font-size:1.6rem;line-height:1;cursor:pointer}
+  .contact-close:hover{background:rgba(255,255,255,.14)}
+  body.contact-open{overflow:hidden}
+  @media (max-width:880px){
+    header{top:8px}
+    .nav-shell{flex-wrap:wrap;height:auto;padding:10px 12px;border-radius:22px;row-gap:8px}
+    .nav-links,.nav-links.open{display:flex;position:static;order:3;width:100%;flex-direction:row;gap:6px;overflow-x:auto;
+      background:none;border:0;padding:2px 0 0;box-shadow:none;backdrop-filter:none;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+    .nav-links::-webkit-scrollbar{display:none}
+    .nav-links a{white-space:nowrap;padding:8px 14px;border-radius:999px;background:rgba(255,255,255,.07);font-size:.88rem;min-height:36px;display:inline-flex;align-items:center}
+    .nav-links a::after{display:none}
+    .nav-links a.active{background:rgba(168,139,255,.25);color:#fff}
+    .nav-cta{width:100%;justify-content:flex-end;gap:8px}
+    .nav-cta .btn{padding:9px 16px;font-size:.9rem}
+    .hero{padding-top:150px}
+    .contact-panel{margin:12px;padding:56px 18px 24px;border-radius:22px}
+  }
+
 </style>
 </head>
 <body>
@@ -413,12 +438,13 @@
         <a href="#services" class="active">Marketing</a>
         <a href="#how">How it works</a>
         <a href="#pricing">Pricing</a>
-        <a href="#contact">Contact</a>
         <a href="/results" target="_top">Results</a>
+        <a href="#faq">FAQ</a>
       </nav>
       <div class="nav-cta" style="margin-left:auto">
+        <a href="#contact" class="btn btn-primary nav-contact" data-open-contact>Contact</a>
         <a href="/admin" target="_top" class="btn btn-outline">Login</a>
-        <button class="menu-btn" id="menuBtn" aria-label="Menu" aria-expanded="false" aria-controls="navlinks"><span></span><span></span><span></span></button>
+        
       </div>
     </div>
   </div>
@@ -452,8 +478,9 @@
 </section>
 
 <!-- ============ CONTACT ============ -->
-<section class="contact" id="contact" aria-labelledby="contact-title">
-  <div class="wrap contact-grid">
+<section class="contact" id="contact" role="dialog" aria-modal="true" aria-labelledby="contact-title" hidden>
+  <div class="wrap contact-grid contact-panel">
+    <button type="button" class="contact-close" data-close-contact aria-label="Close contact">&times;</button>
     <div>
       <span class="c-eyebrow">Contact</span>
       <h2 id="contact-title">Small agency. <span class="grad">High intensity.</span></h2>
@@ -831,6 +858,22 @@
     steps.forEach(function(s){io.observe(s);});
   })();
 
+
+  /* ---- contact panel ---- */
+  (function(){
+    var c=document.getElementById("contact"); if(!c) return; var last=null;
+    function open(e){ if(e) e.preventDefault(); last=document.activeElement; c.hidden=false; document.body.classList.add("contact-open");
+      var f=document.getElementById("cName"); if(f) setTimeout(function(){f.focus();},50); }
+    function close(){ c.hidden=true; document.body.classList.remove("contact-open"); if(last&&last.focus) last.focus(); }
+    document.addEventListener("click",function(e){
+      var o=e.target.closest&&e.target.closest('[data-open-contact],a[href="#contact"]'); if(o){open(e);return;}
+      if(e.target.closest&&e.target.closest("[data-close-contact]")){close();return;}
+      if(e.target===c) close();
+    });
+    document.addEventListener("keydown",function(e){ if(e.key==="Escape"&&!c.hidden) close(); });
+    if(location.hash==="#contact") open();
+  })();
+
   /* ---- mobile menu ---- */
   (function(){
     var b=document.getElementById("menuBtn"), n=document.getElementById("navlinks");
@@ -851,7 +894,7 @@
       {id:"email_sms",      name:"Email & SMS Automations",   price:700, billing:"monthly", desc:"Flows, broadcasts and SMS automations.",                checked:false},
       {id:"website",        name:"Website Design / Creation", price:250, billing:"upfront", desc:"Conversion-focused website, per site.",                checked:false},
       {id:"pixel_ecom",     name:"E-commerce Pixel Setup",    price:100, billing:"upfront", desc:"Pixel + server-side tracking for e-commerce.",          checked:false},
-      {id:"pixel_leadgen",  name:"Lead-gen Pixel Setup",      price:100, billing:"upfront", desc:"Pixel + form/lead tracking for service businesses.",   checked:false}
+      {id:"pixel_leadgen",  name:"Lead-gen Pixel Setup",      price:100, billing:"upfront", desc:"Pixel + form/lead tracking for service businesses.",   checked:false},
       {id:"seo",            name:"SEO Optimization",          price:250, billing:"upfront", desc:"Rank higher on Google: keywords, on-page fixes & content.", checked:false},
       {id:"sea",            name:"SEA / Google Search Ads",   price:400, billing:"monthly", desc:"Paid search campaigns that show up when people search.",   checked:false},
       {id:"sea_setup",      name:"SEA / Google Ads Setup",    price:100, billing:"upfront", desc:"Google Ads account, tracking & first search campaign.",  checked:false},
