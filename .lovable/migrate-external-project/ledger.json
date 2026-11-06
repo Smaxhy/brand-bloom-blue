@@ -1,5 +1,5 @@
 {
-  "source_archive": "inspirova-admin-engine_15.zip",
+  "source_archive": "inspirova-admin-engine_18.zip",
   "capabilities": [
     {
       "capability": "code",
@@ -112,6 +112,13 @@
       "outcome": "Applied GHL plain-text HTML body fallback with safe escaping and URL attributes. Fifteen regression/security tests passed; build OK. Signed-in jomaceo Settings loaded with Google/GHL connection controls and permission-gated credential panel, no runtime errors. Retained secure Settings, server key resolution, public fetch protection and safe provider errors; no schema changes or data writes.",
       "status": "verified",
       "next_action": "Live GHL delivery remains unverified; no real emails sent."
+    },
+    {
+      "capability": "admin-engine-18-update",
+      "source": "inspirova-admin-engine_18.zip",
+      "outcome": "Add read-only sending diagnostics and stricter invalid-address protection; preserve secure credentials, safe GHL HTML, homepage, existing data and managed migrations.",
+      "status": "in_progress",
+      "next_action": "Verify authenticated diagnostics and regression tests without sending emails."
     }
   ]
 }
