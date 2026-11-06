@@ -56,6 +56,12 @@ function HomePage() {
       title="Inspirova"
       id="main-content"
       srcDoc={renderedHtml}
+      onLoad={(event) => {
+        const anchor = window.location.hash.slice(1);
+        if (anchor === "quoteForm" || anchor === "pricing") {
+          event.currentTarget.contentDocument?.getElementById(anchor)?.scrollIntoView({ block: "start" });
+        }
+      }}
       className="block h-screen w-full border-0"
       sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
     />
