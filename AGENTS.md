@@ -1,4 +1,5 @@
 # Project conventions
+- Email dispatch checks a per-run time budget before claiming another recipient or sleeping; keep reply/opt-out sync fail-closed and existing atomic claims while carrying remaining work into later runs.
 - Quote/contact writes use bounded same-origin requests and atomic server-only request counters; admin proxies require explicit verified roles and fail closed if abuse protection is unavailable.
 - Keep the public homepage inside its existing HTML document and iframe navigation bridge; this preserves its calculator and quote interactions.
 - Scope public editorial theme tokens to public pages so redesigns do not alter account-side CRM appearance.

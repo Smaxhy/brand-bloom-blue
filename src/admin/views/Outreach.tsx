@@ -67,6 +67,7 @@ import {
   aiWriteStep,
   enrollLeads,
   sendNow,
+  liveEnrolledEmails,
   type DispatchSummary,
   type ReplyIntent,
 } from "../outreach";
@@ -1212,6 +1213,9 @@ function AddPeople({
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [activate, setActivate] = useState(true);
+  const [live, setLive] = useState<Set<string>>(new Set());
+  const [loadingLive, setLoadingLive] = useState(false);
+  const [liveError, setLiveError] = useState("");
   const [result, setResult] = useState<{
     enrolled: number;
     skipped: { email: string; reason: string }[];
@@ -1222,10 +1226,18 @@ function AddPeople({
     setSel(new Set());
     setResult(null);
     setQ("");
+    let cancelled = false;
+    setLive(new Set());
+    setLoadingLive(true);
+    setLiveError("");
+    void liveEnrolledEmails().then((emails) => { if (!cancelled) setLive(emails); })
+      .catch(() => { if (!cancelled) setLiveError("Could not check existing sequences. Close and reopen to retry."); })
+      .finally(() => { if (!cancelled) setLoadingLive(false); });
+    return () => { cancelled = true; };
   }, [seq]);
 
   const rows = useMemo(() => {
-    const all = (data?.raw ?? []).filter((r) => r.email && r.status !== "rejected");
+    const all = loadingLive || liveError ? [] : (data?.raw ?? []).filter((r) => r.email && r.status !== "rejected" && !live.has(r.email.toLowerCase()));
     const needle = q.trim().toLowerCase();
     return all
       .filter((r) => !hideEmailed || !r.lastEmailedAt)
@@ -1239,7 +1251,7 @@ function AddPeople({
             .includes(needle),
       )
       .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-  }, [data?.raw, q, hideEmailed, onlyAccepted]);
+  }, [data?.raw, q, hideEmailed, onlyAccepted, live, loadingLive, liveError]);
 
   const allShown = rows.length > 0 && rows.every((r) => sel.has(r.id));
   function toggleAll() {
@@ -1284,10 +1296,10 @@ function AddPeople({
       {seq && (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Everyone below came from the Data Scraper and has an email address. Tick who should get
-            this sequence; people already on the suppression list or already in this sequence are
-            skipped automatically.
+            People already in a running or paused sequence are excluded.
           </p>
+          {loadingLive && <p role="status" className="text-sm text-muted-foreground">Checking existing enrollments…</p>}
+          {liveError && <p role="alert" className="text-sm text-destructive">{liveError}</p>}
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-[220px] flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
