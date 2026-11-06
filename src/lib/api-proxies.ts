@@ -374,22 +374,15 @@ export interface EnrichInput {
   phone?: string;
 }
 
-async function enrich(request: Request, env: Env): Promise<Response> {
-  if (request.method !== "POST") return json({ error: "POST only" }, 405);
-  let payload: {
-    people?: EnrichInput[];
-    revealPhone?: boolean;
-    usePaid?: boolean;
-    useClaude?: boolean;
-  } = {};
-  try {
-    payload = (await request.json()) as typeof payload;
-  } catch {
-    return json({ error: "invalid json" }, 400);
-  }
-  const people = (payload.people ?? []).slice(0, 10);
-  if (!people.length) return json({ results: [] });
+export type EnrichRow = {
+  id: string; email: string; phone: string; website: string; source: string; sourceUrl: string;
+  name: string; title: string; linkedin: string; mx: boolean | null; guessed: boolean;
+  score: number; scoreReasons: string[]; signals: SiteSignals | null;
+  ai: { need: number; reasons: string[]; pitch: string; gap: string; siteQuality: string } | null;
+};
 
+export async function enrichPeople(env: Env, people: EnrichInput[], opts: { usePaid?: boolean; useClaude?: boolean; revealPhone?: boolean } = {}): Promise<{ results: EnrichRow[]; warnings: string[] }> {
+  if (!people.length) return { results: [], warnings: [] };
   // Paid sources are OPT-IN per call. Default is free only.
   const usePaid = opts.usePaid === true;
   const apolloKey = usePaid ? secret(env, "APOLLO_API_KEY") : undefined;
