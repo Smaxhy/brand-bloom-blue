@@ -92,15 +92,9 @@ export default {
       const path = new URL(request.url).pathname;
       if (request.body && (path.startsWith("/api/") || path.startsWith("/_serverFn/"))) {
         try {
-          const bytes = await readBoundedBody(request, path === "/api/public/contact" ? MAX_CONTACT_BODY_BYTES : MAX_API_BODY_BYTES);
-          request = new Request(request.url, {
-            method: request.method,
-            headers: request.headers,
-            body: new Blob([new Uint8Array(bytes)]),
-            signal: request.signal,
-            redirect: request.redirect,
-          });
-        } catch {
+          await readBoundedBody(request.clone(), path === "/api/public/contact" ? MAX_CONTACT_BODY_BYTES : MAX_API_BODY_BYTES);
+        } catch (error) {
+          console.error("Request body protection failed:", error instanceof Error ? error.message : "read failure");
           return securityJson({ error: "Request is too large or could not be read." }, 413);
         }
       }
