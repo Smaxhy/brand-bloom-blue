@@ -69,5 +69,6 @@
 - [x] Verify changed admin flows without paid searches or real email sends; 34 tests passed and signed-in lookup toggle checked.
 
 # Reveal scan control
-- [ ] Add visible Stop beside Reveal and stop further scan steps while retaining saved results.
-- [ ] Verify cancellation and preview controls.
+- [x] Add visible Stop beside Reveal and stop further scan steps while retaining saved results.
+- [x] Verify cancellation with five passing tests and preview compilation.
+- [ ] Signed-in Stop flow: blocked because the requesting user has no matching managed session; sign in to verify without paid searches.
