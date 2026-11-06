@@ -361,7 +361,7 @@ async function apolloSearch(request: Request, env: Env): Promise<Response> {
 /* Reveal — use Apollo's data to power a Google (Serper) search            */
 /* --------------------------------------------------------------------- */
 
-interface EnrichInput {
+export interface EnrichInput {
   id?: string;
   name?: string;
   firstName?: string;
@@ -391,7 +391,7 @@ async function enrich(request: Request, env: Env): Promise<Response> {
   if (!people.length) return json({ results: [] });
 
   // Paid sources are OPT-IN per call. Default is free only.
-  const usePaid = payload.usePaid === true;
+  const usePaid = opts.usePaid === true;
   const apolloKey = usePaid ? secret(env, "APOLLO_API_KEY") : undefined;
   const hunterKey = usePaid ? secret(env, "HUNTER_API_KEY") : undefined;
   // Cheap Google (Serper ≈ $1/1k) is allowed as a fallback even without usePaid; SerpApi only with usePaid.
@@ -452,7 +452,7 @@ async function enrich(request: Request, env: Env): Promise<Response> {
       rating: p.rating,
       reviews: p.reviews,
       ownerName: p.name,
-      useClaude: payload.useClaude !== false,
+      useClaude: opts.useClaude !== false,
       db: cacheDb,
     });
     if (!prof) return;
@@ -479,10 +479,10 @@ async function enrich(request: Request, env: Env): Promise<Response> {
     try {
       const missing = people.filter((p) => {
         const r = byId.get(p.id);
-        return r && (!r.email || (payload.revealPhone && !r.phone));
+        return r && (!r.email || (opts.revealPhone && !r.phone));
       });
       const matches = missing.length
-        ? await apolloBulkMatch(apolloKey, missing, !!payload.revealPhone)
+        ? await apolloBulkMatch(apolloKey, missing, !!opts.revealPhone)
         : [];
       matches.forEach((m, i) => {
         const r = byId.get(missing[i].id);
@@ -492,7 +492,7 @@ async function enrich(request: Request, env: Env): Promise<Response> {
           r.source = "Apollo";
         }
         if (m.website && !r.website) r.website = m.website;
-        if (m.phone && payload.revealPhone) r.phone = m.phone;
+        if (m.phone && opts.revealPhone) r.phone = m.phone;
       });
     } catch {
       /* fall through to Google/Hunter */
@@ -504,7 +504,7 @@ async function enrich(request: Request, env: Env): Promise<Response> {
     const p = people[i];
     const r = byId.get(p.id);
     if (!r) continue;
-    if (r.email && (!payload.revealPhone || r.phone)) continue;
+    if (r.email && (!opts.revealPhone || r.phone)) continue;
 
     // 2a) Find the company website via Google if we still don't have one.
     if (!r.website && googleKey && p.organizationName) {
@@ -537,7 +537,7 @@ async function enrich(request: Request, env: Env): Promise<Response> {
               r.email = d.data.email;
               r.source = "Hunter";
               r.sourceUrl = d.data.sources?.find((s) => s.uri)?.uri ?? "";
-              if (payload.revealPhone && d.data.phone_number) r.phone = d.data.phone_number;
+              if (opts.revealPhone && d.data.phone_number) r.phone = d.data.phone_number;
             }
           }
         } catch {
@@ -552,7 +552,7 @@ async function enrich(request: Request, env: Env): Promise<Response> {
         p.name ? `"${p.name}"` : "",
         p.organizationName ? `"${p.organizationName}"` : "",
         domain ? `"@${domain}"` : "",
-        payload.revealPhone ? "email OR phone" : "email",
+        opts.revealPhone ? "email OR phone" : "email",
       ]
         .filter(Boolean)
         .join(" ");
@@ -565,7 +565,7 @@ async function enrich(request: Request, env: Env): Promise<Response> {
           r.source = "Google";
           r.sourceUrl = firstLink;
         }
-        if (payload.revealPhone && !r.phone) r.phone = pickPhone(blob);
+        if (opts.revealPhone && !r.phone) r.phone = pickPhone(blob);
       } catch {
         /* leave locked */
       }
@@ -619,6 +619,25 @@ async function enrich(request: Request, env: Env): Promise<Response> {
       : sc.reasons;
   }
 
+  return { results: results as EnrichRow[], warnings: Array.from(warnings) };
+}
+
+async function enrich(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") return json({ error: "POST only" }, 405);
+  let payload: {
+    people?: EnrichInput[];
+    revealPhone?: boolean;
+    usePaid?: boolean;
+    useClaude?: boolean;
+  } = {};
+  try {
+    payload = (await request.json()) as typeof payload;
+  } catch {
+    return json({ error: "invalid json" }, 400);
+  }
+  const people = (payload.people ?? []).slice(0, 10);
+  if (!people.length) return json({ results: [] });
+  const { results, warnings } = await enrichPeople(env, people, payload);
   return json({ demo: false, results, warnings: Array.from(warnings) });
 }
 

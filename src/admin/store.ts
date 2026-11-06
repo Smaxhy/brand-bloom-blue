@@ -925,6 +925,103 @@ export interface EnrichResult {
  * waterfall on the server: Apollo enrichment first, then Hunter.io for anyone
  * still missing. Process at most 10 people per call (Apollo bulk limit).
  */
+/* ----------------------------------------------------------- scan jobs */
+/** What a background scan needs per business (enough to rebuild the row later). */
+export interface ScanPerson {
+  id: string;
+  name: string;
+  domain: string;
+  organizationName: string;
+  linkedin?: string;
+  rating?: number;
+  reviews?: number;
+  phone?: string;
+  city?: string;
+  industry?: string;
+}
+export interface ScanJobLite {
+  id: string;
+  label: string;
+  status: "queued" | "running" | "done" | "failed" | "cancelled";
+  cursor: number;
+  total: number;
+  warnings: string[];
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+  finished_at: string | null;
+}
+export interface ScanJobFull extends ScanJobLite {
+  people: ScanPerson[];
+  results: Record<string, EnrichResult>;
+  options: { useClaude?: boolean; usePaid?: boolean; revealPhone?: boolean };
+}
+
+async function scanCall<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await authFetch(path, init);
+  const j = (await res.json().catch(() => ({}))) as T & { ok?: boolean; error?: string };
+  if (!res.ok || j.ok === false) throw new Error(j.error || `scan ${res.status}`);
+  return j;
+}
+
+/** Start a background scan over these businesses; returns the first slice too. */
+export function startScan(
+  people: ScanPerson[],
+  options: ScanJobFull["options"],
+  label: string,
+): Promise<{ job: ScanJobLite; produced: EnrichResult[] }> {
+  return scanCall("/api/scan/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ people, options, label }),
+  });
+}
+/** Do ~20 s of work on a job. `claimed: false` = the cron is working it right now. */
+export function stepScan(
+  id: string,
+): Promise<{ job: ScanJobLite | null; produced: EnrichResult[]; claimed: boolean }> {
+  return scanCall(`/api/scan/step?id=${encodeURIComponent(id)}`, { method: "POST" });
+}
+export async function scanStatus(id: string, full: true): Promise<ScanJobFull | null>;
+export async function scanStatus(id: string, full?: false): Promise<ScanJobLite | null>;
+export async function scanStatus(id: string, full = false) {
+  const r = await scanCall<{ job: ScanJobFull | ScanJobLite | null }>(
+    `/api/scan/status?id=${encodeURIComponent(id)}${full ? "&full=1" : ""}`,
+  );
+  return r.job;
+}
+export async function listScans(): Promise<ScanJobLite[]> {
+  return (await scanCall<{ jobs: ScanJobLite[] }>("/api/scan/list")).jobs;
+}
+export function cancelScan(id: string): Promise<unknown> {
+  return scanCall(`/api/scan/cancel?id=${encodeURIComponent(id)}`, { method: "POST" });
+}
+/** Rebuild scraper rows from a stored job (reopening a scan after a reload). */
+export function rowsFromScan(job: ScanJobFull): ScrapedPerson[] {
+  return job.people.map((p) => {
+    const r = job.results[p.id];
+    return {
+      id: p.id,
+      name: p.name || r?.name || "",
+      title: r?.title || "",
+      seniority: "",
+      email: r?.email || "",
+      emailLocked: !r?.email,
+      emailSource: r?.email ? (r.guessed ? "Guess" : r.source || "Website") : undefined,
+      phone: p.phone || r?.phone || "",
+      linkedin: p.linkedin || r?.linkedin || "",
+      company: p.organizationName,
+      website: r?.website || p.domain,
+      city: p.city || "",
+      industry: p.industry || "",
+      rating: p.rating,
+      reviews: p.reviews,
+      score: r?.score,
+      scoreWhy: r?.scoreReasons,
+    };
+  });
+}
+
 /** Provider problems reported by /api/enrich (quota used up, bad key). */
 const enrichWarnings = new Set<string>();
 export function takeEnrichWarnings(): string[] {
