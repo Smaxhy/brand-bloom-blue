@@ -34,7 +34,8 @@
   html{scroll-behavior:smooth;scroll-padding-top:100px}
   section[id]{scroll-margin-top:100px}
   #services,#how,#pricing{scroll-margin-top:100px}
-  body{background:var(--ink);color:var(--mist);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  html{overflow-x:hidden;max-width:100%}
+  body{max-width:100%;background:var(--ink);color:var(--mist);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
   ::selection{background:var(--violet);color:#fff}
   a{color:inherit;text-decoration:none}
   img,svg{display:block;max-width:100%}
@@ -409,15 +410,15 @@
   @media (max-width:880px){
     header{top:8px}
     .nav-shell{flex-wrap:wrap;height:auto;padding:10px 12px;border-radius:22px;row-gap:8px}
-    .nav-links,.nav-links.open{display:flex;position:static;order:3;width:100%;flex-direction:row;gap:6px;overflow-x:auto;
+    .nav-links,.nav-links.open{display:flex;position:static;order:3;width:100%;flex-direction:row;flex-wrap:wrap;justify-content:center;gap:6px;overflow:visible;
       background:none;border:0;padding:2px 0 0;box-shadow:none;backdrop-filter:none;scrollbar-width:none;-webkit-overflow-scrolling:touch}
     .nav-links::-webkit-scrollbar{display:none}
     .nav-links a{white-space:nowrap;padding:8px 14px;border-radius:999px;background:rgba(255,255,255,.07);font-size:.88rem;min-height:36px;display:inline-flex;align-items:center}
     .nav-links a::after{display:none}
     .nav-links a.active{background:rgba(168,139,255,.25);color:#fff}
-    .nav-cta{width:100%;justify-content:flex-end;gap:8px}
+    .nav-cta{width:100%;justify-content:center;gap:8px;margin-left:0!important}
     .nav-cta .btn{padding:9px 16px;font-size:.9rem}
-    .hero{padding-top:150px}
+    .hero{padding-top:200px}
     .contact-panel{margin:12px;padding:56px 18px 24px;border-radius:22px}
   }
 
