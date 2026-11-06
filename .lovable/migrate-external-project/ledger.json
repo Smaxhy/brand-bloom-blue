@@ -1,9 +1,15 @@
 {
   "source_archive": [
-    "inspirova-admin-engine_20.zip",
-    "inspirova-results-page_1.zip"
+    "inspirova-admin-engine_21.zip"
   ],
   "capabilities": [
+    {
+      "capability": "admin21-incremental-update",
+      "source": "inspirova-admin-engine_21.zip",
+      "outcome": "Inspect incremental differences; preserve existing Cloud accounts/data, managed migrations, encrypted credentials, safe fetching, claim-fenced scan jobs and protected dispatch.",
+      "status": "in_progress",
+      "next_action": "Merge only safe new behavior and verify without paid searches or email sends."
+    },
     {
       "capability": "code",
       "source": "admin-engine_4 ZIP",
