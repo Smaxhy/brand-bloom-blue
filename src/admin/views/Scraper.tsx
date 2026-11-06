@@ -929,6 +929,7 @@ export function Scraper({
       setEnrichProgress({ done: job.cursor, total: job.total });
       let idle = 0;
       while (job && (job.status === "running" || job.status === "queued")) {
+        await new Promise((resolve) => setTimeout(resolve, 2200));
         const r = await stepScan(job.id);
         if (r.claimed) {
           apply(r.produced);
@@ -962,6 +963,11 @@ export function Scraper({
         live: b?.live ?? true,
         text: `${b?.text ?? ""} · ⚠ ${warnings.join(" · ")}`.replace(/^ · /, ""),
       }));
+
+    paint();
+    setEnrichBusy(false);
+    setScanJob(null);
+  }
 
   /** Reopen a stored scan: rebuild the rows from what the job read. */
   async function openScan(id: string) {
@@ -1772,23 +1778,22 @@ export function Scraper({
       </Panel>
 
       {(scanJob || recentScans.some((j) => j.status === "running" || j.status === "queued")) && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--brand-violet)]/30 bg-[var(--brand-violet)]/5 px-4 py-2.5 text-sm">
-          <Loader2 className="h-4 w-4 animate-spin text-[var(--brand-violet)]" />
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
           {scanJob ? (
             <>
               <span>
                 Reading websites in the background — <b>{scanJob.cursor}</b> / {scanJob.total}
               </span>
               <span className="text-xs text-muted-foreground">
-                You can keep working or close this tab; the scan finishes on its own and appears
-                under Recent scans.
+                Progress is saved. Automatic continuation depends on the scheduler.
               </span>
-              <button
-                className="ml-auto text-xs underline"
-                onClick={() => void cancelScan(scanJob.id).then(refreshScans)}
+              <Btn variant="ghost"
+                className="ml-auto text-xs"
+                onClick={() => void cancelScan(scanJob.id).then(refreshScans).catch((error) => setBanner({ live: false, text: error.message }))}
               >
                 Stop
-              </button>
+              </Btn>
             </>
           ) : (
             <span>
@@ -1797,7 +1802,7 @@ export function Scraper({
                 .filter((j) => j.status === "running" || j.status === "queued")
                 .map((j) => `${j.label} (${j.cursor}/${j.total})`)
                 .join(", ")}
-              . It will finish on its own; open it from Recent scans.
+              . Progress saved.
             </span>
           )}
         </div>
@@ -1806,13 +1811,13 @@ export function Scraper({
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="text-muted-foreground">Recent scans</span>
           {recentScans.slice(0, 6).map((j) => (
-            <button
+            <Btn variant="ghost"
               key={j.id}
               onClick={() => void openScan(j.id)}
               title={`${j.status} · ${new Date(j.created_at).toLocaleString()}${j.last_error ? ` · ${j.last_error}` : ""}`}
               className={`rounded-full border px-2.5 py-1 hover:bg-secondary ${
                 j.status === "running" || j.status === "queued"
-                  ? "border-[var(--brand-violet)]/50"
+                  ? "border-primary/50"
                   : j.status === "failed"
                     ? "border-destructive/50 text-destructive"
                     : "border-border"
@@ -1820,7 +1825,7 @@ export function Scraper({
             >
               {j.label.length > 40 ? j.label.slice(0, 40) + "…" : j.label} · {j.cursor}/{j.total}
               {j.status === "running" || j.status === "queued" ? " · running" : ""}
-            </button>
+            </Btn>
           ))}
         </div>
       )}

@@ -1,3 +1,4 @@
+import { scanJobAction } from "@/lib/scan-jobs.functions";
 import type { LeadAi } from "@/lib/lead-filters";
 /** Inspirova Admin — per-account Lovable Cloud data layer. */
 
@@ -957,45 +958,24 @@ export interface ScanJobFull extends ScanJobLite {
   options: { useClaude?: boolean; usePaid?: boolean; revealPhone?: boolean };
 }
 
-async function scanCall<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await authFetch(path, init);
-  const j = (await res.json().catch(() => ({}))) as T & { ok?: boolean; error?: string };
-  if (!res.ok || j.ok === false) throw new Error(j.error || `scan ${res.status}`);
-  return j;
+async function scanCall<T>(data: Parameters<typeof scanJobAction>[0]["data"]): Promise<T> {
+  return await scanJobAction({ data }) as T;
 }
-
-/** Start a background scan over these businesses; returns the first slice too. */
-export function startScan(
-  people: ScanPerson[],
-  options: ScanJobFull["options"],
-  label: string,
-): Promise<{ job: ScanJobLite; produced: EnrichResult[] }> {
-  return scanCall("/api/scan/start", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ people, options, label }),
-  });
+export function startScan(people: ScanPerson[], options: ScanJobFull["options"], label: string): Promise<{ job: ScanJobLite; produced: EnrichResult[] }> {
+  return scanCall({ action: "start", people, options, label: label.slice(0, 120) });
 }
-/** Do ~20 s of work on a job. `claimed: false` = the cron is working it right now. */
-export function stepScan(
-  id: string,
-): Promise<{ job: ScanJobLite | null; produced: EnrichResult[]; claimed: boolean }> {
-  return scanCall(`/api/scan/step?id=${encodeURIComponent(id)}`, { method: "POST" });
+export function stepScan(id: string): Promise<{ job: ScanJobLite | null; produced: EnrichResult[]; claimed: boolean }> {
+  return scanCall({ action: "step", id });
 }
 export async function scanStatus(id: string, full: true): Promise<ScanJobFull | null>;
 export async function scanStatus(id: string, full?: false): Promise<ScanJobLite | null>;
 export async function scanStatus(id: string, full = false) {
-  const r = await scanCall<{ job: ScanJobFull | ScanJobLite | null }>(
-    `/api/scan/status?id=${encodeURIComponent(id)}${full ? "&full=1" : ""}`,
-  );
-  return r.job;
+  return (await scanCall<{ job: ScanJobFull | ScanJobLite | null }>({ action: "status", id, full })).job;
 }
 export async function listScans(): Promise<ScanJobLite[]> {
-  return (await scanCall<{ jobs: ScanJobLite[] }>("/api/scan/list")).jobs;
+  return (await scanCall<{ jobs: ScanJobLite[] }>({ action: "list" })).jobs;
 }
-export function cancelScan(id: string): Promise<unknown> {
-  return scanCall(`/api/scan/cancel?id=${encodeURIComponent(id)}`, { method: "POST" });
-}
+export function cancelScan(id: string): Promise<unknown> { return scanCall({ action: "cancel", id }); }
 /** Rebuild scraper rows from a stored job (reopening a scan after a reload). */
 export function rowsFromScan(job: ScanJobFull): ScrapedPerson[] {
   return job.people.map((p) => {
