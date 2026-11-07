@@ -52,6 +52,7 @@ export function mergeWebsiteRequests(deals: Deal[], requests: WebsiteRequest[]):
     history.set(r.id, r);
     result = result.map((d) => d.id !== existing.id ? d : { ...d,
       contact: r.name || d.contact, email: r.email || d.email, phone: r.phone || d.phone,
+      value: d.value || r.estimates?.total || 0,
       requests: [...history.values()], updatedAt: Math.max(d.updatedAt, requestDeal.updatedAt) });
   }
   return result;

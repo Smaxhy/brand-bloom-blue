@@ -168,7 +168,7 @@ export function Pipeline({
                             <Euro className="h-3.5 w-3.5" />
                             {d.value.toLocaleString("nl-BE")}
                           </span>
-                          <span className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                          <span className="flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                             <Btn variant="ghost" onClick={() => setEditing(d)} className="h-6 w-6 p-0" aria-label={`Edit ${d.name}`}>
                               <Pencil className="h-3.5 w-3.5" />
                             </Btn>
