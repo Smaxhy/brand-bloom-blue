@@ -1,5 +1,8 @@
 import type { LeadAi } from "@/lib/lead-filters";
 import { useState, useEffect, useRef, Fragment } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { checkEmailAddresses } from "@/lib/email-check.functions";
+import { checkEmailBatches, emailCheckLabel, type EmailCheckStatus } from "../email-check";
 import {
   Radar,
   MapPin,
@@ -16,6 +19,7 @@ import {
   CheckSquare,
   Square,
   SquareStop,
+  ShieldCheck,
   Building2,
   Download,
   X,
@@ -562,6 +566,21 @@ export function Scraper({
   }, []);
   // id -> which source revealed the email ("Apollo" | "Hunter" | "Google" | "demo")
   const [emailSource, setEmailSource] = useState<Record<string, string>>(saved?.emailSource ?? {});
+  const checkAddresses = useServerFn(checkEmailAddresses);
+  const [checkingEmails, setCheckingEmails] = useState(false);
+  const [emailChecks, setEmailChecks] = useState<Record<string, EmailCheckStatus>>({});
+  async function runEmailCheck(targets: ScrapedPerson[]) {
+    if (checkingEmails) return;
+    setCheckingEmails(true);
+    try {
+      const { results: checks, unchecked } = await checkEmailBatches(targets.filter((person) => !person.emailLocked).map((person) => person.email), (emails) => checkAddresses({ data: { emails } }));
+      setEmailChecks((prev) => ({ ...prev, ...checks }));
+      const counts = Object.values(checks);
+      setBanner({ live: true, text: `Checked ${counts.length}: ${counts.filter((status) => status === "valid").length} confirmed, ${counts.filter((status) => status === "invalid").length} invalid, ${counts.filter((status) => !["valid", "invalid"].includes(status)).length} unconfirmed${unchecked.length ? `; ${unchecked.length} not checked — select and retry` : ""}.` });
+    } catch (error) {
+      setBanner({ live: false, text: `Email check failed: ${(error as Error).message}` });
+    } finally { setCheckingEmails(false); }
+  }
   // id -> URL where the email was found (Hunter source / Google result link)
   const [emailSourceUrl, setEmailSourceUrl] = useState<Record<string, string>>(
     saved?.emailSourceUrl ?? {},
@@ -2013,6 +2032,9 @@ export function Scraper({
                   >
                     <Download className="h-4 w-4" />
                   </Btn>
+                  <Btn variant="ghost" onClick={() => void runEmailCheck(selectedPeople)} disabled={checkingEmails || !selectedPeople.some((person) => person.email && !person.emailLocked)} title="Check selected addresses; a mail-server result does not confirm the mailbox">
+                    {checkingEmails ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Check emails
+                  </Btn>
                   <Btn
                     variant="danger"
                     onClick={denySelected}
@@ -2192,6 +2214,7 @@ export function Scraper({
                                       {emailSource[p.id]}
                                     </span>
                                   )}
+                                  {emailChecks[p.email.trim().toLowerCase()] && <span className="rounded border border-border bg-secondary px-1 text-xs text-muted-foreground">{emailCheckLabel[emailChecks[p.email.trim().toLowerCase()]]}</span>}
                                 </div>
                               )}
                             </td>
