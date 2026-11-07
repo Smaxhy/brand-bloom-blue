@@ -34,31 +34,52 @@ export type Database = {
       }
       contact_submissions: {
         Row: {
+          attribution: Json
           company: string | null
           created_at: string
           email: string
+          estimates: Json | null
           id: string
           ip_hash: string | null
+          kind: string
           message: string
           name: string
+          personal_message: string
+          phone: string
+          request_key: string | null
+          services: Json
         }
         Insert: {
+          attribution?: Json
           company?: string | null
           created_at?: string
           email: string
+          estimates?: Json | null
           id?: string
           ip_hash?: string | null
+          kind?: string
           message: string
           name: string
+          personal_message?: string
+          phone?: string
+          request_key?: string | null
+          services?: Json
         }
         Update: {
+          attribution?: Json
           company?: string | null
           created_at?: string
           email?: string
+          estimates?: Json | null
           id?: string
           ip_hash?: string | null
+          kind?: string
           message?: string
           name?: string
+          personal_message?: string
+          phone?: string
+          request_key?: string | null
+          services?: Json
         }
         Relationships: []
       }
