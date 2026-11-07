@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import {
   Plus,
@@ -13,8 +13,12 @@ import {
   Eye,
   EyeOff,
   Send,
+  Loader2,
+  SquareStop,
 } from "lucide-react";
-import { type AdminData, type RawBusiness, uid } from "../store";
+import { type AdminData, type RawBusiness, type ScanJobLite, type EnrichResult, uid, startScan, stepScan, scanStatus, cancelScan } from "../store";
+import { createRevealScanControl } from "../reveal-scan-control";
+import { mergeRawReveal, needsRawEnrichment, rawScanPerson, runRawReveal } from "../raw-reveal";
 import { type Sequence, listSequences, enrollLeads } from "../outreach";
 import { Panel, StatCard, Modal, Field, inputCls, Btn } from "../ui";
 
@@ -103,6 +107,57 @@ export function RawData({
   }
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
+  const [revealBusy, setRevealBusy] = useState(false);
+  const [stopBusy, setStopBusy] = useState(false);
+  const [revealProgress, setRevealProgress] = useState({ done: 0, total: 0 });
+  const [revealJob, setRevealJob] = useState<ScanJobLite | null>(null);
+  const revealControl = useRef<ReturnType<typeof createRevealScanControl> | null>(null);
+  const [revealMessage, setRevealMessage] = useState("");
+
+  async function revealRows(ids: Set<string>) {
+    if (revealControl.current) return;
+    setRevealedIds((prev) => new Set([...prev, ...ids]));
+    const targets = data.raw.filter((row) => ids.has(row.id) && needsRawEnrichment(row));
+    if (!targets.length) return;
+    const control = createRevealScanControl();
+    revealControl.current = control;
+    setRevealBusy(true);
+    setRevealProgress({ done: 0, total: targets.length });
+    setRevealMessage("");
+    const apply = (results: EnrichResult[]) => {
+      const byId = new Map(results.map((result) => [result.id, result]));
+      if (!byId.size) return;
+      update((prev) => ({ ...prev, raw: prev.raw.map((row) => {
+        const result = byId.get(row.id);
+        return result ? mergeRawReveal(row, result) : row;
+      }) }));
+    };
+    try {
+      const warnings = await runRawReveal(targets.map(rawScanPerson), {
+        start: (people) => startScan(people, { useClaude: false, usePaid: false, revealPhone: true, findLinkedin: false }, `Raw Data · ${people.length} businesses`),
+        step: stepScan, status: (id) => scanStatus(id, true),
+        canContinue: control.canContinue,
+        wait: () => new Promise((resolve) => setTimeout(resolve, 3500)),
+        onJob: setRevealJob, onRows: apply,
+        onProgress: (done, total) => setRevealProgress({ done, total }),
+      });
+      setRevealMessage(warnings.length ? warnings.join(" · ") : await control.canContinue() ? "Reveal finished. Found details are saved; unavailable emails remain blank." : "Reveal stopped. Completed details are saved.");
+    } catch (error) {
+      setRevealMessage(`Reveal could not continue: ${(error as Error).message}. Completed details remain saved.`);
+    } finally {
+      setRevealBusy(false);
+      setRevealJob(null);
+      revealControl.current = null;
+    }
+  }
+
+  async function stopReveal() {
+    if (!revealJob || stopBusy || !revealControl.current) return;
+    setStopBusy(true);
+    try { await revealControl.current.stop(() => cancelScan(revealJob.id)); }
+    catch (error) { toast.error(`Could not stop Reveal: ${(error as Error).message}`); }
+    finally { setStopBusy(false); }
+  }
 
   function setStatus(id: string, status: RawBusiness["status"]) {
     update((p) => ({ ...p, raw: p.raw.map((r) => (r.id === id ? { ...r, status } : r)) }));
@@ -146,11 +201,7 @@ export function RawData({
     setSelectedIds(new Set());
   }
   function revealSelected() {
-    setRevealedIds((prev) => {
-      const next = new Set(prev);
-      for (const id of selectedIds) next.add(id);
-      return next;
-    });
+    void revealRows(new Set(selectedIds));
   }
   function hideSelected() {
     setRevealedIds((prev) => {
@@ -160,6 +211,10 @@ export function RawData({
     });
   }
   function toggleReveal(id: string) {
+    if (!revealedIds.has(id) || !data.raw.find((row) => row.id === id)?.email) {
+      void revealRows(new Set([id]));
+      return;
+    }
     setRevealedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -300,7 +355,7 @@ export function RawData({
                     <div className="truncate text-xs text-muted-foreground">{r.email}</div>
                   </div>
                   <div className="shrink-0 text-xs text-muted-foreground">
-                    {new Date(r.lastEmailedAt!).toLocaleDateString()}
+                    {new Date(r.lastEmailedAt ?? 0).toLocaleDateString()}
                   </div>
                 </div>
               ))}
@@ -382,12 +437,13 @@ export function RawData({
               >
                 <Send className="h-3.5 w-3.5" /> Add to sequence
               </button>
-              <button
+              <Btn
                 onClick={revealSelected}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20"
+                variant="soft"
+                disabled={revealBusy}
               >
-                <Eye className="h-3.5 w-3.5" /> Reveal emails
-              </button>
+                {revealBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />} Reveal emails
+              </Btn>
               <button
                 onClick={hideSelected}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-secondary px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-secondary/80"
@@ -408,6 +464,17 @@ export function RawData({
           )}
         </div>
       )}
+
+      {revealBusy && (
+        <div className="flex flex-wrap items-center gap-3 text-sm" role="status">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Revealing {revealProgress.done}/{revealProgress.total}</span>
+          <Btn variant="ghost" onClick={() => void stopReveal()} disabled={stopBusy || !revealJob}>
+            <SquareStop className="h-4 w-4" /> {stopBusy ? "Stopping…" : "Stop reveal"}
+          </Btn>
+        </div>
+      )}
+      {revealMessage && <p className="text-sm text-muted-foreground" role="status">{revealMessage}</p>}
 
       <p className="text-sm text-muted-foreground">
         Your scraping dump lives here. <strong className="text-foreground">Accept</strong> the
@@ -478,8 +545,8 @@ export function RawData({
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-mono text-xs">
-                      {revealedIds.has(r.id) ? r.email : maskEmail(r.email)}
+                    <span className="font-mono text-xs break-all">
+                      {r.email ? revealedIds.has(r.id) ? r.email : maskEmail(r.email) : "Not found yet"}
                     </span>
                     {r.emailSource === "Guess" && r.email && (
                       <span
@@ -489,17 +556,20 @@ export function RawData({
                         guess
                       </span>
                     )}
-                    <button
+                    <Btn
                       onClick={() => toggleReveal(r.id)}
-                      className="inline-flex items-center rounded p-0.5 text-muted-foreground hover:bg-secondary"
-                      title={revealedIds.has(r.id) ? "Hide email" : "Reveal email"}
+                      variant="ghost"
+                      disabled={revealBusy}
+                      className="!p-1"
+                      title={revealedIds.has(r.id) && r.email ? "Hide email" : "Reveal email"}
+                      aria-label={revealedIds.has(r.id) && r.email ? "Hide email" : "Reveal email"}
                     >
-                      {revealedIds.has(r.id) ? (
+                      {revealedIds.has(r.id) && r.email ? (
                         <EyeOff className="h-3 w-3" />
                       ) : (
                         <Eye className="h-3 w-3" />
                       )}
-                    </button>
+                    </Btn>
                     {r.email && emailCounts[r.email.trim().toLowerCase()] > 1 && (
                       <span
                         title="This email address appears more than once in your data"
