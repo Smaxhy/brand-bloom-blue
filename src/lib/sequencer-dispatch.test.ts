@@ -67,10 +67,12 @@ function query(table: string, q: string) {
   let rows = (tables[table] ??= []).slice();
   let order: string | null = null;
   let limit = Infinity;
+  let offset = 0;
   for (const [k, v] of params) {
     if (k === "select") continue;
     if (k === "order") { order = v; continue; }
     if (k === "limit") { limit = Number(v); continue; }
+    if (k === "offset") { offset = Number(v); continue; }
     if (k === "or") { rows = rows.filter((r) => orMatch(r, v.slice(1, -1))); continue; }
     rows = rows.filter((r) => test(r, k, v));
   }
@@ -78,7 +80,7 @@ function query(table: string, q: string) {
     const [col, dir] = order.split(".");
     rows.sort((a, b) => cmp(a[col], String(b[col])) * (dir === "desc" ? -1 : 1));
   }
-  return rows.slice(0, limit);
+  return rows.slice(offset, offset + limit);
 }
 let ids = 0;
 class FakeDb {
@@ -850,7 +852,7 @@ describe("dispatcher sends whole queues", () => {
 
   it("fails closed when company lease storage fails", async () => {
     seed({ people: 1 });
-    failures.push({ table: "rate_limits", match: () => true, message: "db insert rate_limits: 503" });
+    failures.push({ table: "rate_limits", match: (row) => String(row.key).startsWith("lease:company:"), message: "db insert rate_limits: 503" });
     await runDispatch({}, { source: "tick" });
     expect(sendVia).not.toHaveBeenCalled();
     expect(tables.enrollments[0].current_step).toBe(0);
