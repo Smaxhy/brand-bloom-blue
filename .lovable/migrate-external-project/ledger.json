@@ -4,6 +4,13 @@
   ],
   "capabilities": [
     {
+      "capability": "admin-update-comprehensive",
+      "source": "inspirova-admin-update.zip",
+      "outcome": "Inspected 61-file incremental admin/backend update; preserving current Cloud accounts/records, public pages, generated clients, provider credentials, routes and applied migration journal. Reviewing sending safety, background timer, scanner identity, reveal recovery and UI changes. No package or records export included; existing Cloud records stay in place.",
+      "status": "in_progress",
+      "next_action": "Merge all capabilities with secure runtime adaptations, apply additive timer schema and verify tests/admin flows; no live sends during testing."
+    },
+    {
       "capability": "admin5-incremental-update",
       "source": "inspirova-admin-engine-5.zip",
       "outcome": "Merged conservative search-snippet business email filtering, explicit designer-credit exclusion while retaining alternate published contact domains, decoded-email tiered crawl detection and versioned cache refresh. Added authenticated admin/CEO bounded email checks, email-keyed advisory badges, confirmed-guess enrollment with explicit override, and advisory sequence content checks/AI guidance. Preserved Cloud records/accounts, managed configuration and migrations, providers, URLs, Stop reveal, Raw Data persisted scans, claim fences, request limits, secure credentials, dispatcher pacing and CSV/GHL escaping. All 80 tests in 21 suites pass; preview build OK; admin sign-in entry renders, signed-out enrichment returns 401, homepage iframe intact and no browser runtime errors. External-project migration skill used for archive inspection and capability tracking; this is an incremental source update, not an account/database migration.",
