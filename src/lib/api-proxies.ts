@@ -1241,7 +1241,7 @@ function tilePoints(
   }
   // Centre tile first so small result sets are still the most central businesses.
   pts.sort(
-    (a, b) => distanceKm(centerLat, centerLng, a.lat, a.lng) - distanceKm(centerLat, centerLng, b.lat, b.lng),
+    (a, b) => distanceKm(centerLat, centerLng, a.lat, a.lng) - distanceKm(f.lat, f.lng, b.lat, b.lng),
   );
   return pts;
 }
@@ -1301,7 +1301,7 @@ function applyUniversalFilters<
   let dropped = 0;
   const kept = list.filter((b) => {
     if (f.radiusKm && f.lat != null && f.lng != null && b.lat != null && b.lng != null) {
-      if (distanceKm(centerLat, centerLng, b.lat, b.lng) > f.radiusKm) return (dropped++, false);
+      if (distanceKm(f.lat, f.lng, b.lat, b.lng) > f.radiusKm) return (dropped++, false);
     }
     if (f.minRating && typeof b.rating === "number" && b.rating < f.minRating)
       return (dropped++, false);

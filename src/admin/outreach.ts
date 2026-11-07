@@ -615,7 +615,7 @@ export async function sendAllNow(
 ): Promise<SendAllProgress & { blocked: number; duplicates: number; errors: string[] }> {
   const out = { sent: 0, rounds: 0, left: null as number | null, note: "", blocked: 0, duplicates: 0, errors: [] as string[] };
   let idle = 0;
-  const people = await listEnrollments(sequenceId);
+  const people = await listEnrollments({ sequenceId, limit: 10000 });
   const start = Date.now();
   const remaining = new Set(people.filter((p) => ["queued", "active", "paused"].includes(p.status) &&
     (p.current_step === 0 || (p.next_send_at && Date.parse(p.next_send_at) <= start))).map((p) => p.id));
@@ -637,7 +637,7 @@ export async function sendAllNow(
     out.blocked += boxes.reduce((a, m) => a + (m.bounce_blocked ?? 0), 0);
     out.duplicates += boxes.reduce((a, m) => a + (m.duplicates_held ?? 0), 0);
     out.errors.push(...(r.report?.errors ?? []).slice(0, 2));
-    const current = await listEnrollments(sequenceId);
+    const current = await listEnrollments({ sequenceId, limit: 10000 });
     const eligible = new Set(current.filter((p) => ["queued", "active", "paused"].includes(p.status) &&
       (p.current_step === 0 || (p.next_send_at && Date.parse(p.next_send_at) <= start))).map((p) => p.id));
     for (const id of remaining) if (!eligible.has(id)) remaining.delete(id);
