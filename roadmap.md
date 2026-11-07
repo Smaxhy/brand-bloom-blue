@@ -82,3 +82,8 @@
 - [x] Merge safe email scraping improvements from inspirova-admin-engine-4.zip while preserving saved data, cancellation and security.
 - [x] Run 27 scraping, cache recovery, cancellation and security tests; build OK and admin entry has no runtime errors; no outbound emails.
 - [ ] Verify email recovery with saved rows: blocked by unavailable own-account preview session; user must sign in.
+
+# Proper admin engine 5 update
+- [x] Merge safe new archive fixes while preserving saved data, Stop reveal, secure integrations and request protection.
+- [x] Verify 80 regression tests and preview build; admin entry renders without runtime errors and signed-out enrichment is denied; no emails or paid searches.
+- [ ] Verify new admin checks and Reveal against saved rows: blocked by unavailable own-account session; user must sign in. Live verifier and production publishing remain unverified.

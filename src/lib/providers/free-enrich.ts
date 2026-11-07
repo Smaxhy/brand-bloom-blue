@@ -185,6 +185,26 @@ const JUNK_EMAIL =
   /\.(png|jpg|jpeg|gif|webp|svg|css|js)$|(example|sentry|wixpress|domain|email|yourdomain|squarespace|wordpress)\.com$|^(noreply|no-reply|donotreply)@/i;
 const PHONE_RE =
   /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b|\+\d{1,3}[\s.-]?\d[\d\s().-]{6,}\d/g;
+/** Consumer mailboxes commonly published by small businesses. */
+const FREE_MAIL = new Set("gmail.com googlemail.com yahoo.com yahoo.co.uk yahoo.fr ymail.com hotmail.com hotmail.be hotmail.fr outlook.com outlook.be live.com live.be live.nl msn.com icloud.com me.com mac.com aol.com comcast.net att.net verizon.net sbcglobal.net bellsouth.net cox.net charter.net protonmail.com proton.me mail.com gmx.com gmx.de gmx.net zoho.com telenet.be skynet.be proximus.be scarlet.be btinternet.com sky.com orange.fr free.fr wanadoo.fr laposte.net web.de t-online.de".split(" "));
+export function emailPlausible(email: string, ctx: { domains: string[]; company?: string; owner?: string; fromOwnSite?: boolean }): boolean {
+  const e = email.toLowerCase().trim();
+  if (!/^[a-z0-9._%+'-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}$/i.test(e) || /\.\./.test(e) || JUNK_EMAIL.test(e)) return false;
+  const [local, domain] = e.split("@");
+  const own = ctx.domains.map(cleanDomain).filter(Boolean);
+  if (own.some((d) => domain === d || domain.endsWith("." + d))) return true;
+  if (!FREE_MAIL.has(domain)) return false;
+  if (ctx.fromOwnSite) return true;
+  const stop = new Set(["the", "and", "inc", "llc", "ltd", "company", "services", "service", "group", "bvba", "gmbh"]);
+  const tokens = [ctx.company, ctx.owner].flatMap((name) => (name || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[^a-z0-9]+/)).filter((token) => token.length >= 3 && !stop.has(token));
+  return tokens.some((token) => local.includes(token));
+}
+
+/** Search snippets must not fall back to a directory or competitor's email. */
+export function pickBusinessEmail(text: string, domain?: string, ctx: { company?: string; owner?: string } = {}): string {
+  const found = (text.match(EMAIL_RE) ?? []).map((email) => email.toLowerCase()).filter((email) => emailPlausible(email, { domains: domain ? [domain] : [], ...ctx }));
+  return found.find((email) => domain && email.endsWith("@" + cleanDomain(domain))) || found[0] || "";
+}
 const OWNER_WORDS =
   /(owner|founder|co-founder|president|ceo|principal|managing (director|partner)|proprietor|dr\.?)/i;
 
@@ -372,6 +392,7 @@ function guessPatterns(first: string, last: string, domain: string): string[] {
 export async function freeEnrich(input: {
   website: string;
   ownerName?: string;
+  companyName?: string;
   maxPages?: number;
   /** Fetch /contact + /about first and the deeper pages only when needed. */
   tiered?: boolean;
@@ -430,7 +451,7 @@ export async function freeEnrich(input: {
       `[a-z0-9._%+-]+@(?:www\\.)?${finalDomain.replace(/\./g, "\\.")}`,
       "i",
     );
-    const haveEmail = /mailto:/i.test(seen) || ownEmailRe.test(seen);
+    const haveEmail = hiddenEmails(seen).some((email) => !JUNK_EMAIL.test(email)) || ownEmailRe.test(seen);
     const havePerson = OWNER_HINT_RE.test(seen) || /"@type"\s*:\s*"Person"/i.test(seen);
     if (!haveEmail || !havePerson) extras.push(...(await grab(TIER2, 5000)).filter(notNull));
   } else {
@@ -447,7 +468,9 @@ export async function freeEnrich(input: {
   const texts: string[] = [];
 
   for (const pg of pages) {
-    const html = pg.html;
+    // Explicit designer-credit links are not business contact details. Keep
+    // other published off-domain addresses: businesses may use a separate domain.
+    const html = pg.html.replace(/<a\b[^>]*>[\s\S]*?<\/a>/gi, (anchor) => /\b(?:site designer|website (?:design|designed|built|developed)(?: by)?|web design by|designed by|developed by)\b/i.test(htmlToText(anchor)) ? " " : anchor);
     // mailto: and tel: links are the most reliable signals
     for (const m of html.matchAll(/mailto:([^"'?\s<>]+)/gi)) {
       // Malformed percent encoding in one link must not discard the whole site.

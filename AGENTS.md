@@ -17,4 +17,6 @@
 - Scraper owner LinkedIn searches are an explicit scan option passed through validation and persisted job options; disabling it must suppress fresh and cached-profile lookups to avoid unexpected search credits.
 - Reveal polling waits for server cancellation before issuing another slice; failed cancellation remains retryable and completed results stay saved.
 - Raw Data Reveal uses owner-scoped persisted scans and merges results by original row ID into saved raw contacts; keep existing details, label guesses, and never synthesize demo addresses on failure.
-- Version email extraction in cached site profiles; refresh older incomplete or guessed profiles when decoding improves so saved cache entries cannot hide newly recoverable published addresses.
+- Version email extraction in cached site profiles; refresh older profiles when decoding or business relevance changes so caches cannot retain stale addresses.
+- Manual email checks use authenticated admin/CEO server functions with fail-closed rate limits, bounded batches and email-keyed advisory results; MX checks never mean mailbox confirmation or successful suppression.
+- Guessed-address enrollment requires verifier confirmation unless an explicit boolean override is supplied; invalid addresses remain blocked regardless of override.

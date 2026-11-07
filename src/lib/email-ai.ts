@@ -62,6 +62,7 @@ Respond with ONLY a JSON object:
 - subject: short, lowercase-ish, no clickbait, may use {{company}}.
 - subject_b: a different angle for A/B testing (${followUp ? "empty string for follow-ups" : "required for the first email"}).
 - body: plain text, real line breaks, no signature block (it is added automatically), no footer, no links unless the owner's instructions say so.
+Content guidelines: avoid HTML, images, emoji, ALL CAPS, promotional pressure, shortened URLs and fake Re:/Fwd: subjects. Use at most one relevant full URL. Keep the existing first-email and follow-up length limits. These guidelines may reduce promotional signals; delivery and inbox placement are not guaranteed.
 ${followUp ? "This is follow-up #" + input.index + ": short, references the earlier email without repeating it, one new reason or angle, one ask. subject should be an empty string so it sends in the same thread." : "This is the FIRST email."}`;
 
   const user = `Sequence: ${input.sequenceName}

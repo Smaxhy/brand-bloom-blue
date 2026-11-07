@@ -37,7 +37,7 @@ import {
 } from "./providers/gmaps-self";
 import { enrichSite, enrichMany } from "./enrich-site";
 import { publicCheck, publicConfig } from "./public-check";
-import { freeEnrich, hasMx, scoreLead, type SiteSignals } from "./providers/free-enrich";
+import { freeEnrich, hasMx, scoreLead, pickBusinessEmail, type SiteSignals } from "./providers/free-enrich";
 import { handleOutreachRoute } from "./outreach-routes";
 import { Db } from "./db";
 import { resolveIntegrationEnv } from "./integration-settings.server";
@@ -570,7 +570,7 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
       try {
         const { blob, firstLink, error } = await googleSearch(googleKey, q);
         if (error) warn(error);
-        const found = pickEmail(blob, domain);
+        const found = pickBusinessEmail(blob, domain, { company: p.organizationName, owner: r.name || p.name });
         if (found) {
           r.email = found;
           r.source = "Google";
@@ -815,21 +815,6 @@ async function apolloBulkMatch(
 
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const PHONE_RE = /(\+?\d[\d\s().-]{7,}\d)/g;
-
-/** Pull the best email out of a text blob, preferring one on the company domain. */
-function pickEmail(text: string, domain?: string): string {
-  const found = (text.match(EMAIL_RE) ?? [])
-    .map((e) => e.toLowerCase())
-    // drop obvious junk / image filenames mistaken as emails
-    .filter((e) => !/\.(png|jpg|jpeg|gif|webp|svg)$/i.test(e))
-    .filter((e) => !/(example|sentry|wixpress|domain)\.com$/i.test(e));
-  if (!found.length) return "";
-  if (domain) {
-    const onDomain = found.find((e) => e.endsWith("@" + domain.toLowerCase()));
-    if (onDomain) return onDomain;
-  }
-  return found[0];
-}
 
 /** Best-effort phone extraction from a text blob. */
 function pickPhone(text: string): string {

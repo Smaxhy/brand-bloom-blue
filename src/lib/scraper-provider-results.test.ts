@@ -5,7 +5,9 @@ vi.mock("./api-auth", () => ({
   hasCronSecret: vi.fn(() => false),
   unauthorized: vi.fn(),
 }));
-vi.mock("./db", () => ({ Db: class { static available() { return false; } } }));
+vi.mock("./db", () => ({ Db: class { static available() { return true; } async rpc() { return true; } async one() { return null; } } }));
+vi.mock("./integration-settings.server", () => ({ resolveIntegrationEnv: vi.fn(async (env) => env) }));
+vi.mock("./request-security", () => ({ requestIpHash: vi.fn(async () => "test-ip"), securityJson: (data: unknown, status: number) => Response.json(data, { status }) }));
 vi.mock("./outreach-routes", () => ({ handleOutreachRoute: vi.fn(async () => null) }));
 vi.mock("./enrich-site", () => ({
   enrichSite: vi.fn(async () => null),
@@ -13,7 +15,8 @@ vi.mock("./enrich-site", () => ({
     for (const person of people) await run(person);
   },
 }));
-vi.mock("./providers/free-enrich", () => ({
+vi.mock("./providers/free-enrich", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./providers/free-enrich")>(),
   freeEnrich: vi.fn(),
   hasMx: vi.fn(async () => false),
   scoreLead: vi.fn(() => ({ score: 0, reasons: [] })),
