@@ -3,7 +3,7 @@ const mocks = vi.hoisted(() => ({ authFetch: vi.fn(), reads: [] as unknown[][] }
 vi.mock("./store", () => ({ authFetch: mocks.authFetch }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: { from: () => {
  const q = { select: () => q, order: () => q, limit: () => q, eq: () => q,
- then: (resolve: (v: unknown) => void) => resolve({ data: mocks.reads.shift() ?? [], error: null }) }; return q;
+ then: (resolve: (v: unknown) => void) => resolve({ data: mocks.reads.shift() ?? [], error: null }) }; return { select: () => q };
 } } }));
 import { sendAllNow } from "./outreach";
 const person = (id: string, current_step = 0) => ({ id, status: "active", current_step, next_send_at: new Date(Date.now()+86400000).toISOString() });
