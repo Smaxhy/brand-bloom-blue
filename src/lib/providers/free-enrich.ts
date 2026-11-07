@@ -185,6 +185,26 @@ const JUNK_EMAIL =
   /\.(png|jpg|jpeg|gif|webp|svg|css|js)$|(example|sentry|wixpress|domain|email|yourdomain|squarespace|wordpress)\.com$|^(noreply|no-reply|donotreply)@/i;
 const PHONE_RE =
   /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b|\+\d{1,3}[\s.-]?\d[\d\s().-]{6,}\d/g;
+/** Consumer mailboxes commonly published by small businesses. */
+const FREE_MAIL = /^(gmail|googlemail|yahoo|ymail|hotmail|outlook|live|msn|icloud|me|mac|aol|comcast|att|verizon|sbcglobal|bellsouth|cox|charter|protonmail|proton|mail|gmx|zoho|telenet|skynet|proximus|scarlet|btinternet|sky|orange|free|wanadoo|laposte|web|t-online)\.(com|net|be|fr|nl|de|co\.uk|me|org)$/i;
+export function emailPlausible(email: string, ctx: { domains: string[]; company?: string; owner?: string; fromOwnSite?: boolean }): boolean {
+  const e = email.toLowerCase().trim();
+  if (!/^[a-z0-9._%+'-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}$/i.test(e) || /\.\./.test(e) || JUNK_EMAIL.test(e)) return false;
+  const [local, domain] = e.split("@");
+  const own = ctx.domains.map(cleanDomain).filter(Boolean);
+  if (own.some((d) => domain === d || domain.endsWith("." + d))) return true;
+  if (!FREE_MAIL.test(domain)) return false;
+  if (ctx.fromOwnSite) return true;
+  const stop = new Set(["the", "and", "inc", "llc", "ltd", "company", "services", "service", "group", "bvba", "gmbh"]);
+  const tokens = [ctx.company, ctx.owner].flatMap((name) => (name || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[^a-z0-9]+/)).filter((token) => token.length >= 3 && !stop.has(token));
+  return tokens.some((token) => local.includes(token));
+}
+
+/** Search snippets must not fall back to a directory or competitor's email. */
+export function pickBusinessEmail(text: string, domain?: string, ctx: { company?: string; owner?: string } = {}): string {
+  const found = (text.match(EMAIL_RE) ?? []).map((email) => email.toLowerCase()).filter((email) => emailPlausible(email, { domains: domain ? [domain] : [], ...ctx }));
+  return found.find((email) => domain && email.endsWith("@" + cleanDomain(domain))) || found[0] || "";
+}
 const OWNER_WORDS =
   /(owner|founder|co-founder|president|ceo|principal|managing (director|partner)|proprietor|dr\.?)/i;
 
@@ -372,6 +392,7 @@ function guessPatterns(first: string, last: string, domain: string): string[] {
 export async function freeEnrich(input: {
   website: string;
   ownerName?: string;
+  companyName?: string;
   maxPages?: number;
   /** Fetch /contact + /about first and the deeper pages only when needed. */
   tiered?: boolean;
@@ -430,7 +451,7 @@ export async function freeEnrich(input: {
       `[a-z0-9._%+-]+@(?:www\\.)?${finalDomain.replace(/\./g, "\\.")}`,
       "i",
     );
-    const haveEmail = /mailto:/i.test(seen) || ownEmailRe.test(seen);
+    const haveEmail = hiddenEmails(seen).some((email) => emailPlausible(email, { domains: [finalDomain, domain], company: input.companyName, owner: input.ownerName, fromOwnSite: true })) || ownEmailRe.test(seen);
     const havePerson = OWNER_HINT_RE.test(seen) || /"@type"\s*:\s*"Person"/i.test(seen);
     if (!haveEmail || !havePerson) extras.push(...(await grab(TIER2, 5000)).filter(notNull));
   } else {
@@ -490,6 +511,7 @@ export async function freeEnrich(input: {
   // Rank emails: own-domain first, personal-looking before generic, drop junk.
   const ranked = Array.from(emailMap.entries())
     .filter(([e]) => !JUNK_EMAIL.test(e) && e.length < 80)
+    .filter(([e]) => emailPlausible(e, { domains: [finalDomain, domain], company: input.companyName, owner: input.ownerName, fromOwnSite: true }))
     .map(([email, meta]) => {
       const own = email.endsWith("@" + finalDomain) || email.endsWith("@" + domain);
       const generic =

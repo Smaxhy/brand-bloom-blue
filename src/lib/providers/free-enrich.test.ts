@@ -1,8 +1,27 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { decodeCfEmail, freeEnrich, hasMx, hiddenEmails } from "./free-enrich";
+import { decodeCfEmail, freeEnrich, hasMx, hiddenEmails, emailPlausible, pickBusinessEmail } from "./free-enrich";
 const fetchSite = vi.hoisted(() => vi.fn());
 vi.mock("../public-site-fetch", () => ({ fetchPublicSite: fetchSite }));
 afterEach(() => vi.unstubAllGlobals());
+it("rejects unrelated business emails and keeps published consumer mailboxes", () => {
+  const ctx = { domains: ["business.test"], fromOwnSite: true };
+  expect(emailPlausible("designer@agency.test", ctx)).toBe(false);
+  expect(emailPlausible("owner@business.test", ctx)).toBe(true);
+  expect(emailPlausible("local.business@gmail.com", ctx)).toBe(true);
+  expect(emailPlausible("bad@@business.test", ctx)).toBe(false);
+});
+it("does not select an unrelated directory email from search snippets", () => {
+  expect(pickBusinessEmail("directory@listing.test unrelated@gmail.com", "business.test", { company: "Business" })).toBe("");
+  expect(pickBusinessEmail("directory@listing.test smith.plumbing@gmail.com", "business.test", { company: "Smith Plumbing" })).toBe("smith.plumbing@gmail.com");
+  expect(pickBusinessEmail("smith.plumbing@gmail.com owner@business.test", "business.test", { company: "Smith Plumbing" })).toBe("owner@business.test");
+});
+it("drops designer footer addresses without losing the business's phone or Gmail", async () => {
+  fetchSite.mockResolvedValue({ html: '<p>local.business@gmail.com</p><a href="mailto:designer@agency.test">Site designer</a><a href="tel:+32470123456">Call</a>', finalUrl: "https://business.test" });
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ Status: 3 })));
+  const result = await freeEnrich({ website: "business.test", maxPages: 1 });
+  expect(result.emails.map((item) => item.email)).toEqual(["local.business@gmail.com"]);
+  expect(result.phones).toContain("+32470123456");
+});
 it("treats DNS failure as unknown rather than claiming no mail server", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => Response.json({ Status: 2 })));
   expect(await hasMx("business.test")).toBeNull();
