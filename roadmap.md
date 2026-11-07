@@ -1,4 +1,6 @@
 # Public website refresh
+- [ ] Connect structured quote/contact requests to Pipeline, preserve full details, and merge duplicate deals safely.
+- [ ] Verify public submission, repeated submission, and signed-in pipeline readback; remove test submission.
 - [x] Replace generic visual effects with an editorial design on the homepage.
 - [x] Match the results and privacy pages while preserving content and existing flows.
 - [x] Verify navigation, calculator, and narrow-screen layout.
