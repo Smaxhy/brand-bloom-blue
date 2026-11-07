@@ -92,3 +92,8 @@
 - [x] Isolate scan action budgets, wait and retry explicit throttling, preserve Stop and saved results, and reduce redundant result reads.
 - [x] Verify throttling recovery, cancellation and security with 28 passing tests; preview build OK and admin entry has no runtime errors.
 - [ ] Signed-in saved-row Reveal check: blocked by no matching own-account session; sign in to the preview to verify live data.
+
+# Comprehensive admin update
+- [ ] Merge sending reliability, background timer, scraper/reveal and admin-screen capabilities from inspirova-admin-update.zip while preserving security, public pages and saved data.
+- [ ] Apply additive timer schema without replacing managed migrations; adapt scheduled execution to the current hosting setup.
+- [ ] Run update and existing regression tests, verify available signed-in admin flows without sending emails, and record any live-provider or timer blockers.
