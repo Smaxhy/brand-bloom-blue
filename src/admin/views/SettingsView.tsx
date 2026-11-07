@@ -20,6 +20,7 @@ import {
   Plug,
   Loader2,
   ShieldCheck,
+  Timer,
 } from "lucide-react";
 import { type AdminData, resetData, exportAccountJson, exportAccountCsvs } from "../store";
 import {
@@ -34,6 +35,9 @@ import {
   getOutreachSettings,
   saveOutreachSettings,
   integrationStatus,
+  schedulerStatus,
+  setScheduler,
+  type SchedulerState,
 } from "../outreach";
 import { Panel, Field, inputCls, Btn, Modal } from "../ui";
 import { useServerFn } from "@tanstack/react-start";
@@ -114,6 +118,7 @@ export function SettingsView({
       </Panel>
 
       <MailboxesPanel />
+      <BackgroundTimerPanel />
       <SenderIdentityPanel />
       <IntegrationsPanel />
       <TwoFactorPanel />
@@ -183,6 +188,109 @@ const TIMEZONES = [
   "Europe/Paris",
   "Europe/Berlin",
 ];
+
+/** Settings → Background timer: sending and scans continue with the app closed. */
+function BackgroundTimerPanel() {
+  const [st, setSt] = useState<SchedulerState | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(() => schedulerStatus().then(setSt).catch(() => setSt({ ok: false, error: "Could not read the timer state." })), []);
+  useEffect(() => {
+    void load();
+    const t = setInterval(() => void load(), 60_000);
+    return () => clearInterval(t);
+  }, [load]);
+  const ageMin = st?.last_tick_at ? (Date.now() - Date.parse(st.last_tick_at)) / 60000 : Infinity;
+  const running = ageMin <= 3;
+  const via =
+    st?.last_tick_source === "db"
+      ? "the database timer"
+      : st?.last_tick_source === "cron"
+        ? "the Cloudflare cron"
+        : st?.last_tick_source === "external"
+          ? "an outside timer"
+          : "a timer";
+  async function toggle(enabled: boolean) {
+    setBusy(true);
+    try {
+      const r = await setScheduler(enabled);
+      if (!r.ok) throw new Error(r.error || "Could not change the timer");
+      toast.success(enabled ? "Background timer is on — it runs every minute." : "Background timer is off.");
+      await load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Panel>
+      <div className="mb-3 flex items-center gap-2">
+        <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-[var(--brand-violet)] to-[var(--brand-coral)] text-white">
+          <Timer className="h-4 w-4" />
+        </div>
+        <div className="flex-1">
+          <h3 className="font-display text-lg font-bold">Background timer</h3>
+          <p className="text-xs text-muted-foreground">
+            Sends queued emails one by one and keeps background scans reading websites every minute —
+            with this app and your computer closed.
+          </p>
+        </div>
+      </div>
+      {!st ? (
+        <p className="text-sm text-muted-foreground">Checking…</p>
+      ) : (
+        <div className="space-y-3 text-sm">
+          <div className={`flex items-start gap-2 rounded-lg border px-3 py-2 ${running ? "border-primary/30 bg-primary/5" : "border-border bg-secondary/50"}`} role="status">
+            {running ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> : <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />}
+            <div>
+              <div className="font-semibold">
+                {running
+                  ? `Running — ${via} last ran ${ageMin < 1 ? "just now" : `${Math.round(ageMin)} min ago`}.`
+                  : st.last_tick_at
+                    ? `Not running — last background run ${ageMin < 120 ? `${Math.round(ageMin)} min` : `${Math.round(ageMin / 60)} h`} ago.`
+                    : "Not running yet."}
+              </div>
+              {!running && (
+                <div className="mt-0.5 text-xs text-muted-foreground">
+                  Until it runs, emails and scans only move while an admin tab is open.
+                </div>
+              )}
+            </div>
+          </div>
+          {st.ok === false && st.error && <p className="text-xs text-destructive">{st.error}</p>}
+          <div className="flex flex-wrap items-center gap-2">
+            {st.enabled ? (
+              <>
+                <span className="text-xs text-muted-foreground">Database timer is on → {st.url}</span>
+                <Btn variant="ghost" onClick={() => void toggle(false)} disabled={busy}>
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />} Turn off
+                </Btn>
+                <Btn variant="ghost" onClick={() => void toggle(true)} disabled={busy} title="Create a fresh timer token and address">
+                  <RotateCcw className="h-4 w-4" /> Renew
+                </Btn>
+              </>
+            ) : (
+              <Btn onClick={() => void toggle(true)} disabled={busy || st.migrated === false}>
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} Turn on the database timer
+              </Btn>
+            )}
+          </div>
+          {st.migrated === false && (
+            <p className="text-xs text-muted-foreground">
+              Needs the database update <code className="rounded bg-secondary px-1">0016_background_scheduler</code> first.
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Calls <code className="rounded bg-secondary px-1">{st.url || st.suggested_url}</code> every minute
+            with a private token. If your Cloudflare cron already runs, both can stay on — they never send
+            the same email twice.
+          </p>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
 function MailboxesPanel() {
@@ -496,14 +604,14 @@ function MailboxesPanel() {
           {typeof window !== "undefined" ? window.location.origin : ""}/api/google/oauth/callback
         </code>
         , then add <code>GOOGLE_OAUTH_CLIENT_ID</code> and <code>GOOGLE_OAUTH_CLIENT_SECRET</code>{" "}
-        as secrets. Emails go out every 10 minutes within each mailbox's hours, follow-ups reply in
-        the same thread, and replies or bounces stop the sequence automatically.
+        as secrets. Emails go out one by one at each sequence's pace within the mailbox's hours,
+        follow-ups reply in the same thread, and replies or bounces stop the sequence automatically.
       </p>
       <Modal open={ghlOpen} onClose={() => setGhlOpen(false)} title="Connect GoHighLevel">
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
             Sends go through your GHL sub-account's email (LC Email / Mailgun) instead of a Google
-            mailbox. Replies and bounces are picked up every 10 minutes. Use a dedicated sending
+            mailbox. Replies and bounces are picked up every few minutes. Use a dedicated sending
             domain in GHL (Settings → Email Services) and start at 50–100 a day.
           </p>
           <Field label="Private Integration token (or Agency API key)">
@@ -597,7 +705,7 @@ function SenderIdentityPanel() {
   if (!s) return null;
   async function save() {
     try {
-      await saveOutreachSettings(s!);
+      await saveOutreachSettings(s);
       setSaved(true);
       setTimeout(() => setSaved(false), 1800);
     } catch (e) {

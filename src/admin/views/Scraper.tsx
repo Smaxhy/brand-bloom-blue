@@ -1,5 +1,5 @@
 import type { LeadAi } from "@/lib/lead-filters";
-import { useState, useEffect, useRef, Fragment } from "react";
+import { useState, useEffect, useRef, useCallback, startTransition, Fragment } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { checkEmailAddresses } from "@/lib/email-check.functions";
 import { checkEmailBatches, emailCheckLabel, type EmailCheckStatus } from "../email-check";
@@ -51,6 +51,7 @@ import {
   rowsFromScan,
   type ScanJobLite,
   type ScanJobFull,
+  type ScanPerson,
   type EnrichResult,
   addToDenylist,
   restoreFromDenylist,
@@ -60,8 +61,9 @@ import {
 } from "../store";
 import { Panel, Field, inputCls, Btn } from "../ui";
 import { Button } from "@/components/ui/button";
-import { createRevealScanControl } from "../reveal-scan-control";
 import { SavedSearchesPanel, SaveSearchModal } from "./SavedSearches";
+import { RecentScans } from "./RecentScans";
+import { addToRaw } from "../raw-merge";
 import { leadFilterReason, TEAM_SIZE_BANDS, REVENUE_BANDS } from "@/lib/lead-filters";
 
 const SIZE_PRESETS: { id: string; label: string }[] = [
@@ -546,11 +548,10 @@ export function Scraper({
   const [results, setResults] = useState<ScrapedPerson[]>(saved?.results ?? []);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [banner, setBanner] = useState<{ live: boolean; text: string } | null>(null);
-  const [pushed, setPushed] = useState(0);
+  const [pushed, setPushed] = useState({ added: 0, updated: 0 });
   const [revealPhone, setRevealPhone] = useState(false);
   const [enrichBusy, setEnrichBusy] = useState(false);
   const [stopBusy, setStopBusy] = useState(false);
-  const revealControl = useRef<ReturnType<typeof createRevealScanControl> | null>(null);
   const [enrichProgress, setEnrichProgress] = useState({ done: 0, total: 0 });
   // Background scan job currently being driven/watched by this tab, and recent ones.
   const [scanJob, setScanJob] = useState<ScanJobLite | null>(null);
@@ -602,6 +603,8 @@ export function Scraper({
   // Paid reveal sources (Apollo / Hunter / SerpApi) are opt-in per run.
   const [usePaid, setUsePaid] = useState(false);
   const [findLinkedin, setFindLinkedin] = useState(false);
+  // Pattern guesses (info@…) are off: they look real but often bounce or reach nobody.
+  const [allowGuesses, setAllowGuesses] = useState(false);
   const [scores, setScores] = useState<
     Record<
       string,
@@ -785,13 +788,14 @@ export function Scraper({
         (discoverSources[p.id] ?? []).map((s) => s[0].toUpperCase() + s.slice(1)).join("+") ||
         "Apollo",
     };
+    const preview = addToRaw(data.raw, [row]);
     update((prev) => {
       const withDenied = addToDenylist(prev, "accepted", [
         { name: p.name, company: p.company, email: p.email, website: p.website },
       ]);
-      return { ...withDenied, raw: [row, ...withDenied.raw] };
+      return { ...withDenied, raw: addToRaw(withDenied.raw, [row]).raw };
     });
-    setPushed((driven) => driven + 1);
+    setPushed((was) => ({ added: was.added + preview.added, updated: was.updated + preview.updated }));
     setResults((prev) => prev.filter((x) => x.id !== id));
     setSelected((s) => {
       const { [id]: _omit, ...rest } = s;
@@ -842,82 +846,62 @@ export function Scraper({
     setFilters({ ...filters, industry: next.join(", ") });
   }
 
-  async function stopRevealScan() {
-    if (!scanJob || stopBusy) return;
-    const id = scanJob.id;
-    setStopBusy(true);
-    try {
-      const cancel = () => cancelScan(id);
-      if (revealControl.current) await revealControl.current.stop(cancel);
-      else await cancel();
-      setScanJob((job) => job?.id === id ? { ...job, status: "cancelled" } : job);
-      setBanner({ live: true, text: "Reveal scan stopped. Completed results are saved." });
-      void refreshScans();
-    } catch (error) {
-      setBanner({ live: false, text: `Could not stop the scan: ${(error as Error).message}. Try again.` });
-    } finally {
-      setStopBusy(false);
-    }
-  }
+  // ---- Reveal engine ------------------------------------------------------
+  // Every Reveal click becomes a saved background scan (up to 2,000 businesses
+  // each). This tab drives every scan it knows about — one ~20 s step at a
+  // time, six websites read side by side — and paints rows as they land.
+  // Close the tab and the background timer carries on; open the scraper again
+  // and running scans are picked up automatically. Reveal can be pressed again
+  // while one runs: the new businesses join the queue instead of being ignored.
+  type RevealUpdate = {
+    email: string;
+    phone: string;
+    website: string;
+    source: string;
+    sourceUrl: string;
+    name: string;
+    title: string;
+    linkedin: string;
+    guessed: boolean;
+    score?: number;
+    scoreReasons?: string[];
+    ai?: LeadAi | null;
+  };
+  const driven = useRef<Map<string, ScanJobLite>>(new Map());
+  const inFlight = useRef<Map<string, Set<string>>>(new Map()); // job id -> business ids
+  const stopRequested = useRef(false);
+  const driving = useRef(false);
+  const pendingStarts = useRef(0);
+  const lastFullRead = useRef<Map<string, { cursor: number; at: number }>>(new Map());
 
-  async function revealEmails(targets: ScrapedPerson[], everything = false) {
-    if (revealControl.current) return;
-    // Enrich anyone missing an email OR a website (Apollo finds both; Google/Hunter fill gaps).
-    const list = everything ? targets.filter((p) => p.website || !p.email) : targets.filter((p) => p.emailLocked || !p.email || !p.website);
-    if (!list.length) return;
-    const control = createRevealScanControl();
-    revealControl.current = control;
-    setEnrichBusy(true);
-    setEnrichProgress({ done: 0, total: list.length });
-
-    const updates: Record<
-      string,
-      {
-        email: string;
-        phone: string;
-        website: string;
-        source: string;
-        sourceUrl: string;
-        name: string;
-        title: string;
-        linkedin: string;
-        guessed: boolean;
-        score?: number;
-        scoreReasons?: string[];
-        ai?: LeadAi | null;
-      }
-    > = {};
-    // BACKGROUND JOB. The server reads sites in ~20 s slices; this tab keeps
-    // asking for the next slice while open and paints rows as they land. If the
-    // tab closes, the 10-minute cron finishes the job and "Recent scans" shows it.
-    const apply = (rows: EnrichResult[]) => {
-      rows.forEach((r) => {
-        if (r.id)
-          updates[r.id] = {
-            email: r.email,
-            phone: r.phone,
-            website: r.website,
-            source: r.source,
-            sourceUrl: r.sourceUrl,
-            name: r.name || "",
-            title: r.title || "",
-            linkedin: r.linkedin || "",
-            guessed: !!r.guessed,
-            score: r.score,
-            scoreReasons: r.scoreReasons,
-            ai: r.ai ?? null,
-          };
-      });
-      if (rows.length) paint();
-    };
-    const paint = () => {
+  // Rows currently in the list: results for anything else (an older list) are ignored.
+  const listedIds = useRef<Set<string>>(new Set());
+  listedIds.current = new Set(results.map((p) => p.id));
+  const paintReveal = useCallback((batch: Record<string, RevealUpdate>) => {
+    const updates = Object.fromEntries(Object.entries(batch).filter(([id]) => listedIds.current.has(id)));
+    if (!Object.keys(updates).length) return;
+    // Only this batch is applied (never re-applies older results, so "Clear
+    // list" or reopening another scan isn't undone). Low-priority render: the
+    // page stays responsive while hundreds of rows update.
+    startTransition(() => {
       setResults((prev) =>
         prev.map((p) => {
           const u = updates[p.id];
           if (!u) return p;
+          const email = u.email || p.email;
+          if (
+            email === p.email &&
+            (u.phone || p.phone) === p.phone &&
+            (u.website || p.website) === p.website &&
+            (p.name || u.name) === p.name &&
+            (p.title || u.title) === p.title &&
+            (p.linkedin || u.linkedin) === p.linkedin &&
+            (u.email ? false : p.emailLocked) === p.emailLocked
+          )
+            return p;
           return {
             ...p,
-            email: u.email || p.email,
+            email,
             emailLocked: u.email ? false : p.emailLocked,
             phone: u.phone || p.phone,
             website: u.website || p.website,
@@ -949,8 +933,188 @@ export function Scraper({
         });
         return next;
       });
-    };
-    const people = list.map((p) => ({
+    });
+  }, []);
+
+  const applyRows = useCallback(
+    (rows: EnrichResult[]) => {
+      let any = false;
+      const batch: Record<string, RevealUpdate> = {};
+      for (const r of rows) {
+        if (!r.id) continue;
+        any = true;
+        batch[r.id] = {
+          email: r.email,
+          phone: r.phone,
+          website: r.website,
+          source: r.source,
+          sourceUrl: r.sourceUrl,
+          name: r.name || "",
+          title: r.title || "",
+          linkedin: r.linkedin || "",
+          guessed: !!r.guessed,
+          score: r.score,
+          scoreReasons: r.scoreReasons,
+          ai: r.ai ?? null,
+        };
+      }
+      if (any) paintReveal(batch);
+    },
+    [paintReveal],
+  );
+
+  function syncRevealProgress() {
+    const jobs = [...driven.current.values()];
+    const done = jobs.reduce((a, j) => a + j.cursor, 0);
+    const total = jobs.reduce((a, j) => a + j.total, 0);
+    setEnrichProgress({ done, total });
+    setScanJob(jobs.length ? { ...jobs[jobs.length - 1], cursor: done, total, label: jobs.length > 1 ? `${jobs.length} scans` : jobs[0].label } : null);
+  }
+
+  const isRunning = (j: ScanJobLite) => j.status === "running" || j.status === "queued";
+
+  async function driveScans() {
+    if (driving.current) return;
+    driving.current = true;
+    setEnrichBusy(true);
+    const warnings = new Set<string>();
+    const failures = new Map<string, number>();
+    try {
+      while (driven.current.size && !stopRequested.current) {
+        let progressed = false;
+        for (const job of [...driven.current.values()]) {
+          if (stopRequested.current) break;
+          if (!isRunning(job)) {
+            // Finished: read everything it saved once (covers steps another runner did), then let go.
+            const full: ScanJobFull | null = await scanStatus(job.id, true).catch(() => null);
+            if (full) applyRows(Object.values(full.results));
+            (full?.warnings ?? job.warnings ?? []).forEach((w) => warnings.add(w));
+            if (job.last_error) warnings.add(job.last_error);
+            driven.current.delete(job.id);
+            inFlight.current.delete(job.id);
+            continue;
+          }
+          try {
+            const r = await stepScan(job.id, async () => !stopRequested.current);
+            failures.delete(job.id);
+            if (r.claimed) {
+              applyRows(r.produced);
+              progressed = true;
+            } else {
+              // The background timer (or another tab) holds this scan right now.
+              // Read its saved results only when it has moved on, at most every
+              // 15 s — full results can be large.
+              const cursor = r.job?.cursor ?? job.cursor;
+              const seen = lastFullRead.current.get(job.id);
+              if (!seen || (cursor > seen.cursor && Date.now() - seen.at > 15_000)) {
+                lastFullRead.current.set(job.id, { cursor, at: Date.now() });
+                const full: ScanJobFull | null = await scanStatus(job.id, true).catch(() => null);
+                if (full) applyRows(Object.values(full.results));
+              }
+            }
+            if (driven.current.has(job.id)) driven.current.set(job.id, { ...job, ...(r.job ?? {}) });
+          } catch {
+            if (stopRequested.current) break;
+            const n = (failures.get(job.id) ?? 0) + 1;
+            failures.set(job.id, n);
+            if (n >= 4) {
+              warnings.add(`Lost contact with "${job.label}". Its progress is saved and it continues in the background — reopen it under Recent scans.`);
+              driven.current.delete(job.id);
+              inFlight.current.delete(job.id);
+            } else await new Promise((res) => setTimeout(res, 3000));
+          }
+          syncRevealProgress();
+        }
+        if (driven.current.size && !stopRequested.current)
+          await new Promise((res) => setTimeout(res, progressed ? 250 : 4000));
+      }
+    } finally {
+      driving.current = false;
+      setEnrichBusy(false);
+      syncRevealProgress();
+      if (!driven.current.size) setScanJob(null);
+      if (warnings.size)
+        setBanner((b) => ({
+          live: b?.live ?? true,
+          text: `${b?.text ?? ""} · ⚠ ${[...warnings].slice(0, 4).join(" · ")}`.replace(/^ · /, ""),
+        }));
+      void refreshScans();
+    }
+  }
+
+  /** Pick up scans that are still running (after a reload, or started in another tab). */
+  const attachRunning = useCallback((jobs: ScanJobLite[]) => {
+    if (stopRequested.current) return;
+    let added = false;
+    for (const j of jobs) {
+      if ((j.status === "running" || j.status === "queued") && !driven.current.has(j.id)) {
+        driven.current.set(j.id, j);
+        added = true;
+      }
+    }
+    if (added) {
+      syncRevealProgress();
+      void driveScans();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    attachRunning(recentScans);
+  }, [recentScans, attachRunning]);
+
+  async function stopRevealScan() {
+    if (stopBusy || (!driven.current.size && !pendingStarts.current)) return;
+    setStopBusy(true);
+    stopRequested.current = true;
+    while (pendingStarts.current) await new Promise((resolve) => setTimeout(resolve, 100));
+    const ids = [...driven.current.keys()];
+    try {
+      const results = await Promise.allSettled(ids.map((id) => cancelScan(id)));
+      const failed = results.filter((r) => r.status === "rejected").length;
+      // Only scans that really stopped are let go; any that couldn't be reached
+      // stay listed so Stop can be pressed again.
+      ids.forEach((id, i) => {
+        if (results[i].status === "rejected") return;
+        driven.current.delete(id);
+        inFlight.current.delete(id);
+      });
+      syncRevealProgress();
+      if (!driven.current.size) {
+        setScanJob(null);
+        setEnrichProgress({ done: 0, total: 0 });
+      }
+      setBanner({
+        live: !failed,
+        text: failed
+          ? `Stopped ${ids.length - failed} of ${ids.length} scans; ${failed} could not be reached — try Stop again.`
+          : "Reveal stopped. Everything read so far is saved.",
+      });
+    } finally {
+      // Wait for the loop to notice, then allow new reveals again.
+      while (driving.current) await new Promise((res) => setTimeout(res, 100));
+      if (!driven.current.size) stopRequested.current = false;
+      setStopBusy(false);
+      // A scan that couldn't be stopped is still running: keep showing (and
+      // reading) it so its results land and Stop can be tried again.
+      // Failed cancellation remains stopped client-side and retryable.
+      void refreshScans();
+    }
+  }
+
+  async function revealEmails(targets: ScrapedPerson[], everything = false) {
+    // Read anyone missing an email OR a website (the free website pass finds both).
+    const busy = new Set([...inFlight.current.values()].flatMap((ids) => [...ids]));
+    const list = (everything ? targets.filter((p) => p.website || !p.email) : targets.filter((p) => p.emailLocked || !p.email || !p.website))
+      .filter((p) => !busy.has(p.id));
+    if (!list.length) {
+      if (targets.some((p) => busy.has(p.id)))
+        setBanner({ live: true, text: "Those businesses are already being read — results appear as they land." });
+      return;
+    }
+    if (stopRequested.current) return;
+    setEnrichBusy(true);
+    pendingStarts.current++;
+    const people: ScanPerson[] = list.map((p) => ({
       id: p.id,
       name: p.name,
       domain: p.website,
@@ -962,84 +1126,49 @@ export function Scraper({
       city: p.city,
       industry: p.industry,
     }));
-    let warnings: string[] = [];
+    const options = { useClaude: sources.claude, usePaid, revealPhone, findLinkedin, allowGuesses };
     try {
-      const started = await startScan(
-        people,
-        { useClaude: sources.claude, usePaid, revealPhone, findLinkedin },
-        `${filters.industry || "scan"} · ${filters.location} · ${list.length}`,
-        control.canContinue,
-      );
-      let job: ScanJobLite | null = started.job;
-      setScanJob(job);
-      apply(started.produced);
-      setEnrichProgress({ done: job.cursor, total: job.total });
-      let idle = 0;
-      let failures = 0;
-      while (job && (job.status === "running" || job.status === "queued")) {
-        await new Promise((resolve) => setTimeout(resolve, 2200));
-        if (!(await control.canContinue())) break;
-        let r: Awaited<ReturnType<typeof stepScan>>;
-        try {
-          r = await stepScan(job.id, control.canContinue);
-          failures = 0;
-        } catch {
-          if (!(await control.canContinue())) break;
-          if (++failures >= 4) {
-            warnings.push("Lost contact with the scan. Progress is saved; reopen it from Recent scans to continue.");
-            break;
-          }
-          await new Promise((resolve) => setTimeout(resolve, 5000));
-          if (!(await control.canContinue())) break;
-          const saved: ScanJobFull | null = await scanStatus(job.id, true).catch(() => null);
-          if (saved) {
-            apply(Object.values(saved.results));
-            job = saved;
-            setScanJob(saved);
-            setEnrichProgress({ done: saved.cursor, total: saved.total });
-          }
-          continue;
+      for (let offset = 0; offset < people.length; offset += 2000) {
+        if (stopRequested.current) break;
+        const slice = people.slice(offset, offset + 2000);
+        const started = await startScan(
+          slice,
+          options,
+          `${filters.industry || "scan"} · ${filters.location} · ${slice.length}`,
+          async () => !stopRequested.current,
+        );
+        if (!started.job) continue;
+        if (stopRequested.current) {
+          driven.current.set(started.job.id, started.job);
+          break;
         }
-        // Keep completed rows even when Stop lands during the request.
-        if (r.claimed) apply(r.produced);
-        if (!(await control.canContinue())) break;
-        if (r.claimed) {
-          idle = 0;
-        } else {
-          // The cron grabbed it (we were slow / another tab): watch instead.
-          await new Promise((res) => setTimeout(res, 4000));
-          if (!(await control.canContinue())) break;
-          if (++idle % 3 === 0) {
-            const full: ScanJobFull | null = await scanStatus(job.id, true);
-            if (full) {
-              apply(Object.values(full.results));
-              job = full;
-              setScanJob(full);
-              setEnrichProgress({ done: full.cursor, total: full.total });
-              continue;
-            }
-          }
-        }
-        job = r.job ?? job;
-        setScanJob(job);
-        if (job) setEnrichProgress({ done: job.cursor, total: job.total });
+        inFlight.current.set(started.job.id, new Set(slice.map((p) => p.id)));
+        driven.current.set(started.job.id, started.job);
+        applyRows(started.produced);
+        syncRevealProgress();
       }
-      warnings = [...warnings, ...(job?.warnings ?? [])];
-      if (job?.last_error) warnings = [...warnings, job.last_error];
-      void refreshScans();
     } catch (e) {
-      warnings = [(e as Error).message];
-    }
-    if (warnings.length)
       setBanner((b) => ({
         live: b?.live ?? true,
-        text: `${b?.text ?? ""} · ⚠ ${warnings.join(" · ")}`.replace(/^ · /, ""),
+        text: `${b?.text ?? ""} · ⚠ ${(e as Error).message}`.replace(/^ · /, ""),
       }));
+    }
+    pendingStarts.current--;
+    if (driven.current.size && !stopRequested.current) void driveScans();
+    else if (!driving.current) setEnrichBusy(false);
+  }
 
-    paint();
-    setEnrichBusy(false);
-    setScanJob(null);
-    revealControl.current = null;
+  const [openingId, setOpeningId] = useState<string | null>(null);
+  /** From the Recent scans list: ask before replacing the businesses on screen. */
+  async function reopenScan(id: string) {
+    if (openingId) return;
+    if (results.length && !window.confirm(`Replace the ${results.length} businesses on screen with this scan's results?`)) return;
+    setOpeningId(id);
+    try {
+      await openScan(id);
+    } finally {
+      setOpeningId(null);
+    }
   }
 
   /** Reopen a stored scan: rebuild the rows from what the job read. */
@@ -1108,7 +1237,8 @@ export function Scraper({
     }
     setScrapeBusy(true);
     setBanner(null);
-    setPushed(0);
+    setPushed({ added: 0, updated: 0 });
+    setRenderLimit(150);
     setAiProgress({ done: 0, total: 0 });
     let g = geo;
     if (!g) {
@@ -1174,6 +1304,9 @@ export function Scraper({
     ? [...visibleResults].sort((a, b) => scoreOf(b) - scoreOf(a))
     : visibleResults;
   const scoredCount = results.filter((p) => scores[p.id]).length;
+  // Long lists render in pages so painting reveal results never freezes the screen.
+  const [renderLimit, setRenderLimit] = useState(150);
+  const shownRows = ordered.slice(0, renderLimit);
 
   function selectTop(fraction: number) {
     const ranked = [...results].sort((a, b) => scoreOf(b) - scoreOf(a));
@@ -1218,9 +1351,10 @@ export function Scraper({
           website: p.website,
         })),
       );
-      return { ...withDenied, raw: [...rows, ...withDenied.raw] };
+      return { ...withDenied, raw: addToRaw(withDenied.raw, rows).raw };
     });
-    setPushed(rows.length);
+    const preview = addToRaw(data.raw, rows);
+    setPushed({ added: preview.added, updated: preview.updated });
     const acceptedIds = new Set(selectedPeople.map((p) => p.id));
     setResults((prev) => prev.filter((p) => !acceptedIds.has(p.id)));
     setSelected({});
@@ -1586,6 +1720,13 @@ export function Scraper({
             Phones
           </button>
           <button
+            onClick={() => setAllowGuesses((v) => !v)}
+            className={pill(allowGuesses)}
+            title="When a site publishes no address, fill in a guess like info@domain. Off by default: guesses are marked GUESS, often bounce, and are never emailed unless you include them on purpose."
+          >
+            Guess missing emails
+          </button>
+          <button
             onClick={() => setFilters({ ...filters, includeSeen: !filters.includeSeen })}
             className={pill(!filters.includeSeen)}
             title="Hide businesses that any earlier scan already returned, or that are already in Leads"
@@ -1849,58 +1990,24 @@ export function Scraper({
         )}
       </Panel>
 
-      {((scanJob && (scanJob.status === "running" || scanJob.status === "queued")) || recentScans.some((j) => j.status === "running" || j.status === "queued")) && (
+      {scanJob && (scanJob.status === "running" || scanJob.status === "queued") && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm">
           <Loader2 className="h-4 w-4 animate-spin text-primary" />
-          {scanJob ? (
-            <>
-              <span>
-                Reading websites in the background — <b>{scanJob.cursor}</b> / {scanJob.total}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                Progress is saved. Automatic continuation depends on the scheduler.
-              </span>
-              <Btn variant="ghost"
-                className="ml-auto text-xs"
-                onClick={() => void stopRevealScan()}
-                disabled={stopBusy}
-              >
-                {stopBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquareStop className="h-4 w-4" />}
-                {stopBusy ? "Stopping…" : "Stop reveal"}
-              </Btn>
-            </>
-          ) : (
-            <span>
-              A scan is still running in the background —{" "}
-              {recentScans
-                .filter((j) => j.status === "running" || j.status === "queued")
-                .map((j) => `${j.label} (${j.cursor}/${j.total})`)
-                .join(", ")}
-              . Progress saved.
-            </span>
-          )}
-        </div>
-      )}
-      {recentScans.length > 0 && !scanJob && (
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-muted-foreground">Recent scans</span>
-          {recentScans.slice(0, 6).map((j) => (
-            <Btn variant="ghost"
-              key={j.id}
-              onClick={() => void openScan(j.id)}
-              title={`${j.status} · ${new Date(j.created_at).toLocaleString()}${j.last_error ? ` · ${j.last_error}` : ""}`}
-              className={`rounded-full border px-2.5 py-1 hover:bg-secondary ${
-                j.status === "running" || j.status === "queued"
-                  ? "border-primary/50"
-                  : j.status === "failed"
-                    ? "border-destructive/50 text-destructive"
-                    : "border-border"
-              }`}
-            >
-              {j.label.length > 40 ? j.label.slice(0, 40) + "…" : j.label} · {j.cursor}/{j.total}
-              {j.status === "running" || j.status === "queued" ? " · running" : ""}
-            </Btn>
-          ))}
+          <span className="tabular-nums">
+            Reading websites — <b>{scanJob.cursor}</b> / {scanJob.total}
+            {scanJob.label && /^\d+ scans$/.test(scanJob.label) ? ` · ${scanJob.label}` : ""}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            Saved as it goes; keeps reading in the background while the background timer is on.
+          </span>
+          <Btn variant="ghost"
+            className="ml-auto text-xs"
+            onClick={() => void stopRevealScan()}
+            disabled={stopBusy}
+          >
+            {stopBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquareStop className="h-4 w-4" />}
+            {stopBusy ? "Stopping…" : "Stop reveal"}
+          </Btn>
         </div>
       )}
       {banner && (
@@ -1920,10 +2027,11 @@ export function Scraper({
         </div>
       )}
 
-      {pushed > 0 && (
+      {pushed.added + pushed.updated > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl bg-secondary px-4 py-2.5 text-sm">
           <CheckSquare className="h-4 w-4 text-[oklch(.6_.15_150)]" />
-          {pushed} added to Raw Data.
+          {pushed.added} added to Raw Data
+          {pushed.updated > 0 && ` · ${pushed.updated} already there (missing details filled in, no duplicate)`}.
           <button onClick={() => go("raw")} className="font-semibold text-primary hover:underline">
             Open Raw Data
           </button>
@@ -2000,12 +2108,13 @@ export function Scraper({
                   <Btn
                     variant="ghost"
                     onClick={() => revealEmails(selectedPeople)}
-                    disabled={enrichBusy || !selectedPeople.length}
+                    disabled={stopBusy || !selectedPeople.length}
+                    title={enrichBusy ? "Add the selected businesses to the running reveal" : "Read the selected businesses' websites for owner, email and phone"}
                   >
                     {enrichBusy ? (
                       <>
-                        <Loader2 className="h-4 w-4 animate-spin" /> {enrichProgress.done}/
-                        {enrichProgress.total}
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="tabular-nums">{enrichProgress.done}/{enrichProgress.total}</span>
                       </>
                     ) : (
                       <>
@@ -2017,8 +2126,8 @@ export function Scraper({
                     <Btn
                       variant="ghost"
                       onClick={() => void stopRevealScan()}
-                      disabled={stopBusy || !scanJob}
-                      title="Stop reveal scan"
+                      disabled={stopBusy || (!scanJob && !pendingStarts.current)}
+                      title="Stop every running reveal (what's read so far stays saved)"
                       className="text-destructive"
                     >
                       {stopBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <SquareStop className="h-4 w-4" />}
@@ -2081,7 +2190,7 @@ export function Scraper({
                     </tr>
                   </thead>
                   <tbody>
-                    {ordered.map((p) => {
+                    {shownRows.map((p) => {
                       const on = !!selected[p.id];
                       const sc = scores[p.id];
                       const open = expanded === p.id;
@@ -2193,7 +2302,7 @@ export function Scraper({
                               {p.emailLocked || !p.email ? (
                                 <button
                                   onClick={() => revealEmails([p])}
-                                  disabled={enrichBusy}
+                                  disabled={stopBusy}
                                   className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-semibold text-primary hover:bg-secondary disabled:opacity-50"
                                 >
                                   <Sparkles className="h-3 w-3" /> Reveal
@@ -2295,6 +2404,17 @@ export function Scraper({
                   </tbody>
                 </table>
               </div>
+              {ordered.length > shownRows.length && (
+                <div className="flex items-center justify-center gap-3 border-t border-border px-4 py-2.5 text-xs text-muted-foreground">
+                  Showing {shownRows.length} of {ordered.length}
+                  <Btn variant="ghost" onClick={() => setRenderLimit((n) => n + 150)}>
+                    Show 150 more
+                  </Btn>
+                  <Btn variant="ghost" onClick={() => setRenderLimit(ordered.length)}>
+                    Show all
+                  </Btn>
+                </div>
+              )}
               <div className="flex items-center justify-between border-t border-border px-4 py-2 text-xs text-muted-foreground">
                 <span>
                   Score: can we reach them · is it a real business · is there visible room to
@@ -2380,6 +2500,8 @@ export function Scraper({
               ))}
             </dl>
           </Panel>
+
+          <RecentScans scans={recentScans} onOpen={(id) => void reopenScan(id)} openingId={openingId} />
 
           <Panel>
             <button

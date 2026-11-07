@@ -8,7 +8,8 @@
  * never does more than ~30 websites.
  */
 
-import { Db, enc } from "./db";
+import { Db, enc, pgQuote } from "./db";
+import { isCompanyDomain } from "./business-key";
 import { discoverCore, type DiscoverFilters } from "./api-proxies";
 import { scoreLead } from "./providers/free-enrich";
 import { enrichSite, enrichMany } from "./enrich-site";
@@ -197,7 +198,8 @@ export async function runSavedSearch(env: Env, db: Db, ss: SavedSearch): Promise
               email: email.toLowerCase(),
               email_source: guessed ? "Guess" : "Website",
               email_guessed: guessed,
-              email_verified: mx ? "mx_ok" : "unknown",
+              // A guessed address is never "verified" by its domain having a mail server.
+              email_verified: !guessed && mx ? "mx_ok" : "unknown",
               phone,
               linkedin,
               city: b.city || b.address,
@@ -244,16 +246,21 @@ export async function runSavedSearch(env: Env, db: Db, ss: SavedSearch): Promise
           revenueBands: ss.filters?.revenueBands,
         },
       );
-      if (seq && email && sc.score >= ss.min_score && !filteredOut) {
+      // Guessed addresses are saved for review but never emailed automatically.
+      if (seq && email && !guessed && sc.score >= ss.min_score && !filteredOut) {
         const sup = await db.one(
           "suppressions",
-          `or=(email.eq.${enc(email.toLowerCase())},domain.eq.${enc(website)})&select=id`,
+          `or=(email.eq.${enc(pgQuote(email.toLowerCase()))}${isCompanyDomain(website) ? `,domain.eq.${enc(pgQuote(website))}` : ""})&select=id`,
         );
         const dup = await db.one(
           "enrollments",
           `sequence_id=eq.${seq.id}&lead_id=eq.${lead.id}&select=id`,
         );
-        if (!sup && !dup) {
+        // Never put someone into a second running sequence.
+        const elsewhere = dup
+          ? null
+          : await db.one("enrollments", `lead_id=eq.${lead.id}&status=in.(queued,active,paused)&select=id`);
+        if (!sup && !dup && !elsewhere) {
           const mailboxId = seq.mailbox_ids.length
             ? seq.mailbox_ids[i % seq.mailbox_ids.length]
             : null;
@@ -287,21 +294,25 @@ export async function runSavedSearch(env: Env, db: Db, ss: SavedSearch): Promise
 export async function runDueSavedSearches(
   env: Env,
   db: Db,
+  opts: { limit?: number } = {},
 ): Promise<{ ran: string[]; errors: string[] }> {
   const res = { ran: [] as string[], errors: [] as string[] };
   const due = await db.select<SavedSearch>(
     "saved_searches",
-    `schedule=neq.off&next_run_at=lte.${enc(new Date().toISOString())}&select=*&order=next_run_at.asc&limit=3`,
+    `schedule=neq.off&next_run_at=lte.${enc(new Date().toISOString())}&select=*&order=next_run_at.asc&limit=${Math.max(1, Math.min(3, opts.limit ?? 3))}`,
   );
   for (const ss of due) {
     try {
-      // Claim it first so two overlapping crons don't both run it.
+      // Claim it first so two overlapping schedulers don't both run it.
       const next = new Date(
         Date.now() + (ss.schedule === "daily" ? 1 : 7) * 86_400_000,
       ).toISOString();
-      await db.update("saved_searches", `id=eq.${ss.id}&next_run_at=eq.${enc(ss.next_run_at!)}`, {
-        next_run_at: next,
-      });
+      const claimed = await db.update<{ id: string }>(
+        "saved_searches",
+        `id=eq.${ss.id}&next_run_at=eq.${enc(ss.next_run_at)}&select=id`,
+        { next_run_at: next },
+      );
+      if (!claimed.length) continue;
       const r = await runSavedSearch(env, db, ss);
       await db.update("saved_searches", `id=eq.${ss.id}`, {
         last_run_at: r.ran_at,

@@ -3,9 +3,8 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { handleApiRequest } from "./lib/api-proxies";
-import { runDispatch } from "./lib/sequencer";
 import { resolveIntegrationEnv } from "./lib/integration-settings.server";
-import { continueScanJobs } from "./lib/scan-jobs.server";
+import { runTick } from "./lib/tick";
 import { MAX_API_BODY_BYTES, MAX_CONTACT_BODY_BYTES, readBoundedBody, securityJson } from "./lib/request-security";
 
 type ServerEntry = {
@@ -72,18 +71,23 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
 }
 
 export default {
-  /** Cloudflare Cron Trigger (see wrangler.jsonc) — sends due outreach steps and syncs inboxes. */
+  /**
+   * Cloudflare Cron Trigger (wrangler.jsonc, every minute): one background tick —
+   * sends due outreach emails (paced by each sequence's gap), syncs inboxes and
+   * moves background scans on. The database timer (/api/cron/tick) does the
+   * same if the host doesn't run Cloudflare crons.
+   */
   async scheduled(
     _event: unknown,
     env: unknown,
     ctx: { waitUntil: (p: Promise<unknown>) => void },
   ) {
     const e = (env ?? {}) as Record<string, string | undefined>;
-    ctx.waitUntil(resolveIntegrationEnv(e).then(continueScanJobs).catch((error) => console.error("Scan continuation failed", error)));
     ctx.waitUntil(
-      resolveIntegrationEnv(e).then((configured) => runDispatch(configured, { origin: e.PUBLIC_ORIGIN, source: "cron" }))
-        .then((r) => console.log("[outreach] dispatch", JSON.stringify(r)))
-        .catch((err) => console.error("[outreach] dispatch failed", err)),
+      resolveIntegrationEnv(e)
+        .then((configured) => runTick(configured, { trigger: "cron", origin: e.PUBLIC_ORIGIN }))
+        .then((r) => console.log("[outreach] tick", JSON.stringify({ ...r, dispatch: r.dispatch?.mailboxes })))
+        .catch((err) => console.error("[outreach] tick failed", err)),
     );
   },
 
@@ -98,10 +102,25 @@ export default {
           return securityJson({ error: "Request is too large or could not be read." }, 413);
         }
       }
+      // In the production build Nitro calls this with the request only; it hangs
+      // the Worker's waitUntil (and env) on the request itself. Without it, a
+      // closed tab could cut a send in half.
+      const cf = request as Request & {
+        waitUntil?: (p: Promise<unknown>) => void;
+        runtime?: { cloudflare?: { env?: unknown } };
+      };
+      const given = ctx as { waitUntil?: (p: Promise<unknown>) => void } | undefined;
+      const waitCtx =
+        typeof given?.waitUntil === "function"
+          ? (given as { waitUntil: (p: Promise<unknown>) => void })
+          : typeof cf.waitUntil === "function"
+            ? { waitUntil: cf.waitUntil }
+            : undefined;
       // Same-origin API proxies (Apollo scraper, geocoding, GHL) run first.
       const apiResponse = await handleApiRequest(
         request,
-        (env ?? {}) as Record<string, string | undefined>,
+        (env ?? cf.runtime?.cloudflare?.env ?? {}) as Record<string, string | undefined>,
+        waitCtx,
       );
       if (apiResponse) return apiResponse;
 

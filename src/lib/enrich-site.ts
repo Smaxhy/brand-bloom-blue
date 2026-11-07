@@ -17,7 +17,7 @@
 
 import { anthropicProblem } from "./anthropic-error";
 import { findOwnerLinkedin } from "./providers/websearch";
-import { freeEnrich, type SiteSignals } from "./providers/free-enrich";
+import { freeEnrich, emailPlausible, type SiteSignals } from "./providers/free-enrich";
 import type { Db } from "./db";
 
 type Env = Record<string, string | undefined>;
@@ -26,7 +26,7 @@ const secret = (e: Env, k: string) => e[k] || process.env?.[k];
 const OWNERISH =
   /\b(owner|founder|co-founder|ceo|president|principal|proprietor|managing director|director|zaakvoerder|eigenaar|oprichter|bestuurder|g[ée]rant|fondateur|directeur|inhaber|geschäftsführer)\b/i;
 const CACHE_DAYS = 30;
-const EMAIL_EXTRACTION_VERSION = 2;
+const EMAIL_EXTRACTION_VERSION = 3;
 const BUSINESS_WORDS =
   /\b(roofing|roofers?|plumbing|plumbers?|hvac|heating|cooling|electric(al)?|landscap\w*|lawn|tree|dental|dentistry|clinic|law|legal|realty|real estate|construction|contractors?|services?|solutions|group|company|co\.?|inc\.?|llc|ltd|bv|bvba|nv|gmbh|sarl|srl|studio|salon|spa|shop|store|center|centre|agency|partners|associates|brothers|sons|team|home|house|auto|motors?|cleaning|painting|design|media|marketing|consulting|insurance|bank|church|school|academy)\b/i;
 
@@ -109,7 +109,17 @@ function cleanDomain(u: string): string {
 
 /* ------------------------------------------------------------------ cache */
 
-async function readCache(db: Db | null | undefined, domain: string): Promise<SiteProfile | null> {
+/** A cached address that the current rules would not accept (web designer, supplier, form service). */
+function cachedEmailRejected(p: SiteProfile, domain: string, company?: string, city?: string): boolean {
+  if (!p.email || p.emailGuessed) return false;
+  try {
+    return !emailPlausible(p.email, { domains: [domain, p.website].filter(Boolean), company, owner: p.name, city, fromOwnSite: true });
+  } catch {
+    return false;
+  }
+}
+
+async function readCache(db: Db | null | undefined, domain: string, company?: string, city?: string): Promise<SiteProfile | null> {
   if (!db) return null;
   try {
     const since = new Date(Date.now() - CACHE_DAYS * 86400e3).toISOString();
@@ -121,6 +131,8 @@ async function readCache(db: Db | null | undefined, domain: string): Promise<Sit
     // no MX. Re-crawl those incomplete profiles rather than retaining the loss.
     if (row?.data && !row.data.email && row.data.mx === false) return null;
     if (row?.data && row.data.emailExtractionVersion !== EMAIL_EXTRACTION_VERSION) return null;
+    // Re-read sites whose cached email came from someone else's domain.
+    if (row?.data && cachedEmailRejected(row.data, domain, company, city)) return null;
     return row?.data ? { ...row.data, cached: true } : null;
   } catch {
     return null; // table missing or RLS — just crawl
@@ -341,7 +353,7 @@ export async function enrichSite(env: Env, o: EnrichSiteOpts): Promise<SiteProfi
   )
     return null;
 
-  const hit = await readCache(o.db, domain);
+  const hit = await readCache(o.db, domain, o.company, o.city);
   if (hit) {
     // Cached before the LinkedIn lookup existed (or it found nothing then):
     // one targeted search now, written back so it's not repeated.
@@ -355,7 +367,7 @@ export async function enrichSite(env: Env, o: EnrichSiteOpts): Promise<SiteProfi
     return hit;
   }
 
-  const fe = await freeEnrich({ website: domain, ownerName: o.ownerName, companyName: o.company, tiered: true });
+  const fe = await freeEnrich({ website: domain, ownerName: o.ownerName, companyName: o.company, city: o.city, tiered: true });
   if (!fe.ok) return null;
 
   const siteEmails = fe.emails.filter((e) => e.source === "site");

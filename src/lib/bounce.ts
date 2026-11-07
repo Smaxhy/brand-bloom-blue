@@ -12,6 +12,7 @@
 
 import { Db, enc } from "./db";
 import { hasMx } from "./providers/free-enrich";
+import { isCompanyDomain } from "./business-key";
 
 type Env = Record<string, string | undefined>;
 
@@ -78,6 +79,41 @@ export function classifyBounce(subject: string, text: string): "hard" | "soft" {
   return "hard";
 }
 
+export type SuppressionReason = "unsubscribe" | "bounce" | "replied_stop" | "manual" | "complaint";
+
+/**
+ * Put an address (and optionally its company domain) on the do-not-contact list.
+ *
+ * The table's only unique index is on lower(email) (and partial), which an
+ * upsert's on_conflict can't target — every upsert used to fail, so nothing was
+ * ever saved. Now: look first, insert, and treat "added meanwhile" as done.
+ */
+export async function addSuppression(
+  db: Pick<Db, "one" | "insert" | "update">,
+  s: { email?: string | null; domain?: string | null; reason: SuppressionReason; note?: string },
+): Promise<void> {
+  const email = s.email ? normalizeEmail(s.email) : "";
+  // Only a domain that belongs to ONE company may block a whole company — never
+  // gmail.com or facebook.com (that would block everyone there).
+  const cleaned = (s.domain || "").toLowerCase().trim();
+  const domain = isCompanyDomain(cleaned) ? cleaned : null;
+  if (!email && !domain) return;
+  const existing = email
+    ? await db.one<{ id: string; domain: string | null }>("suppressions", `email=eq.${enc(email)}&select=id,domain`)
+    : await db.one<{ id: string; domain: string | null }>("suppressions", `email=is.null&domain=eq.${enc(domain ?? "")}&select=id,domain`);
+  if (existing) {
+    // Already listed; a company domain learned later is added to the row.
+    if (email && domain && !existing.domain) await db.update("suppressions", `id=eq.${existing.id}`, { domain });
+    return;
+  }
+  try {
+    await db.insert("suppressions", { email: email || null, domain, reason: s.reason, note: (s.note || "").slice(0, 200) });
+  } catch (err) {
+    if (/\b(409|23505)\b|duplicate key/i.test((err as Error).message)) return; // added by someone else meanwhile
+    throw err;
+  }
+}
+
 /**
  * One hard bounce (or a failed pre-send check): suppress the address, flag the
  * lead, stop THIS enrollment and every other queued/active one for the lead.
@@ -90,56 +126,66 @@ export async function applyHardBounce(
     enrollmentId?: string | null;
     reason: "bounce" | "verify_invalid";
     note: string;
+    /** Let write errors through (inbox sync: a bounce must not be recorded as handled if it wasn't applied). */
+    strict?: boolean;
   },
 ): Promise<void> {
   const email = p.email.toLowerCase().trim();
+  const soft = <T,>(work: Promise<T>) => (p.strict ? work : work.catch(() => undefined));
+  // A real bounce (or a domain with no mail server) blacklists the company, as
+  // asked; a verifier rejecting one address at a working domain blocks only
+  // that address — another address there may be fine.
+  const companyWide = p.reason === "bounce" || /no mail server/i.test(p.note);
   if (email)
-    await db
-      .upsert(
-        "suppressions",
-        {
-          email,
-          domain: p.lead?.domain ?? null,
-          reason: "bounce", // suppressions.reason is a fixed set; the note says whether it was pre-send
-          note: (p.reason === "verify_invalid" ? `pre-send: ${p.note}` : p.note).slice(0, 200),
-        },
-        "email",
-      )
-      .catch(() => {});
-  if (p.lead?.id)
-    await db.update("leads", `id=eq.${p.lead.id}`, { email_verified: "invalid" }).catch(() => {});
+    await soft(
+      addSuppression(db, {
+        email,
+        domain: companyWide ? (p.lead?.domain ?? null) : null,
+        reason: "bounce", // suppressions.reason is a fixed set; the note says whether it was pre-send
+        note: p.reason === "verify_invalid" ? `pre-send: ${p.note}` : p.note,
+      }),
+    );
+  if (p.lead?.id) await soft(db.update("leads", `id=eq.${p.lead.id}`, { email_verified: "invalid" }));
   if (p.enrollmentId)
-    await db
-      .update("enrollments", `id=eq.${p.enrollmentId}`, {
+    await soft(
+      db.update("enrollments", `id=eq.${p.enrollmentId}`, {
         status: "bounced",
         last_error:
           p.reason === "bounce" ? `bounced: ${p.note.slice(0, 120)}` : p.note.slice(0, 160),
-      })
-      .catch(() => {});
+      }),
+    );
   // Every other sequence this lead sits in: stop before it bounces again.
   if (p.lead?.id)
-    await db
-      .update(
+    await soft(
+      db.update(
         "enrollments",
         `lead_id=eq.${p.lead.id}&status=in.(queued,active,paused)${p.enrollmentId ? `&id=neq.${p.enrollmentId}` : ""}`,
         { status: "bounced", last_error: "email bounced in another sequence" },
-      )
-      .catch(() => {});
+      ),
+    );
 }
 
 /** A soft bounce: push the enrollment two days out; a second one becomes hard. */
 export async function applySoftBounce(
   db: Db,
-  en: { id: string; last_error?: string | null } | null,
+  en: { id: string; last_error?: string | null; next_send_at?: string | null } | null,
   note: string,
 ): Promise<"retry" | "gave_up"> {
   if (!en) return "retry";
   if (/soft bounce/i.test(en.last_error || "")) return "gave_up";
+  // Never later than planned already (a follow-up a week out stays a week out).
+  const planned = Date.parse(en.next_send_at || "") || 0;
+  const next = Math.max(planned, Date.now() + 2 * 86400e3);
   await db
-    .update("enrollments", `id=eq.${en.id}`, {
-      next_send_at: new Date(Date.now() + 2 * 86400e3).toISOString(),
-      last_error: `soft bounce — retrying in 2 days (${note.slice(0, 100)})`,
-    })
+    .update(
+      "enrollments",
+      // …and never over a send that is happening right now (its "sending" mark).
+      `id=eq.${en.id}&or=(last_error.is.null,last_error.not.like.${enc("sending step*")})`,
+      {
+        next_send_at: new Date(next).toISOString(),
+        last_error: `soft bounce — retrying in 2 days (${note.slice(0, 100)})`,
+      },
+    )
     .catch(() => {});
   return "retry";
 }

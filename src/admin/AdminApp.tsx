@@ -38,6 +38,7 @@ import { SettingsView } from "./views/SettingsView";
 import { Statistics } from "./views/Statistics";
 import { TeamUsers } from "./views/TeamUsers";
 import { UserPlus } from "lucide-react";
+import { browserTick } from "./outreach";
 
 type ViewId =
   | "dashboard"
@@ -97,6 +98,8 @@ export function AdminApp() {
     let currentUserId: string | null = null;
     let hydratingUserId: string | null = null; // blocks duplicate hydrations racing at startup
     let signOutTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastSignedInAt = 0;
+    const currentUserIdStillValid = () => Date.now() - lastSignedInAt < 4000;
 
     function tearDown() {
       currentUserId = null;
@@ -110,20 +113,51 @@ export function AdminApp() {
       unsubData = null;
     }
 
+    /**
+     * Supabase reports "no session" for many temporary reasons: a token refresh
+     * racing another tab, a phone waking up without network yet, a slow
+     * connection. Only show the login screen when the saved login is really
+     * gone — never because of a hiccup.
+     */
+    let confirming = false;
+    async function confirmSignedOut(): Promise<boolean> {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session?.user?.id) return false;
+        if (typeof navigator !== "undefined" && navigator.onLine === false) return false; // wait for the network
+        try {
+          const { data: refreshed, error } = await supabase.auth.refreshSession();
+          if (refreshed.session?.user?.id) return false;
+          // "session missing" / "invalid refresh token" = really signed out.
+          if (error && !/network|fetch|timeout|load failed|temporarily|5\d\d/i.test(error.message)) return true;
+        } catch {
+          /* network trouble: try again */
+        }
+        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+      }
+      return true;
+    }
+
     async function verifyAndHydrate(userId: string | undefined) {
       if (!userId) {
-        // Supabase briefly reports "no session" while a token refresh is in flight
-        // (very common with the admin open in two tabs). Wait a moment: if the
-        // same user comes straight back, keep the screen exactly as it is.
         if (signOutTimer) clearTimeout(signOutTimer);
         signOutTimer = setTimeout(() => {
           signOutTimer = null;
-          void supabase.auth.getSession().then(({ data: { session } }) => {
-            if (!session?.user?.id) tearDown();
-          });
-        }, 3000);
+          if (confirming) return;
+          confirming = true;
+          void confirmSignedOut()
+            .then((gone) => {
+              if (gone && !currentUserIdStillValid()) tearDown();
+            })
+            .finally(() => {
+              confirming = false;
+            });
+        }, 1500);
         return;
       }
+      lastSignedInAt = Date.now();
       if (signOutTimer) {
         clearTimeout(signOutTimer);
         signOutTimer = null;
@@ -161,7 +195,21 @@ export function AdminApp() {
         setData(null);
         return;
       }
-      const list = (roles ?? []).map((r) => r.role);
+      let list = (roles ?? []).map((r) => r.role);
+      if (!list.length) {
+        // An empty answer can come from a request sent while the login token
+        // was being refreshed. Ask once more before deciding there is no role.
+        await new Promise((r) => setTimeout(r, 1200));
+        const again = await supabase.from("user_roles").select("role").eq("user_id", userId);
+        if (again.error) {
+          hydratingUserId = null;
+          setAuthed(true);
+          setLoadError("Your login worked, but the role check is temporarily unavailable. Your data was not changed.");
+          setData(null);
+          return;
+        }
+        list = (again.data ?? []).map((r) => r.role);
+      }
       const resolved: TeamRole | null = list.includes("ceo")
         ? "ceo"
         : list.includes("admin")
@@ -198,7 +246,12 @@ export function AdminApp() {
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       // Only react to real sign-in/out. TOKEN_REFRESHED / USER_UPDATED fire
-      // on tab focus and would otherwise cause a flicker / data reload.
+      // on tab focus and would otherwise cause a flicker / data reload —
+      // except when we're showing the login screen and the session came back.
+      if (event === "TOKEN_REFRESHED" && session?.user?.id && !currentUserId) {
+        void verifyAndHydrate(session.user.id);
+        return;
+      }
       if (
         event !== "SIGNED_IN" &&
         event !== "SIGNED_OUT" &&
@@ -213,10 +266,26 @@ export function AdminApp() {
       void verifyAndHydrate(session?.user?.id);
     });
 
+    // Back online / back to the tab: pick the saved login up again if the
+    // screen fell back to the login form while the network was away.
+    const recover = () => {
+      if (currentUserId || hydratingUserId) return;
+      void supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user?.id) void verifyAndHydrate(session.user.id);
+      });
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") recover();
+    };
+    window.addEventListener("online", recover);
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
       sub.subscription.unsubscribe();
       if (signOutTimer) clearTimeout(signOutTimer);
       unsubData?.();
+      window.removeEventListener("online", recover);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
 
@@ -233,6 +302,30 @@ export function AdminApp() {
     },
     [],
   );
+
+  // Background keep-alive: while any admin tab is open, emails keep going out
+  // and background scans keep reading websites even if no server timer runs.
+  // The server ignores these calls while the real scheduler is running.
+  const canPump = authed && !!data && (role === "admin" || role === "ceo");
+  useEffect(() => {
+    if (!canPump) return;
+    let busy = false;
+    const beat = () => {
+      if (busy) return;
+      busy = true;
+      void browserTick()
+        .catch(() => undefined)
+        .finally(() => {
+          busy = false;
+        });
+    };
+    const first = setTimeout(beat, 20_000);
+    const every = setInterval(beat, 60_000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(every);
+    };
+  }, [canPump]);
 
   const nav = useMemo(() => {
     if (role === "ceo") {

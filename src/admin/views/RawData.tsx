@@ -137,7 +137,8 @@ export function RawData({
         start: (people) => startScan(people, { useClaude: false, usePaid: false, revealPhone: true, findLinkedin: false }, `Raw Data · ${people.length} businesses`, control.canContinue),
         step: (id) => stepScan(id, control.canContinue), status: (id) => scanStatus(id, true),
         canContinue: control.canContinue,
-        wait: () => new Promise((resolve) => setTimeout(resolve, 3500)),
+        // The server step itself takes ~20 s; no need for a long pause between steps.
+        wait: () => new Promise((resolve) => setTimeout(resolve, 400)),
         onJob: setRevealJob, onRows: apply,
         onProgress: (done, total) => setRevealProgress({ done, total }),
       });
@@ -483,7 +484,7 @@ export function RawData({
       </p>
 
       <Panel className="overflow-x-auto p-0">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[880px] text-sm">
           <thead>
             <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
               <th className="w-10 px-2 py-3 text-center">
@@ -498,7 +499,7 @@ export function RawData({
                 />
               </th>
               <th className="px-4 py-3 font-semibold">Business</th>
-              <th className="px-4 py-3 font-semibold">Email</th>
+              <th className="min-w-[210px] px-4 py-3 font-semibold">Email</th>
               <th className="px-4 py-3 font-semibold">Phone</th>
               <th className="hidden px-4 py-3 font-semibold md:table-cell">Website</th>
               <th className="hidden px-4 py-3 font-semibold lg:table-cell">City</th>
@@ -545,7 +546,7 @@ export function RawData({
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-mono text-xs break-all">
+                    <span className="font-mono text-xs [overflow-wrap:anywhere]">
                       {r.email ? revealedIds.has(r.id) ? r.email : maskEmail(r.email) : "Not found yet"}
                     </span>
                     {r.emailSource === "Guess" && r.email && (
@@ -597,7 +598,7 @@ export function RawData({
                   </div>
                 </td>
 
-                <td className="px-4 py-3 text-muted-foreground">{r.phone}</td>
+                <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{r.phone}</td>
                 <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
                   {r.website ? (
                     <a

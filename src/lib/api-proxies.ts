@@ -36,11 +36,14 @@ import {
   GMAPS_DONE,
 } from "./providers/gmaps-self";
 import { enrichSite, enrichMany } from "./enrich-site";
+import { withTimeout } from "./send-errors";
 import { publicCheck, publicConfig } from "./public-check";
 import { freeEnrich, hasMx, scoreLead, pickBusinessEmail, type SiteSignals } from "./providers/free-enrich";
 import { handleOutreachRoute } from "./outreach-routes";
+import { hideSeenBusinesses, rememberBusinesses } from "./seen-businesses";
 import { Db } from "./db";
 import { resolveIntegrationEnv } from "./integration-settings.server";
+import { runTick, keepAlive, verifySchedulerToken } from "./tick";
 import { requestIpHash, securityJson } from "./request-security";
 
 type Env = Record<string, string | undefined>;
@@ -50,7 +53,7 @@ function secret(env: Env, name: string): string | undefined {
   return env[name] || (typeof process !== "undefined" ? process.env?.[name] : undefined);
 }
 
-const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
+const JSON_HEADERS = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -60,12 +63,35 @@ function json(body: unknown, status = 200): Response {
  * Returns a Response for any /api/* route this module owns, or null to let the
  * request fall through to normal SSR routing.
  */
-export async function handleApiRequest(request: Request, env: Env): Promise<Response | null> {
+export async function handleApiRequest(
+  request: Request,
+  env: Env,
+  ctx?: { waitUntil?: (p: Promise<unknown>) => void },
+): Promise<Response | null> {
   const url = new URL(request.url);
   const path = url.pathname;
   if (!path.startsWith("/api/")) return null;
   // Public contact form is handled by its own route (validated + rate-limited there).
   if (path === "/api/public/contact") return null;
+
+  // Background timer (database pg_cron, Cloudflare cron, or an outside pinger).
+  // Authenticated by its own random token or CRON_SECRET — never a login.
+  if (path === "/api/cron/tick" || path === "/api/public/cron/tick") {
+    if (request.method !== "POST") return securityJson({ error: "POST only" }, 405);
+    const cron = hasCronSecret(request, env);
+    const timer = !cron && (await verifySchedulerToken(env, request.headers.get("x-scheduler-token")).catch(() => false));
+    if (!cron && !timer) return unauthorized();
+    const configured = await resolveIntegrationEnv(env);
+    const onlySearches = url.searchParams.get("only") === "searches";
+    const tick = await keepAlive(
+      ctx,
+      runTick(configured, onlySearches
+        ? { trigger: timer ? "db" : "external", origin: url.origin, dispatch: false, scans: false, searches: true }
+        : { trigger: timer ? "db" : "external", origin: url.origin }),
+    );
+    const sent = tick.dispatch?.mailboxes.reduce((a, m) => a + m.sent, 0) ?? 0;
+    return json({ ok: true, sent, read: tick.scans?.read ?? 0, errors: tick.errors.slice(0, 5) });
+  }
 
   // Public endpoints (no login): unsubscribe links + health. Everything else
   // costs money or acts on your behalf, so it needs a signed-in admin — or the
@@ -80,7 +106,10 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
   if (path === "/api/public/config") return publicConfig(env);
   let user = null as Awaited<ReturnType<typeof getApiUser>>;
   if (!isPublic) {
-    if (!hasCronSecret(request, env)) {
+    if (!hasCronSecret(request, env) || path === "/api/outreach/scheduler") {
+      // Flood guard per network address (before any login lookup). Generous
+      // enough for a busy admin screen (keep-alive, scans, sending loops);
+      // fails closed if the protection itself is unavailable.
       try {
         const permitted = await new Db(env).rpc<boolean>("check_rate_limit", {
           _key: `admin:attempts:${await requestIpHash(request)}`, _max: 120, _window_seconds: 60,
@@ -91,45 +120,47 @@ export async function handleApiRequest(request: Request, env: Env): Promise<Resp
       }
     }
     user = await getApiUser(request, env);
-    if (!user && !hasCronSecret(request, env)) return unauthorized();
+    if (!user && (!hasCronSecret(request, env) || path === "/api/outreach/scheduler")) return unauthorized();
   }
 
   if (path === "/api/health") return json({ ok: true });
 
-  // Rate limits per signed-in user (cron and public routes are exempt).
-  // Expensive routes: 30/min. Everything else: 120/min.
+  // Rate limits per signed-in admin (cron and public routes are exempt).
+  // Expensive routes: 60/min. Everything else: 300/min (the admin screens poll,
+  // keep sending loops and scans alive). Fails closed if protection is unavailable.
   if (user) {
     if (!Db.available(env)) return json({ error: "Request protection is temporarily unavailable." }, 503);
     const heavy =
       /^\/api\/(discover|enrich|apollo|claude|scrape-site|outreach\/(enroll|test-send|verify|search))/.test(
         path,
       );
+    let ok: boolean;
     try {
-      const ok = await new Db(env).rpc<boolean>("check_rate_limit", {
+      ok = (await new Db(env).rpc<boolean>("check_rate_limit", {
         _key: `${heavy ? "heavy" : "api"}:${user.id}`,
         _max: heavy ? 30 : 120,
         _window_seconds: 60,
-      });
-      if (ok !== true) {
-        return new Response(
-          JSON.stringify({
-            error: "rate_limited",
-            message: "Too many requests — wait a minute and try again.",
-          }),
-          {
-            status: 429,
-            headers: { ...JSON_HEADERS, "Retry-After": "60" },
-          },
-        );
-      }
+      })) === true;
     } catch {
       return json({ error: "Request protection is temporarily unavailable. Try again later." }, 503);
+    }
+    if (!ok) {
+      return new Response(
+        JSON.stringify({
+          error: "rate_limited",
+          message: "Too many requests — wait a minute and try again.",
+        }),
+        {
+          status: 429,
+          headers: { ...JSON_HEADERS, "Retry-After": "60" },
+        },
+      );
     }
   }
 
   // Load shared encrypted credentials only after caller verification and rate checks.
   env = await resolveIntegrationEnv(env);
-  const outreach = await handleOutreachRoute(path, request, env, user);
+  const outreach = await handleOutreachRoute(path, request, env, user, ctx);
   if (outreach) return outreach;
   if (path === "/api/geocode") return geocode(url, env);
   if (path === "/api/discover/businesses") return discoverBusinesses(request, env);
@@ -398,7 +429,10 @@ export type EnrichRow = {
   ai: { need: number; reasons: string[]; pitch: string; gap: string; siteQuality: string } | null;
 };
 
-export async function enrichPeople(env: Env, people: EnrichInput[], opts: { usePaid?: boolean; useClaude?: boolean; revealPhone?: boolean; findLinkedin?: boolean } = {}): Promise<{ results: EnrichRow[]; warnings: string[] }> {
+/** One website may take at most this long; a slow site can no longer stall a whole reveal. */
+const SITE_TIMEOUT_MS = 25_000;
+
+export async function enrichPeople(env: Env, people: EnrichInput[], opts: { usePaid?: boolean; useClaude?: boolean; revealPhone?: boolean; findLinkedin?: boolean; allowGuesses?: boolean } = {}): Promise<{ results: EnrichRow[]; warnings: string[] }> {
   if (!people.length) return { results: [], warnings: [] };
   // Paid sources are OPT-IN per call. Default is free only.
   const usePaid = opts.usePaid === true;
@@ -449,10 +483,11 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
           .catch(() => null)
       )?.ai_instructions || ""
     : "";
+  let slowSites = 0;
   await enrichMany(people, 6, async (p) => {
     const r = byId.get(p.id);
     if (!r || !r.website) return;
-    const prof = await enrichSite(env, {
+    const prof = await withTimeout(enrichSite(env, {
       onWarn: warn,
       instructions: aiInstructions,
       findLinkedin: opts.findLinkedin,
@@ -465,6 +500,9 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
       ownerName: p.name,
       useClaude: opts.useClaude !== false,
       db: cacheDb,
+    }), SITE_TIMEOUT_MS, "website").catch(() => {
+      slowSites++;
+      return null;
     });
     if (!prof) return;
     r.ai = prof.ai;
@@ -510,17 +548,17 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
     }
   }
 
-  // 2) Per-contact gap-filling with Hunter + Google for anyone Apollo missed.
-  for (let i = 0; i < people.length; i++) {
-    const p = people[i];
+  // 2) Per-contact gap-filling with Hunter + Google for anyone Apollo missed
+  //    (four at a time, each lookup time-limited).
+  await enrichMany(people, 4, async (p) => {
     const r = byId.get(p.id);
-    if (!r) continue;
-    if (r.email && (!opts.revealPhone || r.phone)) continue;
+    if (!r) return;
+    if (r.email && (!opts.revealPhone || r.phone)) return;
 
     // 2a) Find the company website via Google if we still don't have one.
     if (!r.website && googleKey && p.organizationName) {
       try {
-        const site = await googleFindWebsite(googleKey, p.organizationName, warn);
+        const site = await withTimeout(googleFindWebsite(googleKey, p.organizationName, warn), 12_000, "website search");
         if (site && !NOT_A_WEBSITE.test(site)) r.website = site;
       } catch {
         /* skip */
@@ -539,7 +577,7 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
           u.searchParams.set("first_name", first);
           u.searchParams.set("last_name", last);
           u.searchParams.set("api_key", hunterKey);
-          const res = await fetch(u.toString());
+          const res = await fetch(u.toString(), { signal: AbortSignal.timeout(12_000) });
           if (res.ok) {
             const d = (await res.json()) as {
               data?: { email?: string; phone_number?: string; sources?: { uri?: string }[] };
@@ -557,7 +595,8 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
       }
     }
 
-    // 2c) Email via Google search (last resort), tracking the source URL.
+    // 2c) Email via Google search (last resort), tracking the source URL. Only
+    //     an address that belongs to THIS business is accepted.
     if (!r.email && googleKey) {
       const q = [
         p.name ? `"${p.name}"` : "",
@@ -568,7 +607,7 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
         .filter(Boolean)
         .join(" ");
       try {
-        const { blob, firstLink, error } = await googleSearch(googleKey, q);
+        const { blob, firstLink, error } = await withTimeout(googleSearch(googleKey, q), 12_000, "email search");
         if (error) warn(error);
         const found = pickBusinessEmail(blob, domain, { company: p.organizationName, owner: r.name || p.name });
         if (found) {
@@ -581,11 +620,14 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
         /* leave locked */
       }
     }
-  }
+  });
+  if (slowSites) warn(`${slowSites} website${slowSites === 1 ? "" : "s"} took longer than ${SITE_TIMEOUT_MS / 1000} s and ${slowSites === 1 ? "was" : "were"} skipped`);
 
-  // 3) Last resort: a pattern guess on a domain that accepts mail. Flagged so the
-  //    UI shows it as a guess and sequences can verify/skip it.
+  // 3) Optional last resort: a pattern guess (info@…) on a domain that accepts
+  //    mail. OFF unless asked for — guesses look like real addresses but often
+  //    bounce or reach nobody. Flagged so the UI and sequences treat them as such.
   for (const r of results) {
+    if (!opts.allowGuesses) break;
     if (r.email || !r.website) continue;
     const pre = (r as { _guess?: string })._guess;
     if (pre) {
@@ -1160,6 +1202,8 @@ export interface DiscoverFilters {
   expandKeywords?: boolean;
   /** Hide businesses already seen in any earlier scan / in Leads (default on). */
   hideSeen?: boolean;
+  /** When the scan (all its keywords and sources) started — what it found itself isn't "seen before". */
+  since?: string;
 }
 
 /** Domains that are never the business's own site. */
@@ -1180,7 +1224,7 @@ function tilePoints(
   const radiusKm =
     f.radiusKm ||
     (f.bbox ? Math.min(60, Math.max(8, Math.abs(f.bbox[1] - f.bbox[0]) * 111 * 0.6)) : 20);
-  if (n === 1) return [{ lat: f.lat!, lng: f.lng!, radiusM: radiusKm * 1000 }];
+  if (n === 1) return [{ lat: f.lat, lng: f.lng, radiusM: radiusKm * 1000 }];
   const pts: { lat: number; lng: number; radiusM: number }[] = [];
   const step = (2 * radiusKm) / n; // km between tile centres
   const tileR = Math.max(2000, (step / 1.4) * 1000);
@@ -1188,14 +1232,14 @@ function tilePoints(
     for (let j = 0; j < n; j++) {
       const dy = -radiusKm + step * (i + 0.5);
       const dx = -radiusKm + step * (j + 0.5);
-      const lat = f.lat! + dy / 111;
-      const lng = f.lng! + dx / (111 * Math.cos((f.lat! * Math.PI) / 180));
+      const lat = f.lat + dy / 111;
+      const lng = f.lng + dx / (111 * Math.cos((f.lat * Math.PI) / 180));
       pts.push({ lat, lng, radiusM: tileR });
     }
   }
   // Centre tile first so small result sets are still the most central businesses.
   pts.sort(
-    (a, b) => distanceKm(f.lat!, f.lng!, a.lat, a.lng) - distanceKm(f.lat!, f.lng!, b.lat, b.lng),
+    (a, b) => distanceKm(f.lat, f.lng, a.lat, a.lng) - distanceKm(f.lat, f.lng, b.lat, b.lng),
   );
   return pts;
 }
@@ -1330,17 +1374,19 @@ async function gmapsStatusRoute(request: Request, env: Env): Promise<Response> {
       businesses: [],
       error: `Maps scraper job ${status}`,
     });
-  const businesses = await gmapsSelfItems(
+  const found = await gmapsSelfItems(
     env,
     id,
     u.searchParams.get("city") || "",
     u.searchParams.get("industry") || "",
   );
+  const { businesses, notes } = await onlyNew(env, found, u);
   return json({
     ok: true,
     status,
     done: true,
     businesses: businesses.map((b) => ({ ...b, source: "Google Maps" })),
+    notes,
   });
 }
 
@@ -1363,18 +1409,36 @@ async function apifyStatusRoute(request: Request, env: Env): Promise<Response> {
   const status = st?.status || "UNKNOWN";
   const finished = ["SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"].includes(status);
   if (!finished) return json({ ok: true, status, done: false });
-  const businesses = await apifyItems(
+  const found = await apifyItems(
     env,
     datasetId,
     u.searchParams.get("city") || "",
     u.searchParams.get("industry") || "",
   );
+  const { businesses, notes } = await onlyNew(env, found, u);
   return json({
     ok: true,
     status,
     done: true,
     businesses: businesses.map((b) => ({ ...b, source: "Google Maps" })),
+    notes,
   });
+}
+
+/** Bulk results (own Maps scraper, Apify) get the same "Only new" memory as Google. */
+async function onlyNew<T extends { company: string; website?: string; phone?: string; city?: string; industry?: string }>(
+  env: Env,
+  found: T[],
+  u: URL,
+): Promise<{ businesses: T[]; notes: string[] }> {
+  if (!Db.available(env)) return { businesses: found, notes: [] };
+  const db = new Db(env);
+  const { kept, notes } = await hideSeenBusinesses(db, found, {
+    hideSeen: u.searchParams.get("hideSeen") !== "0",
+    since: u.searchParams.get("since"),
+  });
+  await rememberBusinesses(db, kept);
+  return { businesses: kept, notes };
 }
 
 async function discoverBusinesses(request: Request, env: Env): Promise<Response> {
@@ -1426,7 +1490,7 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
     want.includes("osm") && f.bbox && !region
       ? Promise.all(
           queries.map((kw) =>
-            overpassBusinesses({ keyword: kw, bbox: f.bbox!, city, max: wanted, timeoutSec: 12 }),
+            overpassBusinesses({ keyword: kw, bbox: f.bbox, city, max: wanted, timeoutSec: 12 }),
           ),
         )
       : Promise.resolve([] as Awaited<ReturnType<typeof overpassBusinesses>>[]);
@@ -1663,78 +1727,15 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
   const filtered = applyUniversalFilters(Array.from(byKey.values()), f);
   if (filtered.dropped) errors.push(`${filtered.dropped} filtered out (radius / rating / reviews)`);
 
-  // Global "seen" memory: drop anything an earlier scan already returned, or that
-  // is already in Leads; then remember everything we return this time.
+  // Global "seen" memory: drop anything an EARLIER scan already returned, or that
+  // is already in Leads (and blacklisted companies); then remember what we return.
   let kept = filtered.kept;
   if (Db.available(env)) {
     const db = new Db(env);
-    const keyOf = (b: DiscoveredBusiness) =>
-      cleanDomain(b.website) || `${b.company.toLowerCase()}|${(b.phone || "").replace(/\D/g, "")}`;
-    if (f.hideSeen !== false && kept.length) {
-      try {
-        const keys = kept.map(keyOf).filter(Boolean);
-        const seen = new Set<string>();
-        for (let i = 0; i < keys.length; i += 150) {
-          const chunk = keys.slice(i, i + 150);
-          const rows = await db.select<{ key: string }>(
-            "seen_businesses",
-            `key=in.(${chunk.map((k) => `"${k.replace(/"/g, "")}"`).join(",")})&select=key`,
-          );
-          rows.forEach((r) => seen.add(r.key));
-          const domains = chunk.filter((k) => !k.includes("|"));
-          if (domains.length) {
-            const leads = await db.select<{ domain: string }>(
-              "leads",
-              `domain=in.(${domains.map((k) => `"${k}"`).join(",")})&select=domain`,
-            );
-            leads.forEach((r) => r.domain && seen.add(r.domain));
-          }
-        }
-        const before = kept.length;
-        kept = kept.filter((b) => !seen.has(keyOf(b)));
-        if (before - kept.length) errors.push(`${before - kept.length} seen before (hidden)`);
-      } catch {
-        /* table not migrated yet — show everything */
-      }
-    }
-    // Automatic blacklist: a company whose address hard-bounced, opted out or
-    // complained never comes back in a scan (any source, regardless of "Only new").
-    try {
-      const domains = Array.from(new Set(kept.map((b) => cleanDomain(b.website)).filter(Boolean)));
-      const bad = new Set<string>();
-      for (let i = 0; i < domains.length; i += 150) {
-        const chunk = domains.slice(i, i + 150);
-        const rows = await db.select<{ domain: string }>(
-          "suppressions",
-          `domain=in.(${chunk.map((k) => `"${k}"`).join(",")})&select=domain`,
-        );
-        rows.forEach((r) => r.domain && bad.add(r.domain));
-      }
-      if (bad.size) {
-        const before = kept.length;
-        kept = kept.filter((b) => !bad.has(cleanDomain(b.website)));
-        if (before - kept.length)
-          errors.push(`${before - kept.length} blacklisted (bounced / opted out) — hidden`);
-      }
-    } catch {
-      /* no suppressions table yet */
-    }
-    const toRemember = kept.slice(0, wanted);
-    if (toRemember.length) {
-      const now = new Date().toISOString();
-      db.upsert(
-        "seen_businesses",
-        toRemember.map((b) => ({
-          key: keyOf(b),
-          company: b.company,
-          domain: cleanDomain(b.website) || null,
-          city: b.city || "",
-          industry: b.industry || "",
-          last_seen_at: now,
-        })),
-        "key",
-      ).catch(() => {});
-    }
+    const seen = await hideSeenBusinesses(db, kept, { hideSeen: f.hideSeen !== false, since: f.since });
+    kept = seen.kept;
+    errors.push(...seen.notes);
+    await rememberBusinesses(db, kept.slice(0, wanted));
   }
   const businesses = kept.slice(0, wanted);
   if (
@@ -2189,7 +2190,7 @@ Suggest the best keywords.`;
     return fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
-        "x-api-key": key!,
+        "x-api-key": key,
         "anthropic-version": "2023-06-01",
         "Content-Type": "application/json",
       },
@@ -2219,7 +2220,7 @@ Suggest the best keywords.`;
     const raw = data.content?.[0]?.text || "";
     const parsed = parseClaudeJson(raw) as { keywords?: unknown } | null;
     const list = Array.isArray(parsed?.keywords)
-      ? (parsed!.keywords as unknown[])
+      ? (parsed.keywords as unknown[])
           .map((k) => (typeof k === "string" ? k.trim() : ""))
           .filter((k) => k && k.length <= 60)
       : [];
@@ -2401,7 +2402,7 @@ Rules:
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
-        "x-api-key": anthropicKey!,
+        "x-api-key": anthropicKey,
         "anthropic-version": "2023-06-01",
         "Content-Type": "application/json",
       },
