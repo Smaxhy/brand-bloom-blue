@@ -35,6 +35,7 @@ import { RawData } from "./views/RawData";
 import { Clients } from "./views/Clients";
 import { Finance } from "./views/Finance";
 import { Outreach } from "./views/Outreach";
+import { Inboxes } from "./views/Inboxes";
 import { Tasks } from "./views/Tasks";
 import { SettingsView } from "./views/SettingsView";
 import { Statistics } from "./views/Statistics";
@@ -52,6 +53,7 @@ type ViewId =
   | "statistics"
   | "finance"
   | "email"
+  | "inboxes"
   | "tasks"
   | "team"
   | "settings";
@@ -69,6 +71,7 @@ const BASE_NAV: { id: ViewId; label: string; icon: React.ElementType }[] = [
   { id: "statistics", label: "Statistics", icon: BarChart3 },
   { id: "finance", label: "Finance", icon: Wallet },
   { id: "email", label: "Outreach", icon: Mail },
+  { id: "inboxes", label: "Inboxes", icon: Mail },
   { id: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
@@ -472,6 +475,7 @@ export function AdminApp() {
           {view === "statistics" && <Statistics data={data} update={update} />}
           {view === "finance" && <Finance data={data} update={update} />}
           {view === "email" && <Outreach go={(v) => setView(v)} data={data} update={update} />}
+          {view === "inboxes" && <Inboxes />}
           {view === "team" && role === "ceo" && <TeamUsers />}
           {view === "settings" && <SettingsView data={data} update={update} />}
         </main>

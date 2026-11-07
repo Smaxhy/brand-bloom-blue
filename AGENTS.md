@@ -1,6 +1,8 @@
 # Project conventions
 - Website intake remains authoritative in contact_submissions; authenticated Pipeline overlays merge requests by normalized email while retaining immutable original request details and account-specific stages. Submission fingerprints are unique to prevent retry duplicates.
 - Pipeline dedup uses source identity, normalized email, or company plus phone (never company alone); preserve IDs, stage decisions and source/request history rather than inventing missing data.
+- Pipeline deletion persists account-specific dismissed request IDs alongside deals so refreshing cannot recreate deleted quotes; original intake and outreach history remain immutable.
+- Inboxes reads live GoHighLevel conversations through a bounded role-verified server function, validating mailbox access and conversation location before returning plain text; it never sends or changes messages.
 - Email dispatch checks a per-run time budget before claiming another recipient or sleeping; keep reply/opt-out sync fail-closed and existing atomic claims while carrying remaining work into later runs.
 - Quote/contact writes use bounded same-origin requests and atomic server-only request counters; admin proxies require explicit verified roles and fail closed if abuse protection is unavailable.
 - Keep the public homepage inside its existing HTML document and iframe navigation bridge; this preserves its calculator and quote interactions.

@@ -186,6 +186,7 @@ export interface AdScan {
 
 export interface AdminData {
   deals: Deal[];
+  dismissedWebsiteRequestIds?: string[];
   raw: RawBusiness[];
   clients: Client[];
   transactions: Transaction[];
@@ -293,6 +294,7 @@ function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData
     ...s,
     ...d,
     deals: cleanDuplicateDeals(arrayOr<Deal>(d.deals, s.deals)),
+    dismissedWebsiteRequestIds: arrayOr<string>(d.dismissedWebsiteRequestIds, []),
     raw: cleanDuplicateEmails(arrayOr<RawBusiness>(d.raw, s.raw)),
     clients: arrayOr<Client>(d.clients, s.clients),
     transactions: arrayOr<Transaction>(d.transactions, s.transactions),

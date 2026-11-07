@@ -1,9 +1,22 @@
 import { describe, it, expect } from "vitest";
-import { cleanDuplicateDeals, mergeWebsiteRequests, type WebsiteRequest } from "./pipeline-merge";
+import { cleanDuplicateDeals, mergeWebsiteRequests, removePipelineDeal, type WebsiteRequest } from "./pipeline-merge";
 import type { Deal } from "./store";
 const deal = (overrides: Partial<Deal> = {}): Deal => ({ id: "original", name: "Business", contact: "", email: "", phone: "", value: 0, stage: "new", source: "Apollo", notes: "Original notes", createdAt: 1, updatedAt: 1, ...overrides });
 const request: WebsiteRequest = { id: "request1", kind: "quote", name: "Jane Doe", email: "jane@example.test", company: "Business", phone: "+32 123456789", message: "Full request", personal_message: "Please call after 5.", created_at: "2026-11-07T20:00:00Z", consent: true, services: [{ id: "video_creation", name: "Video Creation", price: 250, billing: "monthly" }], estimates: { monthly: 250, upfront: 0, total: 250 }, attribution: { source: "outreach" } };
 describe("quote pipeline", () => {
+  it("keeps a deleted quote out after refresh without changing the original request", () => {
+    const [quote] = mergeWebsiteRequests([], [request]);
+    const removed = removePipelineDeal([quote], quote);
+    expect(mergeWebsiteRequests(removed.deals, [request], removed.dismissedWebsiteRequestIds)).toHaveLength(0);
+    expect(request.personal_message).toBe("Please call after 5.");
+    expect(mergeWebsiteRequests([], [request])).toHaveLength(1);
+  });
+  it("allows a new request from the same visitor after deleting an older quote", () => {
+    const [quote] = mergeWebsiteRequests([], [request]);
+    const removed = removePipelineDeal([quote], quote);
+    const next = mergeWebsiteRequests(removed.deals, [request, { ...request, id: "new-request" }], removed.dismissedWebsiteRequestIds);
+    expect(next).toHaveLength(1); expect(next[0].requests?.map((r) => r.id)).toEqual(["new-request"]);
+  });
   it("retains email services phone and personal message", () => {
     const result = mergeWebsiteRequests([], [request]);
     expect(result[0]).toMatchObject({ email: "jane@example.test", contact: "Jane Doe", phone: "+32 123456789", value: 250 });
