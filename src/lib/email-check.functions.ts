@@ -14,7 +14,8 @@ export const checkEmailAddresses = createServerFn({ method: "POST" })
     const { data: allowed, error: limitError } = await supabaseAdmin.rpc("check_rate_limit", { _key: `email-check:${context.userId}`, _max: 10, _window_seconds: 60 });
     if (limitError || allowed !== true) throw new Error("Please wait a minute before checking again.");
     const { resolveIntegrationEnv } = await import("./integration-settings.server");
-    const { verifyEmail, normalizeEmail, addSuppression } = await import("./bounce");
+    const { verifyEmail, normalizeEmail } = await import("./bounce");
+    const { blacklistConfirmedInvalid } = await import("./email-blacklist.server");
     const { Db } = await import("./db");
     const env = await resolveIntegrationEnv({});
     // Environment-only credentials also remain server-only.
@@ -28,10 +29,7 @@ export const checkEmailAddresses = createServerFn({ method: "POST" })
       while (cursor < emails.length && Date.now() - started < 25000) {
         const email = emails[cursor++];
         const status = await verifyEmail(env, email);
-        if (status === "invalid") {
-          await addSuppression(db, { email, reason: "bounce", note: "Confirmed invalid during email check" });
-          await db.update("leads", `email=eq.${encodeURIComponent(email)}`, { email_verified: "invalid" });
-        }
+        await blacklistConfirmedInvalid(db, email, status);
         results[email] = status;
       }
     }));
