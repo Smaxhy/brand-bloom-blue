@@ -818,4 +818,51 @@ describe("dispatcher sends whole queues", () => {
     expect(saved).toBeGreaterThan(Date.now() - 5 * 1440 * 60_000);
     expect(saved).toBeLessThan(Date.now() - 60 * 60_000);
   });
+
+  it("holds a second address at a company contacted during this run", async () => {
+    seed({ people: 2 });
+    tables.leads[1].domain = "biz0.com";
+    tables.leads[1].email = "owner@biz0.com";
+    await runDispatch({}, { source: "tick" });
+    expect(sentTo()).toEqual(["person0@biz0.com"]);
+    expect(tables.enrollments[1].current_step).toBe(0);
+  });
+
+  it("does not start a company again within 90 days, but permits a 100-day-old contact", async () => {
+    for (const days of [30, 100]) {
+      sendVia.mockClear();
+      seed({ people: 1 });
+      tables.leads.push({ id: "old-lead", domain: "biz0.com", email: "info@biz0.com" });
+      tables.messages.push({ id: "old-message", lead_id: "old-lead", enrollment_id: "old-enrollment", direction: "out", status: "sent", sent_at: past(days * 1440) });
+      await runDispatch({}, { source: "tick" });
+      expect(sentTo()).toEqual(days === 30 ? [] : ["person0@biz0.com"]);
+    }
+  });
+
+  it("does not combine unrelated people at gmail.com", async () => {
+    seed({ people: 2 });
+    tables.leads[0].domain = tables.leads[1].domain = "gmail.com";
+    tables.leads[0].email = "joe@gmail.com";
+    tables.leads[1].email = "ann@gmail.com";
+    await runDispatch({}, { source: "tick" });
+    expect(sentTo().sort()).toEqual(["ann@gmail.com", "joe@gmail.com"]);
+  });
+
+  it("fails closed when company lease storage fails", async () => {
+    seed({ people: 1 });
+    failures.push({ table: "rate_limits", match: () => true, message: "db insert rate_limits: 503" });
+    await runDispatch({}, { source: "tick" });
+    expect(sendVia).not.toHaveBeenCalled();
+    expect(tables.enrollments[0].current_step).toBe(0);
+  });
+
+  it("an explicit picked send overrides company history, not suppression", async () => {
+    const picked = "55555555-5555-4555-8555-555555555555";
+    seed({ people: 0, extra: [{ id: picked, sequence_id: "seq-1", lead_id: "lead-p", mailbox_id: MB1, status: "queued", current_step: 0, next_send_at: past(30), unsub_token: "p", variant: "A", last_error: null }] });
+    tables.leads.push({ id: "lead-p", email: "owner@biz.com", domain: "biz.com", email_verified: "valid" });
+    tables.leads.push({ id: "old", email: "info@biz.com", domain: "biz.com" });
+    tables.messages.push({ id: "old-m", lead_id: "old", enrollment_id: "old-en", direction: "out", status: "sent", sent_at: past(1440) });
+    await runDispatch({}, { source: "manual", force: { enrollmentIds: [picked] }, forceGapSec: [0, 0] });
+    expect(sentTo()).toEqual(["owner@biz.com"]);
+  });
 });
