@@ -377,6 +377,7 @@ export async function loadDataRemote(): Promise<AdminData> {
     }
 
     const merged = withSchemaDefaults(remote);
+    if (Array.isArray(remote?.raw) && remote.raw.length !== merged.raw.length) await pushRemote(merged);
     return merged;
   } catch (e) {
     console.warn("[admin] cloud load failed", e);
