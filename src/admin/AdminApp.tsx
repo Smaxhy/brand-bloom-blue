@@ -18,6 +18,7 @@ import {
 import logo from "@/assets/inspirova-logo.png";
 import { supabase } from "@/integrations/supabase/client";
 import { cleanDuplicateEmails } from "./email-cleanup";
+import { cleanDuplicateDeals } from "./pipeline-merge";
 import {
   loadDataRemote,
   saveData,
@@ -297,7 +298,7 @@ export function AdminApp() {
         const base = prev;
         const resolved =
           typeof next === "function" ? (next as (p: AdminData) => AdminData)(base) : next;
-        const cleaned = { ...resolved, raw: cleanDuplicateEmails(resolved.raw) };
+        const cleaned = { ...resolved, raw: cleanDuplicateEmails(resolved.raw), deals: cleanDuplicateDeals(resolved.deals) };
         saveData(cleaned);
         return cleaned;
       });

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { QUOTE_SERVICES } from "./quote-services";
 
 export const CONTACT_LIMITS = { minute: 3, hour: 5, emailHour: 3, globalMinute: 60 } as const;
 export const contactSchema = z.object({
@@ -9,6 +10,10 @@ export const contactSchema = z.object({
   message: z.string().trim().min(1).max(2000),
   website: z.string().max(0).optional(),
   consent: z.boolean().optional(),
+  phone: z.string().trim().max(40).default(""),
+  services: z.array(z.string().refine((id) => QUOTE_SERVICES.some((s) => s.id === id))).max(10).default([]).transform((ids) => [...new Set(ids)].sort()),
+  personalMessage: z.string().trim().max(1000).default(""),
+  attribution: z.object({ source: z.string().trim().max(200).default(""), medium: z.string().trim().max(200).default(""), campaign: z.string().trim().max(200).default("") }).default({}),
 }).superRefine((data, ctx) => {
   if (data.kind === "quote" && data.consent !== true) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["consent"], message: "Consent is required." });

@@ -231,6 +231,7 @@ export function RawData({
         ...p.deals,
         {
           id: uid("d"),
+          rawId: r.id,
           name: r.business,
           contact: r.contactName || "",
           email: r.email,

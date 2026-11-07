@@ -2,6 +2,7 @@ import { scanJobAction } from "@/lib/scan-jobs.functions";
 import { runScanRequest } from "./scan-request";
 import { businessKey } from "@/lib/business-key";
 import { cleanDuplicateEmails } from "./email-cleanup";
+import { cleanDuplicateDeals, type WebsiteRequest } from "./pipeline-merge";
 import type { LeadAi } from "@/lib/lead-filters";
 /** Inspirova Admin — per-account Lovable Cloud data layer. */
 
@@ -24,6 +25,9 @@ export interface Deal {
   notes: string;
   createdAt: number;
   updatedAt: number;
+  rawId?: string;
+  requests?: WebsiteRequest[];
+  mergedIds?: string[];
 }
 
 export interface RawBusiness {
@@ -288,7 +292,7 @@ function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData
   return {
     ...s,
     ...d,
-    deals: arrayOr<Deal>(d.deals, s.deals),
+    deals: cleanDuplicateDeals(arrayOr<Deal>(d.deals, s.deals)),
     raw: cleanDuplicateEmails(arrayOr<RawBusiness>(d.raw, s.raw)),
     clients: arrayOr<Client>(d.clients, s.clients),
     transactions: arrayOr<Transaction>(d.transactions, s.transactions),
@@ -336,7 +340,7 @@ function compactForRemote(data: AdminData): AdminData {
   return {
     ...data,
     raw: cleanDuplicateEmails(data.raw).slice(0, 5000),
-    deals: data.deals.slice(0, 2000),
+    deals: cleanDuplicateDeals(data.deals),
     clients: data.clients.slice(0, 1000),
     transactions: data.transactions.slice(0, 3000),
     campaigns: data.campaigns.slice(0, 1000),
@@ -377,7 +381,7 @@ export async function loadDataRemote(): Promise<AdminData> {
     }
 
     const merged = withSchemaDefaults(remote);
-    if (Array.isArray(remote?.raw) && remote.raw.length !== merged.raw.length) await pushRemote(merged);
+    if ((Array.isArray(remote?.raw) && remote.raw.length !== merged.raw.length) || (Array.isArray(remote?.deals) && remote.deals.length !== merged.deals.length)) await pushRemote(merged);
     return merged;
   } catch (e) {
     console.warn("[admin] cloud load failed", e);

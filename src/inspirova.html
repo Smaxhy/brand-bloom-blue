@@ -325,6 +325,9 @@
     width:100%;border:1.5px solid rgba(255,255,255,.12);border-radius:12px;padding:13px 16px;font-size:.92rem;font-family:var(--sans);background:rgba(255,255,255,.04);color:#fff}
   .form-grid input::placeholder{color:rgba(255,255,255,.4)}
   .form-grid input:focus{border-color:var(--violet-bright);outline:none;background:rgba(255,255,255,.06)}
+  .form-grid textarea{width:100%;min-height:120px;resize:vertical;border:1.5px solid var(--line-strong);border-radius:12px;padding:13px 16px;font:inherit;background:var(--panel);color:var(--mist)}
+  .form-grid textarea::placeholder{color:var(--muted-2)}
+  .form-grid textarea:focus{border-color:var(--violet-bright);outline:none}
   .chk{display:flex;align-items:flex-start;gap:9px;font-size:.78rem;color:rgba(255,255,255,.65);margin-top:4px}
   .calc-footer{margin-top:36px;display:flex;flex-direction:column;align-items:center;gap:20px}
   .footer-totals{display:grid;grid-template-columns:1fr 1fr;gap:24px;width:100%;max-width:560px}
@@ -748,6 +751,7 @@
             <input type="text"  id="qLast" maxlength="49" aria-label="Last name"    placeholder="Last name">
             <input type="email" id="qEmail" maxlength="255" aria-label="Email address"   placeholder="E-mail">
             <input type="tel"   id="qPhone" maxlength="40" aria-label="Phone number"   placeholder="Phone">
+            <textarea id="qNotes" maxlength="1000" aria-label="Personal message" placeholder="Personal message (optional)" rows="4"></textarea>
             
             <input class="c-hp" id="qWebsite" tabindex="-1" autocomplete="off" aria-hidden="true">
             <label class="chk"><input type="checkbox" id="qConsent"> Yes, I'd like more information and agree to the privacy policy.</label>
@@ -1058,7 +1062,8 @@
       if(!consent||!consent.checked){say("Please tick the consent box so we can contact you.",false);return;}
       var q=window.__inspQuote||{names:[],monthly:0,upfront:0,total:0};
       var message="Services requested: "+q.names.join(", ")+"\nEstimated monthly: €"+q.monthly+" · One-time: €"+q.upfront+" · First month: €"+q.total+"\nPhone: "+val("qPhone")+(val("qNotes")?"\nNote: "+val("qNotes"):"");
-      var data={kind:"quote",name:(first+" "+last).trim(),company:company,email:email,message:message,consent:true,website:val("qWebsite")};
+      var params=new URLSearchParams(window.parent.location.search);
+      var data={kind:"quote",name:(first+" "+last).trim(),company:company,email:email,phone:val("qPhone"),services:q.selected||[],personalMessage:val("qNotes"),attribution:{source:(params.get("utm_source")||"").slice(0,200),medium:(params.get("utm_medium")||"").slice(0,200),campaign:(params.get("utm_campaign")||"").slice(0,200)},message:message,consent:true,website:val("qWebsite")};
       if(data.name.length>100||message.length>2000){say("Please shorten your name or note.",false);return;}
       btn.disabled=true;say("Sending…",true);
       fetch("/api/public/contact",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(data)})

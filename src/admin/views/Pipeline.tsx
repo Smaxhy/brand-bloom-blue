@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { listWebsiteRequests } from "@/lib/website-requests.functions";
+import { mergeWebsiteRequests, type WebsiteRequest } from "../pipeline-merge";
 import { Plus, GripVertical, Pencil, Trash2, Euro } from "lucide-react";
 import {
   type AdminData,
@@ -36,6 +39,26 @@ export function Pipeline({
   const [editing, setEditing] = useState<Deal | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overStage, setOverStage] = useState<StageId | null>(null);
+  const [requests, setRequests] = useState<WebsiteRequest[]>([]);
+  const [requestError, setRequestError] = useState("");
+  const [loadingRequests, setLoadingRequests] = useState(false);
+  const readRequests = useServerFn(listWebsiteRequests);
+  const visibleDeals = mergeWebsiteRequests(data.deals, requests);
+
+  async function refreshRequests() {
+    setLoadingRequests(true);
+    try {
+      const result = await readRequests();
+      setRequests(result.requests);
+      setRequestError(result.truncated ? "Showing the latest 2,000 website requests. Older requests remain stored." : "");
+    } catch (error) { setRequestError(error instanceof Error ? error.message : "Website requests could not be loaded."); }
+    finally { setLoadingRequests(false); }
+  }
+  useEffect(() => {
+    void refreshRequests();
+    const timer = setInterval(() => { if (document.visibilityState === "visible") void refreshRequests(); }, 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   function openNew(stage: StageId = "new") {
     const d = empty();
@@ -51,10 +74,11 @@ export function Pipeline({
 
   function save(d: Deal) {
     update((p) => {
-      const exists = p.deals.some((x) => x.id === d.id);
+      const current = mergeWebsiteRequests(p.deals, requests);
+      const exists = current.some((x) => x.id === d.id);
       const deals = exists
-        ? p.deals.map((x) => (x.id === d.id ? { ...d, updatedAt: Date.now() } : x))
-        : [...p.deals, { ...d, updatedAt: Date.now() }];
+        ? current.map((x) => (x.id === d.id ? { ...d, updatedAt: Date.now() } : x))
+        : [...current, { ...d, updatedAt: Date.now() }];
       return { ...p, deals };
     });
     setEditing(null);
@@ -68,21 +92,23 @@ export function Pipeline({
     if (!dragId) return;
     update((p) => ({
       ...p,
-      deals: p.deals.map((d) => (d.id === dragId ? { ...d, stage, updatedAt: Date.now() } : d)),
+      deals: mergeWebsiteRequests(p.deals, requests).map((d) => (d.id === dragId ? { ...d, stage, updatedAt: Date.now() } : d)),
     }));
     setDragId(null);
     setOverStage(null);
   }
 
-  const total = data.deals.filter((d) => d.stage !== "lost").reduce((s, d) => s + d.value, 0);
+  const total = visibleDeals.filter((d) => d.stage !== "lost").reduce((s, d) => s + d.value, 0);
 
   return (
     <div className="space-y-5">
+      {requestError && <p role="alert" className="text-sm text-destructive">{requestError}</p>}
       <div className="flex flex-wrap items-center gap-3">
         <p className="text-sm text-muted-foreground">
           Drag cards between stages. Weighted pipeline value:{" "}
           <span className="font-semibold text-foreground">{fmtEuro(total)}</span>
         </p>
+        <Btn variant="ghost" disabled={loadingRequests} onClick={() => void refreshRequests()}>{loadingRequests ? "Loading requests…" : "Refresh requests"}</Btn>
         <Btn className="ml-auto" onClick={() => openNew()}>
           <Plus className="h-4 w-4" /> New deal
         </Btn>
@@ -90,7 +116,7 @@ export function Pipeline({
 
       <div className="grid grid-flow-col gap-4 overflow-x-auto pb-4 [grid-auto-columns:minmax(260px,1fr)]">
         {STAGES.map((stage) => {
-          const deals = data.deals.filter((d) => d.stage === stage.id);
+          const deals = visibleDeals.filter((d) => d.stage === stage.id);
           const val = deals.reduce((s, d) => s + d.value, 0);
           return (
             <div
@@ -130,6 +156,8 @@ export function Pipeline({
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-semibold">{d.name || "Untitled"}</div>
                         <div className="truncate text-xs text-muted-foreground">{d.contact}</div>
+                        {d.email && <a href={`mailto:${d.email}`} className="mt-1 block break-all text-xs text-primary">{d.email}</a>}
+                        {!!d.requests?.length && <div className="mt-2 space-y-1 text-xs text-muted-foreground"><div className="font-semibold text-foreground">Website {d.requests.some((r) => r.kind === "quote") ? "quote" : "contact"} · {d.requests.length} request{d.requests.length === 1 ? "" : "s"}</div><div className="break-words">{d.requests.flatMap((r) => r.services.map((s) => s.name)).filter((name, index, names) => names.indexOf(name) === index).join(", ")}</div></div>}
                         {d.template && (
                           <span className="mt-1.5 inline-block rounded-full bg-secondary px-2 py-0.5 text-[.65rem] font-medium">
                             {d.template}
@@ -140,13 +168,13 @@ export function Pipeline({
                             <Euro className="h-3.5 w-3.5" />
                             {d.value.toLocaleString("nl-BE")}
                           </span>
-                          <span className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                            <button onClick={() => setEditing(d)} className="grid h-6 w-6 place-items-center rounded-md hover:bg-secondary" aria-label="Edit">
+                          <span className="flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                            <Btn variant="ghost" onClick={() => setEditing(d)} className="h-6 w-6 p-0" aria-label={`Edit ${d.name}`}>
                               <Pencil className="h-3.5 w-3.5" />
-                            </button>
-                            <button onClick={() => remove(d.id)} className="grid h-6 w-6 place-items-center rounded-md text-destructive hover:bg-destructive/10" aria-label="Delete">
+                            </Btn>
+                            {!d.requests?.length && <Btn variant="ghost" onClick={() => remove(d.id)} className="h-6 w-6 p-0 text-destructive" aria-label="Delete">
                               <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                            </Btn>}
                           </span>
                         </div>
                       </div>
@@ -166,7 +194,7 @@ export function Pipeline({
         })}
       </div>
 
-      <Modal open={!!editing} onClose={() => setEditing(null)} title={editing && data.deals.some((d) => d.id === editing.id) ? "Edit deal" : "New deal"} wide>
+      <Modal open={!!editing} onClose={() => setEditing(null)} title={editing && visibleDeals.some((d) => d.id === editing.id) ? "Edit deal" : "New deal"} wide>
         {editing && (
           <div className="space-y-3">
             <Field label="Start from a template">
@@ -181,7 +209,7 @@ export function Pipeline({
                 ))}
               </select>
             </Field>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Company"><input className={inputCls} value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></Field>
               <Field label="Contact"><input className={inputCls} value={editing.contact} onChange={(e) => setEditing({ ...editing, contact: e.target.value })} /></Field>
               <Field label="Email"><input className={inputCls} value={editing.email} onChange={(e) => setEditing({ ...editing, email: e.target.value })} /></Field>
@@ -195,6 +223,7 @@ export function Pipeline({
               </Field>
             </div>
             <Field label="Notes"><textarea className={`${inputCls} min-h-[72px]`} value={editing.notes} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} /></Field>
+            {!!editing.requests?.length && <section className="space-y-4 border-t border-border pt-4"><h3 className="text-sm font-semibold">Original website requests</h3>{[...editing.requests].reverse().map((r) => <div key={r.id} className="space-y-2 border-b border-border pb-4 text-sm"><div className="flex flex-wrap justify-between gap-2 font-semibold"><span>{r.kind === "quote" ? "Quote request" : "Contact message"}</span><time className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString()}</time></div><p className="break-words">{r.name} · {r.company}</p><p className="break-all"><a className="text-primary" href={`mailto:${r.email}`}>{r.email}</a>{r.phone && <> · {r.phone}</>}</p>{r.services.map((s) => <p key={s.id}>{s.name} — {fmtEuro(s.price)} {s.billing === "monthly" ? "/ month" : "one-time"}</p>)}{r.estimates && <p>Estimate only · Monthly {fmtEuro(r.estimates.monthly)} · One-time {fmtEuro(r.estimates.upfront)} · First month {fmtEuro(r.estimates.total)}</p>}{r.personal_message && <div><h4 className="font-semibold">Personal message</h4><p className="whitespace-pre-wrap break-words">{r.personal_message}</p></div>}<details><summary className="cursor-pointer text-muted-foreground">Full original message</summary><p className="mt-2 whitespace-pre-wrap break-words">{r.message}</p></details>{(r.attribution.source || r.attribution.medium || r.attribution.campaign) && <p className="break-words text-xs text-muted-foreground">Source: {r.attribution.source || "Not supplied"} · Medium: {r.attribution.medium || "Not supplied"} · Campaign: {r.attribution.campaign || "Not supplied"}</p>}<p className="text-xs text-muted-foreground">Contact consent: {r.consent ? "Confirmed" : "Not recorded"}</p></div>)}</section>}
             <div className="flex justify-end gap-2 pt-1">
               <Btn variant="ghost" onClick={() => setEditing(null)}>Cancel</Btn>
               <Btn onClick={() => save(editing)}>Save deal</Btn>

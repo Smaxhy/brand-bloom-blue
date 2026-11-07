@@ -134,6 +134,20 @@
       "when": 1794077224494,
       "tag": "0018_automatic_invalid_email_blacklist",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794082106922,
+      "tag": "0019_structured_quote_pipeline",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794082133018,
+      "tag": "0020_quote_consent_record",
+      "breakpoints": true
     }
   ]
 }

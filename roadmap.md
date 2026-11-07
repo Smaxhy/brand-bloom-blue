@@ -1,4 +1,7 @@
 # Public website refresh
+- [x] Connect structured quote/contact requests to Pipeline, preserve full details, and merge duplicate deals safely.
+- [x] Add an optional personal message to quotes and show it with the original request in Pipeline.
+- [x] Verify public submission, identical retry (one stored row), signed-in pipeline details and phone layout; removed test entries. Owner emails are not enabled (no verified sender domain).
 - [x] Replace generic visual effects with an editorial design on the homepage.
 - [x] Match the results and privacy pages while preserving content and existing flows.
 - [x] Verify navigation, calculator, and narrow-screen layout.

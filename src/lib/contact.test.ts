@@ -8,6 +8,19 @@ const request = (body = payload, origin = "https://site.test") => new Request("h
   method: "POST", headers: { origin, "content-type": "application/json", "cf-connecting-ip": "203.0.113.1" }, body: JSON.stringify(body),
 });
 describe("quote abuse protection", () => {
+  it("persists selected services and the visitor's personal message and contact information", async () => {
+    const db = { insert: vi.fn(), rpc: vi.fn(async () => true) };
+    const body = { ...payload, phone: "+32 123456789", services: ["video_creation"], personalMessage: "Please call after 5." };
+    expect((await handleContactRequest(request(body), async () => db)).status).toBe(200);
+    expect(db.insert).toHaveBeenCalledWith(expect.objectContaining({ phone: "+32 123456789", email: "test@example.test", personal_message: "Please call after 5.", consent: true, estimates: { monthly: 250, upfront: 0, total: 250 }, services: [{ id: "video_creation", name: "Video Creation", price: 250, billing: "monthly" }] }));
+  });
+  it("uses one stable fingerprint for identical retries but a different one for changed messages", async () => {
+    const db = { insert: vi.fn(), rpc: vi.fn(async () => true) };
+    await handleContactRequest(request(), async () => db); await handleContactRequest(request(), async () => db);
+    await handleContactRequest(request({ ...payload, message: "Different request" }), async () => db);
+    expect(db.insert.mock.calls[0][0].request_key).toBe(db.insert.mock.calls[1][0].request_key);
+    expect(db.insert.mock.calls[0][0].request_key).not.toBe(db.insert.mock.calls[2][0].request_key);
+  });
   it("requires quote contact consent", () => expect(contactSchema.safeParse({ ...payload, consent: false }).success).toBe(false));
   it("rejects cross-site submissions before accessing storage", async () => {
     const getDb = vi.fn();
