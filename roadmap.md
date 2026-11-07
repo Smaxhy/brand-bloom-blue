@@ -90,4 +90,5 @@
 
 # Reveal request-limit repair
 - [x] Isolate scan action budgets, wait and retry explicit throttling, preserve Stop and saved results, and reduce redundant result reads.
-- [ ] Verify throttling recovery and cancellation regressions; signed-in saved-row check depends on an available own-account session.
+- [x] Verify throttling recovery, cancellation and security with 28 passing tests; preview build OK and admin entry has no runtime errors.
+- [ ] Signed-in saved-row Reveal check: blocked by no matching own-account session; sign in to the preview to verify live data.
