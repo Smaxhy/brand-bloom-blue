@@ -72,3 +72,8 @@
 - [x] Add visible Stop beside Reveal and stop further scan steps while retaining saved results.
 - [x] Verify cancellation with five passing tests and preview compilation.
 - [ ] Signed-in Stop flow: blocked because the requesting user has no matching managed session; sign in to verify without paid searches.
+
+# Raw Data reveal repair
+- [x] Connect Raw Data Reveal to saved scans, retain found contact details and Stop support, and recover published emails previously suppressed by website MX checks.
+- [x] Run 17 targeted regression tests and check the live admin entry for runtime errors without paid searches or email sends.
+- [ ] Verify Reveal with the user's saved rows: blocked by no matching managed session; user must sign in to the preview.
