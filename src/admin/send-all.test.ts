@@ -24,6 +24,13 @@ describe("fixed send group", () => {
   const result = await sendAllNow("seq");
   expect(mocks.authFetch).toHaveBeenCalledTimes(1); expect(result.note).toMatch(/Daily cap/);
  });
+ it("never sends a second step during the same action even with a zero-day delay", async () => {
+  const overdue = new Date(Date.now()-60000).toISOString();
+  mocks.reads = [[person("a"),person("b")], [{...person("a",1),next_send_at:overdue},person("b")], [{...person("a",1),next_send_at:overdue},person("b",1)]];
+  mocks.authFetch.mockResolvedValueOnce(reply(1)).mockResolvedValueOnce(reply(1));
+  await sendAllNow("seq");
+  expect(mocks.authFetch.mock.calls.map(c=>JSON.parse(c[1].body).enrollmentIds)).toEqual([["a","b"],["b"]]);
+ });
  it("does not include follow-ups whose delay has not elapsed", async () => {
   mocks.reads = [[person("a",1)]];
   expect((await sendAllNow("seq")).left).toBe(0); expect(mocks.authFetch).not.toHaveBeenCalled();

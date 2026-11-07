@@ -503,14 +503,15 @@ async function scheduler(request: Request, env: Env, requestOrigin: string): Pro
     if (result === "pg_cron_unavailable" || result === "pg_net_unavailable")
       return json({
         ok: false,
-        error: `The database can't run timers (${result === "pg_cron_unavailable" ? "pg_cron" : "pg_net"} is not enabled). Enable it in your database extensions, or use the Cloudflare cron.`,
+        error: "The background timer is not available yet. Your saved settings remain unchanged.",
       }, 400);
     return json({ ok: true, enabled: result === "enabled", url: enabled ? `${origin}/api/public/cron/tick` : null });
   } catch (err) {
     const msg = (err as Error).message;
     if (/configure_outreach_scheduler|PGRST202|does not exist/i.test(msg))
-      return json({ ok: false, error: "Apply the database update 0016_background_scheduler first, then try again." }, 400);
-    return json({ ok: false, error: msg.slice(0, 300) }, 500);
+      return json({ ok: false, error: "The background timer update is not available yet." }, 400);
+    console.error("Background timer configuration failed");
+    return json({ ok: false, error: "Could not change the background timer. Try again later." }, 500);
   }
 }
 

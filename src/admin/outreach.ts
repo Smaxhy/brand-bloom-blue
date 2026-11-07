@@ -603,8 +603,8 @@ export interface SendAllProgress {
  * "Send now to everyone waiting": keeps calling the server (≈ 25 s per call,
  * a few seconds between emails) until every never-emailed person and every
  * due follow-up in the sequence has gone out, the daily cap is reached, or
- * `shouldStop()` says stop. The people are fixed when it starts (the server
- * returns that moment and every round sends it back), so each person gets at
+ * `shouldStop()` says stop. The eligible IDs and their current steps are fixed
+ * before sending, so each person gets at
  * most one email per press and people added meanwhile wait for the normal
  * schedule. If the tab closes, the background scheduler finishes the rest at
  * the sequence's normal pace.
@@ -619,6 +619,7 @@ export async function sendAllNow(
   const start = Date.now();
   const remaining = new Set(people.filter((p) => ["queued", "active", "paused"].includes(p.status) &&
     (p.current_step === 0 || (p.next_send_at && Date.parse(p.next_send_at) <= start))).map((p) => p.id));
+  const originalSteps = new Map(people.map((p) => [p.id, p.current_step]));
   if (!remaining.size) return { ...out, left: 0 };
   while (!opts.shouldStop?.()) {
     out.rounds++;
@@ -639,9 +640,9 @@ export async function sendAllNow(
     out.errors.push(...(r.report?.errors ?? []).slice(0, 2));
     const current = await listEnrollments({ sequenceId, limit: 10000 });
     const eligible = new Set(current.filter((p) => ["queued", "active", "paused"].includes(p.status) &&
+      p.current_step === originalSteps.get(p.id) &&
       (p.current_step === 0 || (p.next_send_at && Date.parse(p.next_send_at) <= start))).map((p) => p.id));
     for (const id of remaining) if (!eligible.has(id)) remaining.delete(id);
-    const lefts = boxes.map((m) => m.due_left).filter((x): x is number => typeof x === "number");
     out.left = remaining.size;
     const busy = boxes.some((m) => m.busy);
     // Only a mailbox that SAYS its daily cap is reached counts as capped (a busy
@@ -663,6 +664,7 @@ export async function sendAllNow(
       await new Promise((res) => setTimeout(res, busy ? 5000 : 2000));
     } else idle = 0;
   }
+  if (opts.shouldStop?.() && remaining.size) out.note = "Stopped after the current round. Remaining people keep their normal schedule.";
   return out;
 }
 

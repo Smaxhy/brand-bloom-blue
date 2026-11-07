@@ -3,10 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   settings: { id: "singleton", last_cron_at: null as string | null, last_tick_source: null as string | null, scheduler_token_hash: null as string | null },
   leases: [] as { key: string; window_start: string; count: number }[],
+  drainCalls: 0,
 }));
 vi.mock("./db", () => ({
   Db: class {
     static available() { return true; }
+    async rpc(name: string) {
+      if (name === "drain_outreach_scheduler") state.drainCalls++;
+      return false;
+    }
     async one(table: string) { return table === "outreach_settings" ? { ...state.settings } : table === "outreach_scheduler" ? { token_hash: state.settings.scheduler_token_hash } : null; }
     async update(table: string, query: string, patch: Record<string, unknown>) {
       if (table === "outreach_settings") { Object.assign(state.settings, patch); return [{ id: "singleton" }]; }
@@ -37,6 +42,7 @@ import { runTick, sha256Hex, verifySchedulerToken, forgetSchedulerTokenCache } f
 beforeEach(() => {
   state.settings = { id: "singleton", last_cron_at: null, last_tick_source: null, scheduler_token_hash: null };
   state.leases = [];
+  state.drainCalls = 0;
   runDispatch.mockClear();
   continueScanJobs.mockClear();
   runDueSavedSearches.mockClear();
@@ -50,6 +56,7 @@ describe("background ticks", () => {
     expect(runDispatch).toHaveBeenCalledWith({}, expect.objectContaining({ source: "tick", budgetMs: 25_000 }));
     expect(continueScanJobs).toHaveBeenCalled();
     expect(r.dispatch?.mailboxes[0].sent).toBe(2);
+    expect(state.drainCalls).toBe(1);
   });
   it("an open tab does nothing while a real scheduler is running", async () => {
     state.settings.last_cron_at = new Date(Date.now() - 30_000).toISOString();

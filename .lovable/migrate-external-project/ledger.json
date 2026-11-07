@@ -6,9 +6,9 @@
     {
       "capability": "admin-update-comprehensive",
       "source": "inspirova-admin-update.zip",
-      "outcome": "Inspected 61-file incremental admin/backend update; preserving current Cloud accounts/records, public pages, generated clients, provider credentials, routes and applied migration journal. Reviewing sending safety, background timer, scanner identity, reveal recovery and UI changes. No package or records export included; existing Cloud records stay in place.",
-      "status": "in_progress",
-      "next_action": "Merge all capabilities with secure runtime adaptations, apply additive timer schema and verify tests/admin flows; no live sends during testing."
+      "outcome": "Installed admin update with sending recovery, fixed recipient-ID/current-step snapshot, busy mailbox progress/Stop, business identity and Only-new persistence, Raw Data deduplication, Recent scans, concurrent fenced Reveal, guesses toggle, email accuracy/cache refresh, retained login recovery and safe credentials/limits. Applied additive timer/private-token and delivery-check migrations; registered Nitro scheduled plugin through nitro.config.ts. 218 tests pass; preview build OK; homepage/admin entry render without runtime errors; unauthorized timer/control requests rejected. No real emails or paid searches performed.",
+      "status": "code_verified",
+      "next_action": "Sign in to the preview to verify saved-row admin/Reveal flows; own-account session mint has no matching auth user. Publish and verify scheduled hook/heartbeat before relying on closed-tab execution. Database timer extensions are unavailable in the accessible backend, so timer activation is not verified; no timers activated or credentials requested. Live provider sending/enrichment remains unverified."
     },
     {
       "capability": "admin5-incremental-update",
