@@ -14,6 +14,7 @@ import { renderStep } from "./templates";
 import { hasMx } from "./providers/free-enrich";
 import { verifyEmail, addSuppression, looksLikeEmail } from "./bounce";
 import { isCompanyDomain } from "./business-key";
+import { companyAlreadyContacted } from "./company-contact";
 import { canEnrollGuessedEmail } from "./guessed-email";
 import { writeStep, DEFAULT_AI_INSTRUCTIONS } from "./email-ai";
 import { runSavedSearch, type SavedSearch } from "./saved-searches";
@@ -597,6 +598,7 @@ async function enroll(request: Request, e: Env, user: ApiUser): Promise<Response
   const result = { enrolled: 0, updated: 0, skipped: [] as { email: string; reason: string }[] };
   const start = body.startAt ? new Date(body.startAt) : new Date();
   let i = 0;
+  const companiesInBatch = new Set<string>();
   for (const l of body.leads.slice(0, 500)) {
     const email = (l.email || "").trim().toLowerCase();
     // The same strict check the sender uses: a stray comma or bracket in an
@@ -684,6 +686,19 @@ async function enroll(request: Request, e: Env, user: ApiUser): Promise<Response
       result.skipped.push({ email, reason: "already in another running sequence" });
       continue;
     }
+    // One person per company: not a second address from this same list, and not
+    // a company someone is already in a sequence with or that was emailed lately.
+    if (isCompanyDomain(domain)) {
+      if (companiesInBatch.has(domain)) {
+        result.skipped.push({ email, reason: "another person at this company is already in this list (one per company)" });
+        continue;
+      }
+    }
+    const contacted = await companyAlreadyContacted(db, { id: lead.id, domain }, { includeNotStarted: true });
+    if (contacted) {
+      result.skipped.push({ email, reason: contacted.reason });
+      continue;
+    }
     try {
       await db.insert("enrollments", {
         sequence_id: seq.id,
@@ -703,6 +718,7 @@ async function enroll(request: Request, e: Env, user: ApiUser): Promise<Response
       });
       continue;
     }
+    if (isCompanyDomain(domain)) companiesInBatch.add(domain);
     result.enrolled++;
     i++;
   }

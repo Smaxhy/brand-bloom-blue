@@ -76,9 +76,26 @@ describe("scraper provider result handling", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ people, useClaude: false }),
     }), { SERPER_API_KEY: "s".repeat(40) });
-    const result = await response!.json();
+    if (!response) throw new Error("Missing enrichment response");
+    const result = await response.json();
     const serperCalls = fetchMock.mock.calls.filter((c) => String(c[0]).includes("serper.dev")).length;
     expect(serperCalls).toBe(1);
     expect(result.warnings).toEqual([expect.stringMatching(/no searches left on your Serper account/)]);
+  });
+
+  it.each([true, false])("uses SerpApi fallback only when Paid fallback is %s", async (usePaid) => {
+    const fetchMock = vi.fn(async (url: string) => String(url).includes("serper.dev")
+      ? new Response(JSON.stringify({ message: "Not enough credits" }), { status: 400 })
+      : Response.json({ organic_results: [{ link: "https://holidaylightingco.com/", title: "Holiday Lighting Co", snippet: "hello@holidaylightingco.com" }] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const response = await handleApiRequest(new Request("https://example.com/api/enrich", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ people: [{ id: "b1", organizationName: "Holiday Lighting Co" }], usePaid, useClaude: false }),
+    }), { SERPER_API_KEY: "s".repeat(40), SERPAPI_API_KEY: "a".repeat(64) });
+    if (!response) throw new Error("Missing enrichment response");
+    const result = await response.json();
+    expect(fetchMock.mock.calls.filter((c) => String(c[0]).includes("serper.dev"))).toHaveLength(1);
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes("serpapi.com"))).toBe(usePaid);
+    expect(result.results[0].email).toBe(usePaid ? "hello@holidaylightingco.com" : "");
   });
 });

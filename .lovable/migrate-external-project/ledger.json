@@ -4,6 +4,13 @@
   ],
   "capabilities": [
     {
+      "capability": "admin-fix-2",
+      "source": "inspirova-admin-update_2.zip",
+      "outcome": "Merged new company-level first-contact/history checks across enrollment, saved searches and dispatch with 90-day cooldown, shared-host exclusions and explicit picked-send override. Hardened company leases to acquire before history reads and fail closed; paginated company history instead of archive 50-row cap. Added opt-in Serper-to-SerpApi fallback. Retained existing deadline budgets, sent-but-unlogged markers, security limits, scheduler protection, cancellation, ID/current-step snapshots and email cleanup; managed schema/data/public pages unchanged. 240 tests pass; preview build OK; signed-in dashboard and scraper with saved searches render without runtime errors.",
+      "status": "code_verified",
+      "next_action": "Live company blocking/sending and paid provider fallback remain unverified; no real sends, paid searches or scheduler activation performed."
+    },
+    {
       "capability": "admin-update-comprehensive",
       "source": "inspirova-admin-update.zip",
       "outcome": "Installed admin update with sending recovery, fixed recipient-ID/current-step snapshot, busy mailbox progress/Stop, business identity and Only-new persistence, Raw Data deduplication, Recent scans, concurrent fenced Reveal, guesses toggle, email accuracy/cache refresh, retained login recovery and safe credentials/limits. Applied additive timer/private-token and delivery-check migrations; registered Nitro scheduled plugin through nitro.config.ts. 218 tests pass; preview build OK; homepage/admin entry render without runtime errors; unauthorized timer/control requests rejected. No real emails or paid searches performed.",

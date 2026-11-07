@@ -10,6 +10,7 @@
 
 import { Db, enc, pgQuote } from "./db";
 import { isCompanyDomain } from "./business-key";
+import { companyAlreadyContacted } from "./company-contact";
 import { discoverCore, type DiscoverFilters } from "./api-proxies";
 import { scoreLead } from "./providers/free-enrich";
 import { enrichSite, enrichMany } from "./enrich-site";
@@ -260,7 +261,12 @@ export async function runSavedSearch(env: Env, db: Db, ss: SavedSearch): Promise
         const elsewhere = dup
           ? null
           : await db.one("enrollments", `lead_id=eq.${lead.id}&status=in.(queued,active,paused)&select=id`);
-        if (!sup && !dup && !elsewhere) {
+        // One company, one conversation (also across earlier scans and sequences).
+        const contacted =
+          sup || dup || elsewhere
+            ? null
+            : await companyAlreadyContacted(db, { id: lead.id, domain: website || null }, { includeNotStarted: true });
+        if (!sup && !dup && !elsewhere && !contacted) {
           const mailboxId = seq.mailbox_ids.length
             ? seq.mailbox_ids[i % seq.mailbox_ids.length]
             : null;

@@ -105,3 +105,8 @@
 - [x] Add atomic invalid/bounced transitions to suppressions and stop matching enrollments; backfill existing invalid/bounced addresses (zero missing blacklist rows verified).
 - [x] Verify 227 tests and preview build; admin entry has no runtime errors, protected endpoints deny signed-out requests; no emails sent.
 - [ ] Signed-in cleanup/email-check flow: blocked by no matching own-account session; sign in to the preview for saved-row verification.
+
+# Admin fix 2
+- [x] Merge new company-contact and opt-in fallback fixes without reverting existing protections.
+- [x] Verify 240 tests, preview build and signed-in dashboard/scraper with saved searches; no real sends or paid searches.
+- [ ] Live new company contact/send and paid fallback verification: requires real provider calls; not performed to avoid outreach and search charges.
