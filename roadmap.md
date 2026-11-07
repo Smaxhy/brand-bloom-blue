@@ -1,4 +1,5 @@
 # Public website refresh
+- [ ] Repair misleading quote validation and prevent browser autofill from filling the bot-trap field; verify completed quotes and retained consent/security.
 - [x] Connect structured quote/contact requests to Pipeline, preserve full details, and merge duplicate deals safely.
 - [x] Add an optional personal message to quotes and show it with the original request in Pipeline.
 - [x] Verify public submission, identical retry (one stored row), signed-in pipeline details and phone layout; removed test entries. Owner emails are not enabled (no verified sender domain).

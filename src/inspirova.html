@@ -522,7 +522,7 @@
       </div>
       <label>Company (optional)<input id="cCompany" name="company" maxlength="120" autocomplete="organization"></label>
       <label>Your question<textarea id="cMessage" name="message" required maxlength="2000"></textarea></label>
-      <input class="c-hp" id="cWebsite" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <input type="hidden" class="c-hp" id="cWebsite" name="website" autocomplete="off">
       <button type="submit" class="btn btn-primary" id="cSubmit">Send message <span class="arr">→</span></button>
       <div id="cMsg" role="status" aria-live="polite" style="font-size:.85rem;min-height:1.2em"></div>
     </form>
@@ -753,7 +753,7 @@
             <input type="tel"   id="qPhone" maxlength="40" aria-label="Phone number"   placeholder="Phone">
             <textarea id="qNotes" maxlength="1000" aria-label="Personal message" placeholder="Personal message (optional)" rows="4"></textarea>
             
-            <input class="c-hp" id="qWebsite" tabindex="-1" autocomplete="off" aria-hidden="true">
+            <input type="hidden" class="c-hp" id="qWebsite" autocomplete="off">
             <label class="chk"><input type="checkbox" id="qConsent"> Yes, I'd like more information and agree to the privacy policy.</label>
           </div>
         </div>
