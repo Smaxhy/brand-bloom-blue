@@ -26,6 +26,7 @@ const secret = (e: Env, k: string) => e[k] || process.env?.[k];
 const OWNERISH =
   /\b(owner|founder|co-founder|ceo|president|principal|proprietor|managing director|director|zaakvoerder|eigenaar|oprichter|bestuurder|g[ée]rant|fondateur|directeur|inhaber|geschäftsführer)\b/i;
 const CACHE_DAYS = 30;
+const EMAIL_EXTRACTION_VERSION = 1;
 const BUSINESS_WORDS =
   /\b(roofing|roofers?|plumbing|plumbers?|hvac|heating|cooling|electric(al)?|landscap\w*|lawn|tree|dental|dentistry|clinic|law|legal|realty|real estate|construction|contractors?|services?|solutions|group|company|co\.?|inc\.?|llc|ltd|bv|bvba|nv|gmbh|sarl|srl|studio|salon|spa|shop|store|center|centre|agency|partners|associates|brothers|sons|team|home|house|auto|motors?|cleaning|painting|design|media|marketing|consulting|insurance|bank|church|school|academy)\b/i;
 
@@ -60,6 +61,8 @@ export interface SiteProfile {
   email: string;
   emailGuessed: boolean;
   emailPage: string;
+  /** Allows incomplete older caches to recover newly supported published addresses. */
+  emailExtractionVersion?: number;
   names: { name: string; title: string }[];
   /** AI marketing-need rating (0–100), reasons, pitch angle. Null when no ANTHROPIC_API_KEY. */
   ai: {
@@ -117,6 +120,7 @@ async function readCache(db: Db | null | undefined, domain: string): Promise<Sit
     // Older profiles discarded published emails solely because the website had
     // no MX. Re-crawl those incomplete profiles rather than retaining the loss.
     if (row?.data && !row.data.email && row.data.mx === false) return null;
+    if (row?.data && (!row.data.email || row.data.emailGuessed) && row.data.emailExtractionVersion !== EMAIL_EXTRACTION_VERSION) return null;
     return row?.data ? { ...row.data, cached: true } : null;
   } catch {
     return null; // table missing or RLS — just crawl
@@ -450,6 +454,7 @@ export async function enrichSite(env: Env, o: EnrichSiteOpts): Promise<SiteProfi
     email,
     emailGuessed,
     emailPage,
+    emailExtractionVersion: EMAIL_EXTRACTION_VERSION,
     names: people.map((n) => ({ name: n.name, title: n.title })),
     ai,
     cached: false,

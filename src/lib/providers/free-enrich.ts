@@ -198,6 +198,37 @@ export function cleanDomain(s: string | undefined): string {
     .toLowerCase();
 }
 
+/** Decode addresses protected by Cloudflare's public email-obfuscation markup. */
+export function decodeCfEmail(hex: string): string {
+  if (!/^[0-9a-f]{4,320}$/i.test(hex) || hex.length % 2) return "";
+  const key = parseInt(hex.slice(0, 2), 16);
+  const bytes = new Uint8Array(hex.length / 2 - 1);
+  for (let i = 2; i < hex.length; i += 2)
+    bytes[i / 2 - 1] = parseInt(hex.slice(i, i + 2), 16) ^ key;
+  const email = new TextDecoder().decode(bytes);
+  return /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(email) ? email : "";
+}
+
+/** Published addresses hidden with Cloudflare, HTML entities or deliberate at/dot text. */
+export function hiddenEmails(html: string): string[] {
+  const found = new Set<string>();
+  const content = html.replace(/<!--[\s\S]*?-->/g, " ");
+  for (const match of content.matchAll(/data-cfemail\s*=\s*["']([0-9a-f]+)["']|email-protection#([0-9a-f]+)/gi)) {
+    const email = decodeCfEmail(match[1] || match[2] || "");
+    if (email) found.add(email.toLowerCase());
+  }
+  const entities = content
+    .replace(/&#0*64;|&#x0*40;|&commat;/gi, "@")
+    .replace(/&#0*46;|&#x0*2e;|&period;/gi, ".");
+  // Use visible text rather than script/style content to avoid tracking addresses.
+  const spelled = htmlToText(entities).replace(
+    /\b([a-z0-9._%+-]{1,})\s*(?:\[\s*at\s*\]|\(\s*at\s*\)|\s+at\s+|@)\s*([a-z0-9-]+(?:\s*(?:\[\s*dot\s*\]|\(\s*dot\s*\)|\s+dot\s+|\.)\s*[a-z0-9-]+)+)\b/gi,
+    (_match, user: string, domain: string) => `${user}@${domain.replace(/\[\s*dot\s*\]|\(\s*dot\s*\)|\bdot\b/gi, ".").replace(/\s+/g, "")}`,
+  );
+  for (const email of spelled.match(EMAIL_RE) ?? []) found.add(email.toLowerCase());
+  return Array.from(found);
+}
+
 export function htmlToText(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -418,8 +449,15 @@ export async function freeEnrich(input: {
   for (const pg of pages) {
     const html = pg.html;
     // mailto: and tel: links are the most reliable signals
-    for (const m of html.matchAll(/mailto:([^"'?\s<>]+)/gi))
-      emailMap.set(decodeURIComponent(m[1]).toLowerCase(), { page: pg.path });
+    for (const m of html.matchAll(/mailto:([^"'?\s<>]+)/gi)) {
+      // Malformed percent encoding in one link must not discard the whole site.
+      try {
+        const raw = decodeURIComponent(m[1]).toLowerCase();
+        for (const email of hiddenEmails(raw)) emailMap.set(email, { page: pg.path });
+      } catch { /* continue extracting other published addresses */ }
+    }
+    for (const email of hiddenEmails(html))
+      emailMap.set(email, emailMap.get(email) ?? { page: pg.path });
     for (const m of html.matchAll(/tel:([+\d()\s.-]{7,})/gi)) phones.add(m[1].trim());
     // social links
     const li = html.match(

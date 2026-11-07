@@ -77,3 +77,8 @@
 - [x] Connect Raw Data Reveal to saved scans, retain found contact details and Stop support, and recover published emails previously suppressed by website MX checks.
 - [x] Run 17 targeted regression tests and check the live admin entry for runtime errors without paid searches or email sends.
 - [ ] Verify Reveal with the user's saved rows: blocked by no matching managed session; user must sign in to the preview.
+
+# Uploaded email scraping fixes
+- [x] Merge safe email scraping improvements from inspirova-admin-engine-4.zip while preserving saved data, cancellation and security.
+- [x] Run 27 scraping, cache recovery, cancellation and security tests; build OK and admin entry has no runtime errors; no outbound emails.
+- [ ] Verify email recovery with saved rows: blocked by unavailable own-account preview session; user must sign in.

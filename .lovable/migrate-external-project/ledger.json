@@ -4,6 +4,13 @@
   ],
   "capabilities": [
     {
+      "capability": "admin4-email-scraping-fixes",
+      "source": "inspirova-admin-engine-4.zip",
+      "outcome": "Merged Cloudflare-obfuscated, entity-encoded and at/dot published email recovery; malformed mailto links no longer abort website extraction. Versioned incomplete/guessed cache refresh so old profiles can recover published addresses. Preserved current Cloud records, accounts, authorization, providers, endpoints, schedules, cancellation, Raw Data persisted Reveal, MX recovery, public-destination fetch guards and managed migrations. Twenty-seven targeted tests passed; preview build OK and admin sign-in entry has no runtime errors.",
+      "status": "code_verified",
+      "next_action": "Sign in to the preview to verify Reveal against saved rows; own-account session mint has no matching account. No paid searches or outbound emails performed."
+    },
+    {
       "capability": "admin3-email-fixes",
       "source": "inspirova-admin-engine-3.zip",
       "outcome": "Applied bounded email dispatch pacing, existing-enrollment picker exclusion, database-trigger duplicate enrollment protection and scan network recovery. Preserved fail-closed inbox sync, safe HTML/CSV, frozen send batches, secure credentials, owner-scoped scans, Cloud data/accounts and managed migrations. Thirty-three tests passed; public quote create/read/remove verified, malicious requests rejected and basic security checks clean.",
