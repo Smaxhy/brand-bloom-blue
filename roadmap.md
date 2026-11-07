@@ -1,4 +1,6 @@
 # Public website refresh
+- [ ] Make website quotes deletable from Pipeline without returning on refresh or losing original submissions.
+- [ ] Add admin Inboxes with GoHighLevel sent emails, reply status, message details and refresh; verify signed-in flows without sending emails.
 - [x] Prevent browser autofill from filling quote/contact bot-trap fields and return field-specific validation errors; 20 tests pass and completed browser quote returns success. Removed temporary test entry; original visitor failure could not be reproduced.
 - [x] Connect structured quote/contact requests to Pipeline, preserve full details, and merge duplicate deals safely.
 - [x] Add an optional personal message to quotes and show it with the original request in Pipeline.
