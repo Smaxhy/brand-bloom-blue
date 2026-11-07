@@ -27,7 +27,7 @@ export function mergeRawReveal(row: RawBusiness, result: EnrichResult): RawBusin
   };
 }
 
-type Reply = { job: ScanJobLite | null; produced: EnrichResult[] };
+type Reply = { job: ScanJobLite | null; produced: EnrichResult[]; claimed?: boolean };
 export async function runRawReveal(people: ScanPerson[], deps: {
   start: (people: ScanPerson[]) => Promise<Reply>;
   step: (id: string) => Promise<Reply>;
@@ -61,12 +61,17 @@ export async function runRawReveal(people: ScanPerson[], deps: {
       try {
         const next = await deps.step(job.id);
         deps.onRows(next.produced);
-        // Read saved results too: another tab or the scheduler may have produced them.
-        const full = await deps.status(job.id);
-        if (full) deps.onRows(Object.values(full.results));
-        job = full ?? next.job;
+        job = next.job;
+        if (!(await deps.canContinue())) return [...warnings];
+        // Read back another runner's results only when we did not own the slice.
+        // Our own rows are already returned; the final read reconciles all saved data.
+        if (next.claimed === false && job) {
+          const full = await deps.status(job.id);
+          if (full) { deps.onRows(Object.values(full.results)); job = full; }
+        }
         failures = 0;
       } catch (error) {
+        if (!(await deps.canContinue())) return [...warnings];
         if (++failures >= 4) throw error;
       }
     }

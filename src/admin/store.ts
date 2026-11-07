@@ -1,4 +1,5 @@
 import { scanJobAction } from "@/lib/scan-jobs.functions";
+import { runScanRequest } from "./scan-request";
 import type { LeadAi } from "@/lib/lead-filters";
 /** Inspirova Admin — per-account Lovable Cloud data layer. */
 
@@ -958,14 +959,14 @@ export interface ScanJobFull extends ScanJobLite {
   options: { useClaude?: boolean; usePaid?: boolean; revealPhone?: boolean; findLinkedin?: boolean };
 }
 
-async function scanCall<T>(data: unknown): Promise<T> {
-  return await scanJobAction({ data }) as T;
+async function scanCall<T>(data: unknown, canContinue?: () => Promise<boolean>): Promise<T> {
+  return runScanRequest<T>(() => scanJobAction({ data }), { canContinue });
 }
-export function startScan(people: ScanPerson[], options: ScanJobFull["options"], label: string): Promise<{ job: ScanJobLite; produced: EnrichResult[] }> {
-  return scanCall({ action: "start", people, options, label: label.slice(0, 120) });
+export function startScan(people: ScanPerson[], options: ScanJobFull["options"], label: string, canContinue?: () => Promise<boolean>): Promise<{ job: ScanJobLite; produced: EnrichResult[] }> {
+  return scanCall({ action: "start", people, options, label: label.slice(0, 120) }, canContinue);
 }
-export function stepScan(id: string): Promise<{ job: ScanJobLite | null; produced: EnrichResult[]; claimed: boolean }> {
-  return scanCall({ action: "step", id });
+export function stepScan(id: string, canContinue?: () => Promise<boolean>): Promise<{ job: ScanJobLite | null; produced: EnrichResult[]; claimed: boolean }> {
+  return scanCall({ action: "step", id }, canContinue);
 }
 export async function scanStatus(id: string, full: true): Promise<ScanJobFull | null>;
 export async function scanStatus(id: string, full?: false): Promise<ScanJobLite | null>;

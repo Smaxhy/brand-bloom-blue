@@ -134,8 +134,8 @@ export function RawData({
     };
     try {
       const warnings = await runRawReveal(targets.map(rawScanPerson), {
-        start: (people) => startScan(people, { useClaude: false, usePaid: false, revealPhone: true, findLinkedin: false }, `Raw Data · ${people.length} businesses`),
-        step: stepScan, status: (id) => scanStatus(id, true),
+        start: (people) => startScan(people, { useClaude: false, usePaid: false, revealPhone: true, findLinkedin: false }, `Raw Data · ${people.length} businesses`, control.canContinue),
+        step: (id) => stepScan(id, control.canContinue), status: (id) => scanStatus(id, true),
         canContinue: control.canContinue,
         wait: () => new Promise((resolve) => setTimeout(resolve, 3500)),
         onJob: setRevealJob, onRows: apply,
