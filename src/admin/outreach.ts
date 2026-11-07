@@ -418,6 +418,7 @@ export interface EnrollInput {
 export async function enrollLeads(
   sequenceId: string,
   leads: EnrollInput[],
+  options: { allowGuessed?: boolean } = {},
 ): Promise<{
   ok: boolean;
   enrolled: number;
@@ -427,7 +428,7 @@ export async function enrollLeads(
   const res = await authFetch("/api/outreach/enroll", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sequenceId, leads }),
+    body: JSON.stringify({ sequenceId, leads, allowGuessed: options.allowGuessed === true }),
   });
   return (await res.json()) as {
     ok: boolean;

@@ -13,6 +13,7 @@ import { runDispatch, type Lead, type Mailbox, type OutreachSettings } from "./s
 import { renderStep } from "./templates";
 import { hasMx } from "./providers/free-enrich";
 import { verifyEmail } from "./bounce";
+import { canEnrollGuessedEmail } from "./guessed-email";
 import { writeStep, DEFAULT_AI_INSTRUCTIONS } from "./email-ai";
 import { runSavedSearch, type SavedSearch } from "./saved-searches";
 
@@ -493,7 +494,9 @@ async function enroll(request: Request, e: Env, user: ApiUser): Promise<Response
     sequenceId?: string;
     leads?: EnrollLead[];
     startAt?: string;
+    allowGuessed?: boolean;
   };
+  if (body.allowGuessed !== undefined && typeof body.allowGuessed !== "boolean") return json({ ok: false, error: "Invalid guessed-address option" }, 400);
   if (!body.sequenceId || !Array.isArray(body.leads) || !body.leads.length)
     return json({ ok: false, error: "sequenceId and leads[] are required" }, 400);
   const db = new Db(e);
@@ -525,6 +528,10 @@ async function enroll(request: Request, e: Env, user: ApiUser): Promise<Response
     let verified = "unknown";
     if (l.emailGuessed) {
       verified = await verifyOne(e, email);
+      if (verified !== "invalid" && !canEnrollGuessedEmail(verified, body.allowGuessed)) {
+        result.skipped.push({ email, reason: "Guessed address is not confirmed. Configure the email verifier in Settings or explicitly include unverified guesses." });
+        continue;
+      }
       if (verified === "invalid") {
         result.skipped.push({
           email,

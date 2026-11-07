@@ -19,3 +19,4 @@
 - Raw Data Reveal uses owner-scoped persisted scans and merges results by original row ID into saved raw contacts; keep existing details, label guesses, and never synthesize demo addresses on failure.
 - Version email extraction in cached site profiles; refresh older profiles when decoding or business relevance changes so caches cannot retain stale addresses.
 - Manual email checks use authenticated admin/CEO server functions with fail-closed rate limits, bounded batches and email-keyed advisory results; MX checks never mean mailbox confirmation or successful suppression.
+- Guessed-address enrollment requires verifier confirmation unless an explicit boolean override is supplied; invalid addresses remain blocked regardless of override.

@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { getSendingStatus } from "@/lib/sending-status.functions";
 import { eligibleSendBatches } from "../send-batches";
+import { inboxCheck } from "@/lib/inbox-check";
 type SendingStatus = Awaited<ReturnType<typeof getSendingStatus>>;
 import {
   Plus,
@@ -952,6 +953,11 @@ function Sequences({
                       })
                     }
                   />
+                  {st.body.trim() && <div className="mt-2 text-xs text-muted-foreground" role="status">
+                    <span className="font-semibold">Content check: {inboxCheck(st.subject, st.body).score}/100</span>
+                    <ul className="mt-1 list-disc pl-4">{inboxCheck(st.subject, st.body).issues.map((issue) => <li key={issue.text}>{issue.text}</li>)}</ul>
+                    <span>Inbox placement is not guaranteed.</span>
+                  </div>}
                 </div>
               ))}
               <Btn
@@ -1213,6 +1219,7 @@ function AddPeople({
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [activate, setActivate] = useState(true);
+  const [allowGuessed, setAllowGuessed] = useState(false);
   const [live, setLive] = useState<Set<string>>(new Set());
   const [loadingLive, setLoadingLive] = useState(false);
   const [liveError, setLiveError] = useState("");
@@ -1226,6 +1233,7 @@ function AddPeople({
     setSel(new Set());
     setResult(null);
     setQ("");
+    setAllowGuessed(false);
     let cancelled = false;
     setLive(new Set());
     setLoadingLive(true);
@@ -1264,7 +1272,7 @@ function AddPeople({
     if (!picked.length) return toast.error("Tick at least one person.");
     setBusy(true);
     try {
-      const res = await enrollLeads(seq.id, picked.map(rawToEnroll));
+      const res = await enrollLeads(seq.id, picked.map(rawToEnroll), { allowGuessed });
       if (!res.ok) throw new Error(res.error || "Could not add people");
       setResult({ enrolled: res.enrolled, skipped: res.skipped });
       if (res.enrolled) {
@@ -1439,6 +1447,10 @@ function AddPeople({
                 className="accent-[var(--brand-violet)]"
               />
               Start sending right away (sets the sequence to Active)
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <input type="checkbox" checked={allowGuessed} onChange={(event) => setAllowGuessed(event.target.checked)} />
+              Include unverified guessed addresses (higher bounce risk)
             </label>
             <div className="flex gap-2">
               <Btn variant="ghost" onClick={onClose}>
