@@ -223,7 +223,9 @@ function ResultsPage() {
         <div className="mt-8 grid items-start gap-8 md:grid-cols-2">
           {proofs.map((proof, index) => (
             <figure key={proof.src} className={index === 0 ? "md:col-span-2" : ""}>
-              <img src={proof.src} alt={proof.caption} loading="lazy" className="block w-full" />
+              <div className={index === 4 || index === 5 ? "proof-image-frame proof-image-frame-wide" : "proof-image-frame"}>
+                <img src={proof.src} alt={proof.caption} loading="lazy" />
+              </div>
               <figcaption className="border-b border-border py-4 text-sm text-muted-foreground"><span className="mr-3 text-primary">0{index + 1}</span>{proof.caption}</figcaption>
             </figure>
           ))}
