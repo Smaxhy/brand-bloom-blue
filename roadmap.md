@@ -79,5 +79,6 @@
 - [ ] Verify Reveal with the user's saved rows: blocked by no matching managed session; user must sign in to the preview.
 
 # Uploaded email scraping fixes
-- [ ] Merge safe email scraping improvements from inspirova-admin-engine-4.zip while preserving saved data, cancellation and security.
-- [ ] Run scraping regression tests and verify the available preview flow without outbound emails.
+- [x] Merge safe email scraping improvements from inspirova-admin-engine-4.zip while preserving saved data, cancellation and security.
+- [x] Run 27 scraping, cache recovery, cancellation and security tests; build OK and admin entry has no runtime errors; no outbound emails.
+- [ ] Verify email recovery with saved rows: blocked by unavailable own-account preview session; user must sign in.
