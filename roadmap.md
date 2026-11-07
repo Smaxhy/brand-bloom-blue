@@ -72,3 +72,7 @@
 - [x] Add visible Stop beside Reveal and stop further scan steps while retaining saved results.
 - [x] Verify cancellation with five passing tests and preview compilation.
 - [ ] Signed-in Stop flow: blocked because the requesting user has no matching managed session; sign in to verify without paid searches.
+
+# Raw Data reveal repair
+- [ ] Diagnose and repair missing emails and contact details in Raw Data Reveal.
+- [ ] Run targeted regression tests and verify the available live flow without paid searches or email sends.
