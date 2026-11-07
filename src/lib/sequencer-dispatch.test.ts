@@ -98,6 +98,7 @@ class FakeDb {
   }
   async insertIgnore(table: string, rows: Row | Row[]) {
     const list = Array.isArray(rows) ? rows : [rows];
+    for (const f of failures) if (f.table === table && list.some(f.match)) throw new Error(f.message);
     const t = (tables[table] ??= []);
     const added = list.filter((r) => !t.some((x) => x.key === r.key));
     t.push(...added.map((r) => ({ ...r })));
