@@ -87,7 +87,7 @@ export async function handleApiRequest(
       ctx,
       runTick(configured, onlySearches
         ? { trigger: timer ? "db" : "external", origin: url.origin, dispatch: false, scans: false, searches: true }
-        : { trigger: timer ? "db" : "external", origin: url.origin }),
+        : { trigger: timer ? "db" : "external", origin: url.origin, searches: true }),
     );
     const sent = tick.dispatch?.mailboxes.reduce((a, m) => a + m.sent, 0) ?? 0;
     return json({ ok: true, sent, read: tick.scans?.read ?? 0, errors: tick.errors.slice(0, 5) });
@@ -1241,7 +1241,7 @@ function tilePoints(
   }
   // Centre tile first so small result sets are still the most central businesses.
   pts.sort(
-    (a, b) => distanceKm(centerLat, centerLng, a.lat, a.lng) - distanceKm(f.lat, f.lng, b.lat, b.lng),
+    (a, b) => distanceKm(centerLat, centerLng, a.lat, a.lng) - distanceKm(centerLat, centerLng, b.lat, b.lng),
   );
   return pts;
 }

@@ -148,6 +148,7 @@ export async function runTick(
   });
 
   await Promise.all([sending, scanning, searches]);
+  if (opts.trigger === "db" && !report.errors.length) await db.rpc("drain_outreach_scheduler", {}).catch(() => {});
   return report;
 }
 

@@ -21,3 +21,6 @@
 - Version email extraction in cached site profiles; refresh older profiles when decoding or business relevance changes so caches cannot retain stale addresses.
 - Manual email checks use authenticated admin/CEO server functions with fail-closed rate limits, bounded batches and email-keyed advisory results; MX checks never mean mailbox confirmation or successful suppression.
 - Guessed-address enrollment requires verifier confirmation unless an explicit boolean override is supplied; invalid addresses remain blocked regardless of override.
+
+- Background timer configuration and token hashes are service-role-only; validate approved published destinations, wake its bounded processor on enqueue, and disarm after drain. Nitro scheduled work uses the Cloudflare scheduled hook because generated hosting entries do not invoke the custom server scheduled export.
+- GoHighLevel delivery checks persist a last-check cursor so missed scheduling windows cannot hide hard bounces.

@@ -214,7 +214,7 @@ function BackgroundTimerPanel() {
     try {
       const r = await setScheduler(enabled);
       if (!r.ok) throw new Error(r.error || "Could not change the timer");
-      toast.success(enabled ? "Background timer is on — it runs every minute." : "Background timer is off.");
+      toast.success(enabled ? "Background timer is on — it runs every five minutes." : "Background timer is off.");
       await load();
     } catch (e) {
       toast.error((e as Error).message);
@@ -231,7 +231,7 @@ function BackgroundTimerPanel() {
         <div className="flex-1">
           <h3 className="font-display text-lg font-bold">Background timer</h3>
           <p className="text-xs text-muted-foreground">
-            Sends queued emails one by one and keeps background scans reading websites every minute —
+            Sends queued emails one by one and keeps background scans reading websites every five minutes —
             with this app and your computer closed.
           </p>
         </div>
@@ -281,7 +281,7 @@ function BackgroundTimerPanel() {
             </p>
           )}
           <p className="text-xs text-muted-foreground">
-            Calls <code className="rounded bg-secondary px-1">{st.url || st.suggested_url}</code> every minute
+            Calls <code className="rounded bg-secondary px-1">{st.url || st.suggested_url}</code> every five minutes
             with a private token. If your Cloudflare cron already runs, both can stay on — they never send
             the same email twice.
           </p>
