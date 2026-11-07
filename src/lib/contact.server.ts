@@ -1,9 +1,10 @@
 import { CONTACT_LIMITS, contactSchema } from "./contact-schema";
+import { quoteDetails } from "./quote-services";
 import { MAX_CONTACT_BODY_BYTES, readBoundedBody, requestIpHash, sameOriginRequest, securityJson } from "./request-security";
 
 interface ContactDb {
   rpc: (args: { _key: string; _max: number; _window_seconds: number }) => Promise<boolean>;
-  insert: (row: { name: string; email: string; company: string | null; message: string; ip_hash: string }) => Promise<void>;
+  insert: (row: { name: string; email: string; company: string | null; message: string; ip_hash: string; kind: string; phone: string; services: ReturnType<typeof quoteDetails>["services"]; estimates: ReturnType<typeof quoteDetails>["estimates"] | null; personal_message: string; attribution: { source: string; medium: string; campaign: string }; consent: boolean; request_key: string }) => Promise<void>;
 }
 
 export async function handleContactRequest(request: Request, getDb: () => Promise<ContactDb>): Promise<Response> {
@@ -35,8 +36,14 @@ export async function handleContactRequest(request: Request, getDb: () => Promis
     for (const limit of limits) {
       if ((await db.rpc(limit)) !== true) return securityJson({ error: "Too many requests. Please wait and try again, or e-mail us directly." }, 429, limit._window_seconds);
     }
+    const details = quoteDetails(data.services);
+    // Identical retries have a stable unique key; changed messages/services remain separate requests.
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(data)));
+    const requestKey = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
     await db.insert({ name: data.name, email: data.email, company: data.company || null,
-      message: data.kind === "quote" ? `Quote request (contact consent confirmed)\n${data.message}` : data.message, ip_hash: ipHash });
+      message: data.kind === "quote" ? `Quote request (contact consent confirmed)\n${data.message}` : data.message, ip_hash: ipHash,
+      kind: data.kind, phone: data.phone, services: [...details.services], estimates: data.kind === "quote" && data.services.length ? details.estimates : null,
+      personal_message: data.personalMessage, attribution: data.attribution, consent: data.consent === true, request_key: requestKey });
     return securityJson({ ok: true });
   } catch {
     // Never allow unprotected submissions during database/limiter outages.

@@ -13,7 +13,7 @@ export const Route = createFileRoute("/api/public/contact")({
             return data === true;
           },
           insert: async (row) => {
-            const { error } = await supabaseAdmin.from("contact_submissions").insert(row);
+            const { error } = await supabaseAdmin.from("contact_submissions").upsert(row, { onConflict: "request_key", ignoreDuplicates: true });
             if (error) throw new Error("Submission unavailable");
           },
         };
