@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { listWebsiteRequests } from "@/lib/website-requests.functions";
-import { mergeWebsiteRequests, type WebsiteRequest } from "../pipeline-merge";
+import { mergeWebsiteRequests, removePipelineDeal, type WebsiteRequest } from "../pipeline-merge";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Plus, GripVertical, Pencil, Trash2, Euro } from "lucide-react";
 import {
   type AdminData,
@@ -37,13 +38,14 @@ export function Pipeline({
   update: (fn: (p: AdminData) => AdminData) => void;
 }) {
   const [editing, setEditing] = useState<Deal | null>(null);
+  const [deleting, setDeleting] = useState<Deal | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overStage, setOverStage] = useState<StageId | null>(null);
   const [requests, setRequests] = useState<WebsiteRequest[]>([]);
   const [requestError, setRequestError] = useState("");
   const [loadingRequests, setLoadingRequests] = useState(false);
   const readRequests = useServerFn(listWebsiteRequests);
-  const visibleDeals = mergeWebsiteRequests(data.deals, requests);
+  const visibleDeals = mergeWebsiteRequests(data.deals, requests, data.dismissedWebsiteRequestIds);
 
   async function refreshRequests() {
     setLoadingRequests(true);
@@ -74,7 +76,7 @@ export function Pipeline({
 
   function save(d: Deal) {
     update((p) => {
-      const current = mergeWebsiteRequests(p.deals, requests);
+      const current = mergeWebsiteRequests(p.deals, requests, p.dismissedWebsiteRequestIds);
       const exists = current.some((x) => x.id === d.id);
       const deals = exists
         ? current.map((x) => (x.id === d.id ? { ...d, updatedAt: Date.now() } : x))
@@ -84,15 +86,17 @@ export function Pipeline({
     setEditing(null);
   }
 
-  function remove(id: string) {
-    update((p) => ({ ...p, deals: p.deals.filter((d) => d.id !== id) }));
+  function remove(deal: Deal) {
+    update((p) => ({ ...p, ...removePipelineDeal(p.deals, deal, p.dismissedWebsiteRequestIds) }));
+    setEditing(null);
+    setDeleting(null);
   }
 
   function drop(stage: StageId) {
     if (!dragId) return;
     update((p) => ({
       ...p,
-      deals: mergeWebsiteRequests(p.deals, requests).map((d) => (d.id === dragId ? { ...d, stage, updatedAt: Date.now() } : d)),
+      deals: mergeWebsiteRequests(p.deals, requests, p.dismissedWebsiteRequestIds).map((d) => (d.id === dragId ? { ...d, stage, updatedAt: Date.now() } : d)),
     }));
     setDragId(null);
     setOverStage(null);
@@ -172,9 +176,9 @@ export function Pipeline({
                             <Btn variant="ghost" onClick={() => setEditing(d)} className="h-6 w-6 p-0" aria-label={`Edit ${d.name}`}>
                               <Pencil className="h-3.5 w-3.5" />
                             </Btn>
-                            {!d.requests?.length && <Btn variant="ghost" onClick={() => remove(d.id)} className="h-6 w-6 p-0 text-destructive" aria-label="Delete">
+                            <Btn variant="ghost" onClick={() => setDeleting(d)} className="h-6 w-6 p-0 text-destructive" aria-label={`Delete ${d.name}`}>
                               <Trash2 className="h-3.5 w-3.5" />
-                            </Btn>}
+                            </Btn>
                           </span>
                         </div>
                       </div>
@@ -225,12 +229,14 @@ export function Pipeline({
             <Field label="Notes"><textarea className={`${inputCls} min-h-[72px]`} value={editing.notes} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} /></Field>
             {!!editing.requests?.length && <section className="space-y-4 border-t border-border pt-4"><h3 className="text-sm font-semibold">Original website requests</h3>{[...editing.requests].reverse().map((r) => <div key={r.id} className="space-y-2 border-b border-border pb-4 text-sm"><div className="flex flex-wrap justify-between gap-2 font-semibold"><span>{r.kind === "quote" ? "Quote request" : "Contact message"}</span><time className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString()}</time></div><p className="break-words">{r.name} · {r.company}</p><p className="break-all"><a className="text-primary" href={`mailto:${r.email}`}>{r.email}</a>{r.phone && <> · {r.phone}</>}</p>{r.services.map((s) => <p key={s.id}>{s.name} — {fmtEuro(s.price)} {s.billing === "monthly" ? "/ month" : "one-time"}</p>)}{r.estimates && <p>Estimate only · Monthly {fmtEuro(r.estimates.monthly)} · One-time {fmtEuro(r.estimates.upfront)} · First month {fmtEuro(r.estimates.total)}</p>}{r.personal_message && <div><h4 className="font-semibold">Personal message</h4><p className="whitespace-pre-wrap break-words">{r.personal_message}</p></div>}<details><summary className="cursor-pointer text-muted-foreground">Full original message</summary><p className="mt-2 whitespace-pre-wrap break-words">{r.message}</p></details>{(r.attribution.source || r.attribution.medium || r.attribution.campaign) && <p className="break-words text-xs text-muted-foreground">Source: {r.attribution.source || "Not supplied"} · Medium: {r.attribution.medium || "Not supplied"} · Campaign: {r.attribution.campaign || "Not supplied"}</p>}<p className="text-xs text-muted-foreground">Contact consent: {r.consent ? "Confirmed" : "Not recorded"}</p></div>)}</section>}
             <div className="flex justify-end gap-2 pt-1">
+              {visibleDeals.some((d) => d.id === editing.id) && <Btn variant="danger" className="mr-auto" onClick={() => setDeleting(editing)}><Trash2 className="h-4 w-4" /> Delete deal</Btn>}
               <Btn variant="ghost" onClick={() => setEditing(null)}>Cancel</Btn>
               <Btn onClick={() => save(editing)}>Save deal</Btn>
             </div>
           </div>
         )}
       </Modal>
+      <ConfirmDialog open={!!deleting} onOpenChange={(open) => { if (!open) setDeleting(null); }} title="Delete this deal?" description="This removes the deal from your pipeline. Original website requests and email history remain saved." confirmLabel="Delete deal" destructive onConfirm={() => { if (deleting) remove(deleting); }} />
     </div>
   );
 }

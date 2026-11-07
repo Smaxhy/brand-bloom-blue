@@ -40,9 +40,15 @@ export function cleanDuplicateDeals(deals: Deal[]): Deal[] {
   return result;
 }
 
-export function mergeWebsiteRequests(deals: Deal[], requests: WebsiteRequest[]): Deal[] {
-  let result = cleanDuplicateDeals(deals);
-  for (const r of [...requests].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
+export function removePipelineDeal(deals: Deal[], deal: Deal, dismissedIds: string[] = []) {
+  return { deals: deals.filter((d) => !sameDeal(d, deal)),
+    dismissedWebsiteRequestIds: [...new Set([...dismissedIds, ...(deal.requests ?? []).map((r) => r.id)])] };
+}
+
+export function mergeWebsiteRequests(deals: Deal[], requests: WebsiteRequest[], dismissedIds: string[] = []): Deal[] {
+  const dismissed = new Set(dismissedIds);
+  let result = cleanDuplicateDeals(deals.map((d) => ({ ...d, requests: d.requests?.filter((r) => !dismissed.has(r.id)) })));
+  for (const r of requests.filter((r) => !dismissed.has(r.id)).sort((a, b) => a.created_at.localeCompare(b.created_at))) {
     const requestDeal: Deal = { id: `website_${r.id}`, name: r.company || r.name, contact: r.name,
       email: r.email, phone: r.phone, value: r.estimates?.total ?? 0, stage: "new",
       source: r.kind === "quote" ? "Website quote" : "Website contact", notes: "",
