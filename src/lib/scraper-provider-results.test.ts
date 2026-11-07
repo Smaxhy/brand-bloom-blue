@@ -63,4 +63,22 @@ describe("scraper provider result handling", () => {
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).not.toContain("private diagnostic value");
   });
+  it("stops asking Serper once the account has no searches left (one warning, no call per business)", async () => {
+    const fetchMock = vi.fn(async (url: string) =>
+      String(url).includes("serper.dev")
+        ? new Response(JSON.stringify({ message: "Not enough credits", statusCode: 400 }), { status: 400 })
+        : Response.json({}),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const people = Array.from({ length: 6 }, (_, i) => ({ id: `b${i}`, organizationName: `Business ${i}` }));
+    const response = await handleApiRequest(new Request("https://example.com/api/enrich", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ people, useClaude: false }),
+    }), { SERPER_API_KEY: "s".repeat(40) });
+    const result = await response!.json();
+    const serperCalls = fetchMock.mock.calls.filter((c) => String(c[0]).includes("serper.dev")).length;
+    expect(serperCalls).toBe(1);
+    expect(result.warnings).toEqual([expect.stringMatching(/no searches left on your Serper account/)]);
+  });
 });
