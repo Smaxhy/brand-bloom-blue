@@ -32,4 +32,14 @@ describe("Raw Data reveal", () => {
     await runRawReveal([rawScanPerson(row)], { start: async () => ({ job, produced: [] }), step, status: async () => null, canContinue: async () => allowed, wait: async () => { allowed = false; }, onJob: vi.fn(), onRows: vi.fn(), onProgress: vi.fn() });
     expect(step).not.toHaveBeenCalled();
   });
+  it("does not spend status requests after every owned slice, but still reconciles final saved results", async () => {
+    const job: ScanJobFull = { id: "scan", label: "Raw", status: "queued", cursor: 0, total: 2, warnings: [], last_error: null, created_at: "", updated_at: "", finished_at: "", people: [rawScanPerson(row)], results: { raw_1: result }, options: {} };
+    const step = vi.fn().mockResolvedValueOnce({ job: { ...job, status: "running", cursor: 1 }, produced: [result], claimed: true }).mockResolvedValueOnce({ job: { ...job, status: "done", cursor: 2 }, produced: [], claimed: true });
+    const status = vi.fn(async () => ({ ...job, status: "done" as const, cursor: 2 }));
+    const onRows = vi.fn();
+    await runRawReveal([rawScanPerson(row)], { start: async () => ({ job, produced: [] }), step, status, canContinue: async () => true, wait: async () => {}, onJob: vi.fn(), onRows, onProgress: vi.fn() });
+    expect(step).toHaveBeenCalledTimes(2);
+    expect(status).toHaveBeenCalledTimes(1);
+    expect(onRows).toHaveBeenCalledWith([result]);
+  });
 });
