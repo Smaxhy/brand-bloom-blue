@@ -444,6 +444,11 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
   // Provider problems (quota used up, bad key) — shown once in the scraper banner.
   const warnings = new Set<string>();
   const warn = (w: string) => warnings.add(w);
+  // No searches left / key rejected: don't ask again for every next business.
+  let googleOff = false;
+  const stopGoogle = () => {
+    googleOff = true;
+  };
 
   const results = people.map((p) => ({
     id: p.id,
@@ -556,9 +561,9 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
     if (r.email && (!opts.revealPhone || r.phone)) return;
 
     // 2a) Find the company website via Google if we still don't have one.
-    if (!r.website && googleKey && p.organizationName) {
+    if (!r.website && googleKey && !googleOff && p.organizationName) {
       try {
-        const site = await withTimeout(googleFindWebsite(googleKey, p.organizationName, warn), 12_000, "website search");
+        const site = await withTimeout(googleFindWebsite(googleKey, p.organizationName, warn, stopGoogle), 12_000, "website search");
         if (site && !NOT_A_WEBSITE.test(site)) r.website = site;
       } catch {
         /* skip */
@@ -597,7 +602,7 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
 
     // 2c) Email via Google search (last resort), tracking the source URL. Only
     //     an address that belongs to THIS business is accepted.
-    if (!r.email && googleKey) {
+    if (!r.email && googleKey && !googleOff) {
       const q = [
         p.name ? `"${p.name}"` : "",
         p.organizationName ? `"${p.organizationName}"` : "",
@@ -607,8 +612,9 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
         .filter(Boolean)
         .join(" ");
       try {
-        const { blob, firstLink, error } = await withTimeout(googleSearch(googleKey, q), 12_000, "email search");
+        const { blob, firstLink, error, stop } = await withTimeout(googleSearch(googleKey, q), 12_000, "email search");
         if (error) warn(error);
+        if (stop) stopGoogle();
         const found = pickBusinessEmail(blob, domain, { company: p.organizationName, owner: r.name || p.name });
         if (found) {
           r.email = found;
@@ -704,19 +710,42 @@ function isSerpApi(key: string): boolean {
 const PROVIDER_URL_RE =
   /https?:\/\/[^"\\ ]*(serpapi\.com|serper\.dev|google\.com\/search|gstatic\.com|googleusercontent\.com)[^"\\ ]*/gi;
 
-/** Human-readable reason a search provider refused us (quota, bad key). */
-function searchProviderProblem(provider: "SerpApi" | "Serper", status: number): string {
-  if (status === 429)
-    return `${provider}: monthly searches used up — website/email lookups are skipped until it resets or you add a Serper.dev key`;
-  if (status === 401 || status === 403) return `${provider}: key rejected (check the secret)`;
-  return `${provider}: HTTP ${status}`;
+/**
+ * Why a search provider refused a request, in plain words, and whether to stop
+ * asking it for the rest of this scan (no credits / bad key won't fix itself).
+ * Serper answers "out of credits" with a 400 and explains it in the body — the
+ * old message only showed "HTTP 400".
+ */
+export function searchProviderProblem(
+  provider: "SerpApi" | "Serper",
+  status: number,
+  body = "",
+): { text: string; stop: boolean } {
+  // The provider's own words are only used to tell the cases apart — never
+  // shown (they can carry account details).
+  let said = "";
+  try {
+    const j = JSON.parse(body) as { message?: string; error?: string };
+    said = String(j.message || j.error || "");
+  } catch {
+    said = body;
+  }
+  if (/credit|quota|plan|run out|limit|exceed/i.test(said) || status === 429 || status === 402)
+    return {
+      text: `${provider}: no searches left on your ${provider} account — finding websites/emails through Google is skipped until you top it up; free website reading carries on`,
+      stop: true,
+    };
+  if (status === 401 || status === 403 || /api key|unauthori[sz]ed|forbidden/i.test(said))
+    return { text: `${provider}: key rejected — check the ${provider} key in Settings`, stop: true };
+  if (status >= 500) return { text: `${provider}: temporary problem on their side (${status})`, stop: false };
+  return { text: `${provider}: refused a search (HTTP ${status})`, stop: false };
 }
 
 /** Run a Google search via whichever provider the key belongs to. */
 async function googleSearch(
   key: string,
   q: string,
-): Promise<{ blob: string; firstLink: string; error?: string }> {
+): Promise<{ blob: string; firstLink: string; error?: string; stop?: boolean }> {
   if (isSerpApi(key)) {
     const u = new URL("https://serpapi.com/search.json");
     u.searchParams.set("engine", "google");
@@ -724,16 +753,20 @@ async function googleSearch(
     u.searchParams.set("num", "10");
     u.searchParams.set("api_key", key);
     const res = await fetch(u.toString());
-    if (!res.ok)
-      return { blob: "", firstLink: "", error: searchProviderProblem("SerpApi", res.status) };
+    if (!res.ok) {
+      const p = searchProviderProblem("SerpApi", res.status, await res.text().catch(() => ""));
+      return { blob: "", firstLink: "", error: p.text, stop: p.stop };
+    }
     const d = (await res.json()) as {
       organic_results?: { link?: string; title?: string; snippet?: string }[];
       knowledge_graph?: { website?: string; description?: string; title?: string };
       answer_box?: unknown;
       error?: string;
     };
-    if (d.error && /limit|exceed|run out|plan/i.test(d.error))
-      return { blob: "", firstLink: "", error: searchProviderProblem("SerpApi", 429) };
+    if (d.error && /limit|exceed|run out|plan/i.test(d.error)) {
+      const p = searchProviderProblem("SerpApi", 429, d.error);
+      return { blob: "", firstLink: "", error: p.text, stop: true };
+    }
     // Only the fields that describe the RESULT. The raw SerpApi JSON is full of
     // serpapi.com links (serpapi_link, thumbnails, pagination) that used to leak
     // in as "the website".
@@ -760,8 +793,10 @@ async function googleSearch(
     headers: { "X-API-KEY": key, "Content-Type": "application/json" },
     body: JSON.stringify({ q, num: 10 }),
   });
-  if (!res.ok)
-    return { blob: "", firstLink: "", error: searchProviderProblem("Serper", res.status) };
+  if (!res.ok) {
+    const p = searchProviderProblem("Serper", res.status, await res.text().catch(() => ""));
+    return { blob: "", firstLink: "", error: p.text, stop: p.stop };
+  }
   const d = (await res.json()) as {
     organic?: { link?: string; title?: string; snippet?: string }[];
     knowledgeGraph?: { website?: string; title?: string; description?: string };
@@ -788,9 +823,11 @@ async function googleFindWebsite(
   key: string,
   company: string,
   warn?: (w: string) => void,
+  onStop?: () => void,
 ): Promise<string> {
-  const { blob, firstLink, error } = await googleSearch(key, `${company} official website`);
+  const { blob, firstLink, error, stop } = await googleSearch(key, `${company} official website`);
   if (error) warn?.(error);
+  if (stop) onStop?.();
   if (firstLink && !SOCIAL_RE.test(firstLink)) {
     const dom = cleanDomain(firstLink);
     if (dom && dom.includes(".")) return dom;
@@ -1602,7 +1639,9 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
           body: JSON.stringify({ q: loc ? `${kw} in ${loc}` : kw, num: 20 }),
         });
         if (!res.ok) {
-          errors.push(`Serper ${res.status}`);
+          const p = searchProviderProblem("Serper", res.status, await res.text().catch(() => ""));
+          errors.push(p.text);
+          if (p.stop) break; // no credits / bad key: the next keyword won't do better
           continue;
         }
         const d = (await res.json()) as {
@@ -1652,7 +1691,9 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
         u.searchParams.set("api_key", serpapiKey);
         const res = await fetch(u.toString());
         if (!res.ok) {
-          errors.push(`SerpApi ${res.status}`);
+          const p = searchProviderProblem("SerpApi", res.status, await res.text().catch(() => ""));
+          errors.push(p.text);
+          if (p.stop) break;
           continue;
         }
         const d = (await res.json()) as {
@@ -1745,7 +1786,8 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
     businesses.length < wanted &&
     byKey.size < wanted &&
     !region &&
-    !errors.some((e) => /SerpApi|Serper \d/.test(e))
+    // (not when a provider refused: then the area isn't the reason)
+    !errors.some((e) => /^(SerpApi|Serper)\b/.test(e))
   )
     errors.push(
       `Google only had ${byKey.size} businesses for this search area — widen the radius, add nearby cities, or add keywords for more`,
