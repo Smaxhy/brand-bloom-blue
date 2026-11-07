@@ -57,7 +57,6 @@ export function Modal({
   open,
   onClose,
   title,
-  "aria-label": ariaLabel,
   children,
   wide,
 }: {
@@ -121,6 +120,7 @@ export function Btn({
   type = "button",
   disabled = false,
   title,
+  "aria-label": ariaLabel,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
