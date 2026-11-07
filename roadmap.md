@@ -74,5 +74,6 @@
 - [ ] Signed-in Stop flow: blocked because the requesting user has no matching managed session; sign in to verify without paid searches.
 
 # Raw Data reveal repair
-- [ ] Diagnose and repair missing emails and contact details in Raw Data Reveal.
-- [ ] Run targeted regression tests and verify the available live flow without paid searches or email sends.
+- [x] Connect Raw Data Reveal to saved scans, retain found contact details and Stop support, and recover published emails previously suppressed by website MX checks.
+- [x] Run 17 targeted regression tests and check the live admin entry for runtime errors without paid searches or email sends.
+- [ ] Verify Reveal with the user's saved rows: blocked by no matching managed session; user must sign in to the preview.

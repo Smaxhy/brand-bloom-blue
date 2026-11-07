@@ -27,7 +27,7 @@ describe("Raw Data reveal", () => {
   });
   it("never requests a new slice after Stop", async () => {
     const step = vi.fn();
-    const job = { id: "scan", status: "queued", cursor: 0, total: 1, warnings: [], last_error: null } as ScanJobFull;
+    const job: ScanJobFull = { id: "scan", label: "Raw", status: "queued", cursor: 0, total: 1, warnings: [], last_error: null, created_at: "", updated_at: "", finished_at: "", people: [rawScanPerson(row)], results: {}, options: {} };
     let allowed = true;
     await runRawReveal([rawScanPerson(row)], { start: async () => ({ job, produced: [] }), step, status: async () => null, canContinue: async () => allowed, wait: async () => { allowed = false; }, onJob: vi.fn(), onRows: vi.fn(), onProgress: vi.fn() });
     expect(step).not.toHaveBeenCalled();
