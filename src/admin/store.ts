@@ -1,6 +1,7 @@
 import { scanJobAction } from "@/lib/scan-jobs.functions";
 import { runScanRequest } from "./scan-request";
 import { businessKey } from "@/lib/business-key";
+import { cleanDuplicateEmails } from "./email-cleanup";
 import type { LeadAi } from "@/lib/lead-filters";
 /** Inspirova Admin — per-account Lovable Cloud data layer. */
 
@@ -288,7 +289,7 @@ function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData
     ...s,
     ...d,
     deals: arrayOr<Deal>(d.deals, s.deals),
-    raw: arrayOr<RawBusiness>(d.raw, s.raw),
+    raw: cleanDuplicateEmails(arrayOr<RawBusiness>(d.raw, s.raw)),
     clients: arrayOr<Client>(d.clients, s.clients),
     transactions: arrayOr<Transaction>(d.transactions, s.transactions),
     templates: arrayOr<EmailTemplate>(d.templates, s.templates),
@@ -334,7 +335,7 @@ function isEmptyRemote(d: unknown): boolean {
 function compactForRemote(data: AdminData): AdminData {
   return {
     ...data,
-    raw: data.raw.slice(0, 5000),
+    raw: cleanDuplicateEmails(data.raw).slice(0, 5000),
     deals: data.deals.slice(0, 2000),
     clients: data.clients.slice(0, 1000),
     transactions: data.transactions.slice(0, 3000),
@@ -376,6 +377,7 @@ export async function loadDataRemote(): Promise<AdminData> {
     }
 
     const merged = withSchemaDefaults(remote);
+    if (Array.isArray(remote?.raw) && remote.raw.length !== merged.raw.length) await pushRemote(merged);
     return merged;
   } catch (e) {
     console.warn("[admin] cloud load failed", e);

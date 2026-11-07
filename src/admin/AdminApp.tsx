@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import logo from "@/assets/inspirova-logo.png";
 import { supabase } from "@/integrations/supabase/client";
+import { cleanDuplicateEmails } from "./email-cleanup";
 import {
   loadDataRemote,
   saveData,
@@ -296,8 +297,9 @@ export function AdminApp() {
         const base = prev;
         const resolved =
           typeof next === "function" ? (next as (p: AdminData) => AdminData)(base) : next;
-        saveData(resolved);
-        return resolved;
+        const cleaned = { ...resolved, raw: cleanDuplicateEmails(resolved.raw) };
+        saveData(cleaned);
+        return cleaned;
       });
     },
     [],

@@ -99,3 +99,9 @@
 - [x] Verify 218 regression tests, preview build, homepage/admin entry and unauthorized timer rejection; no emails or paid searches.
 - [ ] Signed-in saved-row admin/Reveal verification: blocked by no matching own-account session; user must sign in to the preview.
 - [ ] Closed-tab timer and live provider verification: blocked by deployment/heartbeat checks and unavailable database timer extensions; no timer activated.
+
+# Automatic email hygiene
+- [x] Merge duplicate raw email entries on load/save/UI updates, retaining canonical sent identity and useful contact details.
+- [x] Add atomic invalid/bounced transitions to suppressions and stop matching enrollments; backfill existing invalid/bounced addresses (zero missing blacklist rows verified).
+- [x] Verify 227 tests and preview build; admin entry has no runtime errors, protected endpoints deny signed-out requests; no emails sent.
+- [ ] Signed-in cleanup/email-check flow: blocked by no matching own-account session; sign in to the preview for saved-row verification.

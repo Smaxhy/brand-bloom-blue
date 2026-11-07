@@ -15,19 +15,24 @@ export const checkEmailAddresses = createServerFn({ method: "POST" })
     if (limitError || allowed !== true) throw new Error("Please wait a minute before checking again.");
     const { resolveIntegrationEnv } = await import("./integration-settings.server");
     const { verifyEmail, normalizeEmail } = await import("./bounce");
+    const { blacklistConfirmedInvalid } = await import("./email-blacklist.server");
+    const { Db } = await import("./db");
     const env = await resolveIntegrationEnv({});
     // Environment-only credentials also remain server-only.
     if (!env.REOON_API_KEY) env.REOON_API_KEY = process.env["REOON_API_KEY"];
     const emails = [...new Set(data.emails.map(normalizeEmail))];
+    const db = new Db(env);
     const results: Record<string, import("./bounce").VerifyStatus> = {};
     const started = Date.now();
     let cursor = 0;
     await Promise.all(Array.from({ length: Math.min(4, emails.length) }, async () => {
       while (cursor < emails.length && Date.now() - started < 25000) {
         const email = emails[cursor++];
-        results[email] = await verifyEmail(env, email);
+        const status = await verifyEmail(env, email);
+        await blacklistConfirmedInvalid(db, email, status);
+        results[email] = status;
       }
     }));
-    // This is advisory. Invalid badges never falsely promise a suppression write.
+    // Invalid results are returned only after the blacklist write succeeds.
     return { results, unchecked: emails.filter((email) => !results[email]) };
   });
