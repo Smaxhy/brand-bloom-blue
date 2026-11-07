@@ -25,3 +25,6 @@
 - Background timer configuration and token hashes are service-role-only; validate approved published destinations, wake its bounded processor on enqueue, and disarm after drain. Nitro scheduled work uses the Cloudflare scheduled hook because generated hosting entries do not invoke the custom server scheduled export.
 - GoHighLevel delivery checks persist a last-check cursor so missed scheduling windows cannot hide hard bounces.
 - Raw email cleanup merges normalized duplicate addresses within each account at load/save and UI update boundaries; retain the canonical sent/contact identity and never delete outreach history. Invalid lead and bounced enrollment transitions atomically populate suppressions and stop matching outreach through database triggers.
+
+- First-contact company checks are shared by manual enrollment, saved searches and dispatch; acquire the company lease before history reads and fail closed on lookup/lease errors to prevent parallel duplicate starts. Individual explicit sends retain the override but never bypass suppressions.
+- Search fallback can switch from exhausted Serper to SerpApi only with the existing paid opt-in; keep provider warnings sanitized and preserve bounded reveal concurrency.

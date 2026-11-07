@@ -53,7 +53,8 @@ import {
   certainlyNotSent,
 } from "./send-errors";
 import { applyReply, enrollmentForThread } from "./reply-actions";
-import { isCompanyDomain } from "./business-key";
+import { cleanDomain, isCompanyDomain } from "./business-key";
+import { companyAlreadyContacted } from "./company-contact";
 
 type Env = Record<string, string | undefined>;
 
@@ -632,7 +633,23 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
    * Claim one person, run every check, wait for the gap, send, record.
    * "stop" = the mailbox can't continue this run; "skipped"/"failed" = nothing went out.
    */
-  async function sendOne(
+  type SendPace = Parameters<typeof sendOneInner>[4];
+  async function sendOne(mb: Mailbox, en: Enrollment, seq: Sequence,
+    entry: DispatchReport["mailboxes"][number], pace: SendPace,
+  ): Promise<"sent" | "skipped" | "failed" | "stop" | "unclear"> {
+    const held: { company?: Lease | null } = {};
+    let outcome: string | undefined;
+    try {
+      outcome = await sendOneInner(mb, en, seq, entry, pace, held);
+      return outcome as "sent" | "skipped" | "failed" | "stop" | "unclear";
+    } finally {
+      // A successful or ambiguous send retains the short reservation while its
+      // durable history is recorded; all other exits release it, including throws.
+      if (held.company && outcome !== "sent" && outcome !== "unclear") await releaseLease(db, held.company);
+    }
+  }
+
+  async function sendOneInner(
     mb: Mailbox,
     en: Enrollment,
     seq: Sequence,
@@ -649,6 +666,7 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
       /** Stop picking follow-ups for the rest of this run. */
       holdFollowUps: () => void;
     },
+    held: { company?: Lease | null },
   ): Promise<"sent" | "skipped" | "failed" | "stop" | "unclear"> {
     const lease = pace.lease;
     // ATOMIC CLAIM: only succeeds if the row is still exactly as we read it
@@ -738,19 +756,27 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
           entry.duplicates_held = (entry.duplicates_held ?? 0) + 1;
           return "skipped";
         }
-        const recent = await db.one<{ id: string }>(
-          "messages",
-          `lead_id=eq.${lead.id}&direction=eq.out&status=eq.sent&sent_at=gte.${enc(new Date(Date.now() - 86_400_000).toISOString())}&enrollment_id=neq.${en.id}&select=id`,
-        );
-        if (recent) {
-          await db
-            .update("enrollments", ours, {
-              next_send_at: new Date(Date.now() + 86_400_000).toISOString(),
-              last_error: "emailed by another sequence in the last 24 h — waiting a day",
-            })
-            .catch(() => {});
-          entry.duplicates_held = (entry.duplicates_held ?? 0) + 1;
-          return "skipped";
+        if (!pace.explicit) {
+          const domain = cleanDomain(lead.domain);
+          if (isCompanyDomain(domain)) {
+            // Acquire BEFORE reading company history, so a parallel mailbox must
+            // wait until the winning sender records its message. Failure is closed.
+            const company = await acquireLease(db, `company:${domain}`, 15 * 60_000);
+            if (!company) {
+              await unpark({ next_send_at: new Date(Date.now() + 10 * 60_000).toISOString() });
+              return "skipped";
+            }
+            held.company = company;
+          }
+          const contacted = await companyAlreadyContacted(db, lead, { excludeEnrollmentId: en.id });
+          if (contacted) {
+            await db.update("enrollments", ours, {
+              status: "skipped",
+              last_error: `${contacted.reason} — skipped so the company isn't emailed again (Send now on this person to send anyway)`,
+            });
+            entry.duplicates_held = (entry.duplicates_held ?? 0) + 1;
+            return "skipped";
+          }
         }
       }
       // Automatic bounce check BEFORE the first send (Reoon if configured, else MX).

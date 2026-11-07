@@ -439,15 +439,21 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
   const apolloKey = usePaid ? secret(env, "APOLLO_API_KEY") : undefined;
   const hunterKey = usePaid ? secret(env, "HUNTER_API_KEY") : undefined;
   // Cheap Google (Serper ≈ $1/1k) is allowed as a fallback even without usePaid; SerpApi only with usePaid.
-  const googleKey =
-    secret(env, "SERPER_API_KEY") || (usePaid ? secret(env, "SERPAPI_API_KEY") : undefined);
+  const serperKey = secret(env, "SERPER_API_KEY");
+  const serpapiKey = usePaid ? secret(env, "SERPAPI_API_KEY") : undefined;
+  let googleKey = serperKey || serpapiKey;
   // Provider problems (quota used up, bad key) — shown once in the scraper banner.
   const warnings = new Set<string>();
   const warn = (w: string) => warnings.add(w);
   // No searches left / key rejected: don't ask again for every next business.
   let googleOff = false;
   const stopGoogle = () => {
-    googleOff = true;
+    // Serper empty (or its key rejected) and "Paid fallback" is on with a
+    // SerpApi key: carry on with SerpApi instead of stopping.
+    if (googleKey && googleKey === serperKey && serpapiKey && serpapiKey !== serperKey) {
+      googleKey = serpapiKey;
+      warn("Switched to SerpApi for the Google lookups (Serper has no searches left)");
+    } else googleOff = true;
   };
 
   const results = people.map((p) => ({
@@ -563,7 +569,11 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
     // 2a) Find the company website via Google if we still don't have one.
     if (!r.website && googleKey && !googleOff && p.organizationName) {
       try {
-        const site = await withTimeout(googleFindWebsite(googleKey, p.organizationName, warn, stopGoogle), 12_000, "website search");
+        const key = googleKey;
+        let site = await withTimeout(googleFindWebsite(key, p.organizationName, warn, stopGoogle), 12_000, "website search");
+        // Just switched provider (the first one is out of searches): ask the new one.
+        if (!site && googleKey && googleKey !== key && !googleOff)
+          site = await withTimeout(googleFindWebsite(googleKey, p.organizationName, warn, stopGoogle), 12_000, "website search");
         if (site && !NOT_A_WEBSITE.test(site)) r.website = site;
       } catch {
         /* skip */
@@ -612,9 +622,18 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
         .filter(Boolean)
         .join(" ");
       try {
-        const { blob, firstLink, error, stop } = await withTimeout(googleSearch(googleKey, q), 12_000, "email search");
+        const key = googleKey;
+        let { blob, firstLink, error, stop } = await withTimeout(googleSearch(key, q), 12_000, "email search");
         if (error) warn(error);
-        if (stop) stopGoogle();
+        if (stop) {
+          stopGoogle();
+          // Switched to the other provider: ask it instead.
+          if (googleKey && googleKey !== key && !googleOff) {
+            ({ blob, firstLink, error, stop } = await withTimeout(googleSearch(googleKey, q), 12_000, "email search"));
+            if (error) warn(error);
+            if (stop) stopGoogle();
+          }
+        }
         const found = pickBusinessEmail(blob, domain, { company: p.organizationName, owner: r.name || p.name });
         if (found) {
           r.email = found;

@@ -86,6 +86,9 @@ function toastDispatch(rep: DispatchSummary | undefined, prefix = "") {
   const parts = [
     `${prefix}Sent ${sent}`,
     blocked ? `${blocked} held back by the bounce check` : "",
+    (rep?.mailboxes ?? []).reduce((a, m) => a + (m.duplicates_held ?? 0), 0)
+      ? `${(rep?.mailboxes ?? []).reduce((a, m) => a + (m.duplicates_held ?? 0), 0)} skipped — that company was already contacted`
+      : "",
     rep?.mailboxes?.some((m) => m.followups_held) ? FOLLOWUPS_HELD_NOTE : "",
     ...skips,
     ...errs.slice(0, 2),
@@ -1615,7 +1618,7 @@ function Queue({
           `Sent ${r.sent}`,
           r.left ? `${r.left} still waiting` : r.sent ? "everyone waiting has had their email" : "",
           r.blocked ? `${r.blocked} held back by the bounce check` : "",
-          r.duplicates ? `${r.duplicates} already emailed by another sequence` : "",
+          r.duplicates ? `${r.duplicates} skipped — that company was already contacted` : "",
           stopSending.current ? "stopped" : r.note,
           ...r.errors.slice(0, 1),
         ]
