@@ -6,9 +6,9 @@
     {
       "capability": "admin5-incremental-update",
       "source": "inspirova-admin-engine-5.zip",
-      "outcome": "Safely inspected 79 files; partial admin source patch without packages or record exports. Reviewing changed scraping, enrichment and outreach code; existing Cloud schema, records, accounts, managed configuration, providers and public URLs stay in place.",
-      "status": "in_progress",
-      "next_action": "Merge safe new fixes, reject security/cancellation regressions, run regression tests and verify the available preview flow."
+      "outcome": "Merged conservative search-snippet business email filtering, explicit designer-credit exclusion while retaining alternate published contact domains, decoded-email tiered crawl detection and versioned cache refresh. Added authenticated admin/CEO bounded email checks, email-keyed advisory badges, confirmed-guess enrollment with explicit override, and advisory sequence content checks/AI guidance. Preserved Cloud records/accounts, managed configuration and migrations, providers, URLs, Stop reveal, Raw Data persisted scans, claim fences, request limits, secure credentials, dispatcher pacing and CSV/GHL escaping. All 80 tests in 21 suites pass; preview build OK; admin sign-in entry renders, signed-out enrichment returns 401, homepage iframe intact and no browser runtime errors. External-project migration skill used for archive inspection and capability tracking; this is an incremental source update, not an account/database migration.",
+      "status": "code_verified",
+      "next_action": "Sign in to the preview to verify new admin controls and Reveal on saved rows; own-account session mint has no matching account. Live verifier, paid scraping, mail delivery, scheduled continuation and production deployment remain unverified; no provider calls or outbound emails performed."
     },
     {
       "capability": "admin4-email-scraping-fixes",
