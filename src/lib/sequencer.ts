@@ -1052,7 +1052,7 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
         status: "sent",
         variant,
       })
-      .catch((err) => { logged = false; report.errors.push(`${mb.email}: sent email could not be logged: ${(err as Error).message.slice(0, 160)}`); });
+      .catch((err) => { logged = false; report.errors.push(`${mb.email}: sent email could not log delivery: ${(err as Error).message.slice(0, 160)}`); });
     await advance(en, mb, seq, steps, claimedStatus, { threadId: sent.threadId, messageId: sent.rfcMessageId });
     if (!logged) await db.update("enrollments", `id=eq.${en.id}`, { last_error: `Sent but not logged at ${new Date().toISOString()} — check Sent folder before manual retry.` }).catch(() => {});
     return "sent";

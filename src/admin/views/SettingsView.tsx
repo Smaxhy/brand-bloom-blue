@@ -704,6 +704,7 @@ function SenderIdentityPanel() {
   }, []);
   if (!s) return null;
   async function save() {
+    if (!s) return;
     try {
       await saveOutreachSettings(s);
       setSaved(true);

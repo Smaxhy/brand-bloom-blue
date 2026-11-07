@@ -615,14 +615,15 @@ export async function sendAllNow(
 ): Promise<SendAllProgress & { blocked: number; duplicates: number; errors: string[] }> {
   const out = { sent: 0, rounds: 0, left: null as number | null, note: "", blocked: 0, duplicates: 0, errors: [] as string[] };
   let idle = 0;
-  let frozenAt: string | undefined;
+  const people = await listEnrollments(sequenceId);
+  const start = Date.now();
+  const remaining = new Set(people.filter((p) => ["queued", "active", "paused"].includes(p.status) &&
+    (p.current_step === 0 || (p.next_send_at && Date.parse(p.next_send_at) <= start))).map((p) => p.id));
+  if (!remaining.size) return { ...out, left: 0 };
   while (!opts.shouldStop?.()) {
     out.rounds++;
-    const r = await sendNow({ sequenceId, frozenAt });
-    if (r.ok && !frozenAt) {
-      if (!r.frozen_at || !Number.isFinite(Date.parse(r.frozen_at))) { out.errors.push("The send group could not be fixed safely; try again."); break; }
-      frozenAt = r.frozen_at;
-    }
+    const batch = [...remaining].slice(0, 200);
+    const r = await sendNow({ sequenceId, enrollmentIds: batch });
     if (!r.ok) {
       out.errors.push(r.error || "Could not send");
       if (++idle >= 3) break;
@@ -636,8 +637,12 @@ export async function sendAllNow(
     out.blocked += boxes.reduce((a, m) => a + (m.bounce_blocked ?? 0), 0);
     out.duplicates += boxes.reduce((a, m) => a + (m.duplicates_held ?? 0), 0);
     out.errors.push(...(r.report?.errors ?? []).slice(0, 2));
+    const current = await listEnrollments(sequenceId);
+    const eligible = new Set(current.filter((p) => ["queued", "active", "paused"].includes(p.status) &&
+      (p.current_step === 0 || (p.next_send_at && Date.parse(p.next_send_at) <= start))).map((p) => p.id));
+    for (const id of remaining) if (!eligible.has(id)) remaining.delete(id);
     const lefts = boxes.map((m) => m.due_left).filter((x): x is number => typeof x === "number");
-    out.left = lefts.length ? Math.max(...lefts) : null;
+    out.left = remaining.size;
     const busy = boxes.some((m) => m.busy);
     // Only a mailbox that SAYS its daily cap is reached counts as capped (a busy
     // mailbox hasn't counted anything yet).

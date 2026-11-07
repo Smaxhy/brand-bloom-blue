@@ -746,7 +746,7 @@ function Sequences({
                           seq: {
                             ...editing.seq,
                             mailbox_ids: on
-                              ? editing.seq.mailbox_ids.filter((x) => x !== m.id)
+                              ? (editing.seq.mailbox_ids ?? []).filter((x) => x !== m.id)
                               : [...(editing.seq.mailbox_ids ?? []), m.id],
                           },
                         })
@@ -1032,7 +1032,7 @@ function Sequences({
         title={deleting ? `Delete "${deleting.name}"?` : "Delete sequence?"}
         description={`${
           counts[deleting?.id ?? ""]?.total
-            ? `${counts[deleting.id].total} people are in it — they will get no further emails, and their send history for this sequence is removed. `
+            ? `${counts[deleting?.id ?? ""]?.total} people are in it — they will get no further emails, and their send history for this sequence is removed. `
             : ""
         }Suppressions (opt-outs, bounces) are kept. This cannot be undone.`}
         confirmLabel="Delete sequence"

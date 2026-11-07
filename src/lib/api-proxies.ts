@@ -1217,7 +1217,9 @@ function tilePoints(
   queryCount: number,
 ): { lat?: number; lng?: number; radiusM?: number; label?: string }[] {
   const hasCentre = typeof f.lat === "number" && typeof f.lng === "number";
-  if (!hasCentre) return [{ label: f.location }];
+  if (typeof f.lat !== "number" || typeof f.lng !== "number") return [{ label: f.location }];
+  const centerLat = f.lat;
+  const centerLng = f.lng;
   const perQuery = Math.ceil(wanted / Math.max(1, queryCount));
   const n =
     perQuery <= 60 ? 1 : perQuery <= 120 ? 2 : perQuery <= 220 ? 3 : perQuery <= 350 ? 4 : 5;
@@ -1239,7 +1241,7 @@ function tilePoints(
   }
   // Centre tile first so small result sets are still the most central businesses.
   pts.sort(
-    (a, b) => distanceKm(f.lat, f.lng, a.lat, a.lng) - distanceKm(f.lat, f.lng, b.lat, b.lng),
+    (a, b) => distanceKm(centerLat, centerLng, a.lat, a.lng) - distanceKm(centerLat, centerLng, b.lat, b.lng),
   );
   return pts;
 }
@@ -1299,7 +1301,7 @@ function applyUniversalFilters<
   let dropped = 0;
   const kept = list.filter((b) => {
     if (f.radiusKm && f.lat != null && f.lng != null && b.lat != null && b.lng != null) {
-      if (distanceKm(f.lat, f.lng, b.lat, b.lng) > f.radiusKm) return (dropped++, false);
+      if (distanceKm(centerLat, centerLng, b.lat, b.lng) > f.radiusKm) return (dropped++, false);
     }
     if (f.minRating && typeof b.rating === "number" && b.rating < f.minRating)
       return (dropped++, false);
@@ -1486,11 +1488,12 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
   const perQuery = Math.ceil(wanted / queries.length);
   // Big areas (a state, a country): search city by city instead of one point.
   const region = regionSubAreas(location, f.bbox);
+  const bbox = f.bbox;
   const osmPromise =
-    want.includes("osm") && f.bbox && !region
+    want.includes("osm") && bbox && !region
       ? Promise.all(
           queries.map((kw) =>
-            overpassBusinesses({ keyword: kw, bbox: f.bbox, city, max: wanted, timeoutSec: 12 }),
+            overpassBusinesses({ keyword: kw, bbox, city, max: wanted, timeoutSec: 12 }),
           ),
         )
       : Promise.resolve([] as Awaited<ReturnType<typeof overpassBusinesses>>[]);
@@ -2052,7 +2055,7 @@ async function runClaudeExtract(env: Env, body: ClaudeExtractInput): Promise<unk
     fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
-        "x-api-key": key,
+        "x-api-key": key ?? "",
         "anthropic-version": "2023-06-01",
         "Content-Type": "application/json",
       },
@@ -2119,7 +2122,7 @@ Return exactly ${count} entries, best first. "searchAs" must be a string Google 
       fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
-          "x-api-key": key,
+          "x-api-key": key ?? "",
           "anthropic-version": "2023-06-01",
           "Content-Type": "application/json",
         },
@@ -2190,7 +2193,7 @@ Suggest the best keywords.`;
     return fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
-        "x-api-key": key,
+        "x-api-key": key ?? "",
         "anthropic-version": "2023-06-01",
         "Content-Type": "application/json",
       },
@@ -2398,11 +2401,12 @@ Rules:
   }
 
   // --- Path 2: Anthropic direct (legacy fallback) ----------------------------
+  if (!anthropicKey) return json({ ok: false, error: "AI service is not configured" }, 503);
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
-        "x-api-key": anthropicKey,
+        "x-api-key": anthropicKey ?? "",
         "anthropic-version": "2023-06-01",
         "Content-Type": "application/json",
       },

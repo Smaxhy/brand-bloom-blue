@@ -302,6 +302,7 @@ export async function runDueSavedSearches(
     `schedule=neq.off&next_run_at=lte.${enc(new Date().toISOString())}&select=*&order=next_run_at.asc&limit=${Math.max(1, Math.min(3, opts.limit ?? 3))}`,
   );
   for (const ss of due) {
+    if (!ss.next_run_at) continue;
     try {
       // Claim it first so two overlapping schedulers don't both run it.
       const next = new Date(

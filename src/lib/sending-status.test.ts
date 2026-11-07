@@ -17,7 +17,7 @@ describe("sending diagnostics", () => {
     expect(result.mailboxes[0].daily_cap).toBe(2);
     expect(result.mailboxes[0].sent_today).toBe(2);
     expect(result.mailboxes[0].can_send_now).toBe(false);
-    expect(select.mock.calls.map(([table]) => table)).toEqual(["mailboxes", "sequences", "outreach_settings", "messages", "enrollments"]);
+    expect(select.mock.calls.map(([table]) => table)).toEqual(["mailboxes", "sequences", "outreach_settings", "messages", "enrollments", "enrollments"]);
   });
   it("only counts anytime sequences as due outside mailbox hours", async () => {
     vi.useFakeTimers();

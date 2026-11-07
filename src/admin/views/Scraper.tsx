@@ -1152,8 +1152,9 @@ export function Scraper({
         live: b?.live ?? true,
         text: `${b?.text ?? ""} · ⚠ ${(e as Error).message}`.replace(/^ · /, ""),
       }));
+    } finally {
+      pendingStarts.current = Math.max(0, pendingStarts.current - 1);
     }
-    pendingStarts.current--;
     if (driven.current.size && !stopRequested.current) void driveScans();
     else if (!driving.current) setEnrichBusy(false);
   }

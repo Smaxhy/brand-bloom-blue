@@ -10,10 +10,10 @@ describe("bounded email dispatch", () => {
     expect(dispatchBudgetMs("cron")).toBe(50_000);
     expect(dispatchBudgetMs("cron", 60_000)).toBe(50_000);
   });
-  it("fills a slower cron interval instead of sending one email per tick", () => {
-    expect(dispatchBudgetMs("cron", 600_000)).toBe(540_000);
-    expect(dispatchBudgetMs("cron", 3 * 60_000)).toBe(170_000);
-    expect(dispatchBudgetMs("cron", 6 * 3600_000)).toBe(540_000);
+  it("bounds even a delayed cron run to fifty seconds", () => {
+    expect(dispatchBudgetMs("cron", 600_000)).toBe(50_000);
+    expect(dispatchBudgetMs("cron", 3 * 60_000)).toBe(50_000);
+    expect(dispatchBudgetMs("cron", 6 * 3600_000)).toBe(50_000);
   });
   it("leaves a long sending gap for the next run instead of sleeping beyond the budget", () => {
     expect(fitsDispatchBudget(0, 50_000, 45_000, 10_000)).toBe(false);

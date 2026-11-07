@@ -7,7 +7,7 @@ const state = vi.hoisted(() => ({
 vi.mock("./db", () => ({
   Db: class {
     static available() { return true; }
-    async one(table: string) { return table === "outreach_settings" ? { ...state.settings } : null; }
+    async one(table: string) { return table === "outreach_settings" ? { ...state.settings } : table === "outreach_scheduler" ? { token_hash: state.settings.scheduler_token_hash } : null; }
     async update(table: string, query: string, patch: Record<string, unknown>) {
       if (table === "outreach_settings") { Object.assign(state.settings, patch); return [{ id: "singleton" }]; }
       const key = decodeURIComponent(/key=eq\.([^&]+)/.exec(query)?.[1] ?? "");
@@ -72,11 +72,11 @@ describe("background ticks", () => {
     expect(r.dispatch_skipped).toMatch(/already sending/);
     expect(continueScanJobs).toHaveBeenCalled();
   });
-  it("sizes the cron run by how long ago the previous tick was", async () => {
+  it("keeps delayed cron runs bounded", async () => {
     state.settings.last_cron_at = new Date(Date.now() - 10 * 60_000).toISOString();
     await runTick({}, { trigger: "cron" });
     const call = runDispatch.mock.calls[0] as unknown as [unknown, { budgetMs: number }];
-    expect(call[1].budgetMs).toBeGreaterThan(500_000);
+    expect(call[1].budgetMs).toBe(50_000);
   });
 });
 
@@ -89,5 +89,7 @@ describe("database timer token", () => {
     expect(await verifySchedulerToken({}, "cd".repeat(32))).toBe(false);
     expect(await verifySchedulerToken({}, "short")).toBe(false);
     expect(await verifySchedulerToken({}, null)).toBe(false);
+    state.settings.scheduler_token_hash = null;
+    expect(await verifySchedulerToken({}, token)).toBe(false);
   });
 });

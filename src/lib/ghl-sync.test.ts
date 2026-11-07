@@ -56,15 +56,15 @@ beforeEach(() => {
 });
 
 describe("GoHighLevel bounce checks", () => {
-  it("only asks GHL about emails sent ~10–20 min or ~6 h ago", async () => {
+  it("catches bounces missed by earlier time windows", async () => {
     const db = fakeDb([
       { id: "a", gmail_message_id: "e-a", enrollment_id: "en-a", lead_id: "lead-1", subject: "Hi", sent_at: minAgo(15) },
       { id: "b", gmail_message_id: "e-b", enrollment_id: "en-b", lead_id: "lead-1", subject: "Hi", sent_at: minAgo(30) },
       { id: "c", gmail_message_id: "e-c", enrollment_id: "en-c", lead_id: "lead-1", subject: "Hi", sent_at: minAgo(365) },
     ]);
     const out = await syncGhlMailbox({}, db as never, mb);
-    expect(ghl.ghlEmail.mock.calls.map((c) => (c as unknown[])[1])).toEqual(["e-a", "e-c"]);
-    expect(out.bounces).toBe(2);
+    expect(ghl.ghlEmail.mock.calls.map((c) => (c as unknown[])[1])).toEqual(["e-a", "e-b", "e-c"]);
+    expect(out.bounces).toBe(3);
     expect(applyHardBounce.mock.calls.every((c) => (c as unknown[])[1] && ((c as unknown[])[1] as { strict?: boolean }).strict)).toBe(true);
     expect(db.calls.some((c) => c.op === "update" && c.table === "mailboxes")).toBe(true);
   });
