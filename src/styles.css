@@ -81,6 +81,10 @@
   font-family: "Inter", system-ui, sans-serif;
 }
 .results-site h1,.results-site h2,.results-site h3 { font-family: var(--font-display); font-weight: 700; }
+.proof-image-frame { overflow: hidden; border: 1px solid var(--border); border-radius: 1rem; background: var(--card); box-shadow: var(--shadow-soft); }
+.proof-image-frame img { display: block; width: 100%; height: auto; }
+.proof-image-frame-wide { display: flex; min-height: 12rem; align-items: center; padding: clamp(1rem, 3vw, 2rem); }
+.proof-image-frame-wide img { margin: auto; }
 
 @utility shadow-brand { box-shadow: var(--shadow-brand); }
 @utility shadow-soft { box-shadow: var(--shadow-soft); }
