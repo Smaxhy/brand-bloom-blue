@@ -57,6 +57,7 @@ export function Modal({
   open,
   onClose,
   title,
+  "aria-label": ariaLabel,
   children,
   wide,
 }: {
@@ -128,6 +129,7 @@ export function Btn({
   type?: "button" | "submit";
   disabled?: boolean;
   title?: string;
+  "aria-label"?: string;
 }) {
   const styles = {
     primary: "bg-primary text-primary-foreground hover:bg-primary/90",
@@ -139,6 +141,7 @@ export function Btn({
     <button
       type={type}
       title={title}
+      aria-label={ariaLabel}
       onClick={onClick}
       disabled={disabled}
       aria-disabled={disabled}
