@@ -107,5 +107,6 @@
 - [ ] Signed-in cleanup/email-check flow: blocked by no matching own-account session; sign in to the preview for saved-row verification.
 
 # Admin fix 2
-- [ ] Merge new company-contact and opt-in fallback fixes without reverting existing protections.
-- [ ] Verify targeted tests and preview; no real sends or paid searches.
+- [x] Merge new company-contact and opt-in fallback fixes without reverting existing protections.
+- [x] Verify 240 tests, preview build and signed-in dashboard/scraper with saved searches; no real sends or paid searches.
+- [ ] Live new company contact/send and paid fallback verification: requires real provider calls; not performed to avoid outreach and search charges.

@@ -6,9 +6,9 @@
     {
       "capability": "admin-fix-2",
       "source": "inspirova-admin-update_2.zip",
-      "outcome": "Inspected safe incremental archive; reviewing company contact deduplication and opt-in paid search fallback. Preserve existing accounts, records, providers, security, scheduler schema and public pages.",
-      "status": "in_progress",
-      "next_action": "Merge new fixes and run regression checks; no live sends or paid searches."
+      "outcome": "Merged new company-level first-contact/history checks across enrollment, saved searches and dispatch with 90-day cooldown, shared-host exclusions and explicit picked-send override. Hardened company leases to acquire before history reads and fail closed; paginated company history instead of archive 50-row cap. Added opt-in Serper-to-SerpApi fallback. Retained existing deadline budgets, sent-but-unlogged markers, security limits, scheduler protection, cancellation, ID/current-step snapshots and email cleanup; managed schema/data/public pages unchanged. 240 tests pass; preview build OK; signed-in dashboard and scraper with saved searches render without runtime errors.",
+      "status": "code_verified",
+      "next_action": "Live company blocking/sending and paid provider fallback remain unverified; no real sends, paid searches or scheduler activation performed."
     },
     {
       "capability": "admin-update-comprehensive",
