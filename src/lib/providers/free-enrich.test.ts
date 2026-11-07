@@ -9,6 +9,8 @@ it("rejects unrelated business emails and keeps published consumer mailboxes", (
   expect(emailPlausible("owner@business.test", ctx)).toBe(true);
   expect(emailPlausible("local.business@gmail.com", ctx)).toBe(true);
   expect(emailPlausible("bad@@business.test", ctx)).toBe(false);
+  expect(emailPlausible("business@gmail.be", { domains: [], company: "Business" })).toBe(false);
+  expect(emailPlausible("owner@business.test.attacker.com", { domains: ["business.test"] })).toBe(false);
 });
 it("does not select an unrelated directory email from search snippets", () => {
   expect(pickBusinessEmail("directory@listing.test unrelated@gmail.com", "business.test", { company: "Business" })).toBe("");
@@ -21,6 +23,23 @@ it("drops designer footer addresses without losing the business's phone or Gmail
   const result = await freeEnrich({ website: "business.test", maxPages: 1 });
   expect(result.emails.map((item) => item.email)).toEqual(["local.business@gmail.com"]);
   expect(result.phones).toContain("+32470123456");
+});
+it("preserves a separately published business email domain", async () => {
+  fetchSite.mockResolvedValue({ html: '<a href="mailto:owner@other-business.test">Contact us</a>', finalUrl: "https://business.test" });
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ Status: 3 })));
+  const result = await freeEnrich({ website: "business.test", maxPages: 1 });
+  expect(result.emails.map((item) => item.email)).toEqual(["owner@other-business.test"]);
+});
+it("avoids deeper crawling only after a decoded usable email and owner are found", async () => {
+  fetchSite.mockClear();
+  fetchSite.mockImplementation(async (url: string) => ({ html: `Owner Alex Smith <span data-cfemail="${cloudflare("owner@business.test")}"></span>`, finalUrl: url }));
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ Status: 0, Answer: [{ type: 15 }] })));
+  await freeEnrich({ website: "business.test", tiered: true });
+  expect(fetchSite).toHaveBeenCalledTimes(3);
+  fetchSite.mockClear();
+  fetchSite.mockImplementation(async (url: string) => ({ html: 'Owner Alex Smith <span data-cfemail="0000"></span>', finalUrl: url }));
+  await freeEnrich({ website: "business.test", tiered: true });
+  expect(fetchSite).toHaveBeenCalledTimes(9);
 });
 it("treats DNS failure as unknown rather than claiming no mail server", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => Response.json({ Status: 2 })));
