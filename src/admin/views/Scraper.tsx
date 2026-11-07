@@ -1114,6 +1114,7 @@ export function Scraper({
     if (stopRequested.current) return;
     setEnrichBusy(true);
     pendingStarts.current++;
+    try {
     const people: ScanPerson[] = list.map((p) => ({
       id: p.id,
       name: p.name,
@@ -1127,7 +1128,6 @@ export function Scraper({
       industry: p.industry,
     }));
     const options = { useClaude: sources.claude, usePaid, revealPhone, findLinkedin, allowGuesses };
-    try {
       for (let offset = 0; offset < people.length; offset += 2000) {
         if (stopRequested.current) break;
         const slice = people.slice(offset, offset + 2000);

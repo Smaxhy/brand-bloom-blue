@@ -200,7 +200,7 @@ function BackgroundTimerPanel() {
     return () => clearInterval(t);
   }, [load]);
   const ageMin = st?.last_tick_at ? (Date.now() - Date.parse(st.last_tick_at)) / 60000 : Infinity;
-  const running = ageMin <= 3;
+  const running = ageMin <= (st?.last_tick_source === "db" ? 7 : 3);
   const via =
     st?.last_tick_source === "db"
       ? "the database timer"
