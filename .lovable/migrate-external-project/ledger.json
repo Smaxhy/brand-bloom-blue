@@ -4,6 +4,13 @@
   ],
   "capabilities": [
     {
+      "capability": "admin5-incremental-update",
+      "source": "inspirova-admin-engine-5.zip",
+      "outcome": "Safely inspected 79 files; partial admin source patch without packages or record exports. Reviewing changed scraping, enrichment and outreach code; existing Cloud schema, records, accounts, managed configuration, providers and public URLs stay in place.",
+      "status": "in_progress",
+      "next_action": "Merge safe new fixes, reject security/cancellation regressions, run regression tests and verify the available preview flow."
+    },
+    {
       "capability": "admin4-email-scraping-fixes",
       "source": "inspirova-admin-engine-4.zip",
       "outcome": "Merged Cloudflare-obfuscated, entity-encoded and at/dot published email recovery; malformed mailto links no longer abort website extraction. Versioned incomplete/guessed cache refresh so old profiles can recover published addresses. Preserved current Cloud records, accounts, authorization, providers, endpoints, schedules, cancellation, Raw Data persisted Reveal, MX recovery, public-destination fetch guards and managed migrations. Twenty-seven targeted tests passed; preview build OK and admin sign-in entry has no runtime errors.",
