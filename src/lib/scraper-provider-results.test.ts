@@ -5,7 +5,7 @@ vi.mock("./api-auth", () => ({
   hasCronSecret: vi.fn(() => false),
   unauthorized: vi.fn(),
 }));
-vi.mock("./db", () => ({ Db: class { static available() { return true; } async rpc() { return true; } } }));
+vi.mock("./db", () => ({ Db: class { static available() { return true; } async rpc() { return true; } async one() { return null; } } }));
 vi.mock("./integration-settings.server", () => ({ resolveIntegrationEnv: vi.fn(async (env) => env) }));
 vi.mock("./request-security", () => ({ requestIpHash: vi.fn(async () => "test-ip"), securityJson: (data: unknown, status: number) => Response.json(data, { status }) }));
 vi.mock("./outreach-routes", () => ({ handleOutreachRoute: vi.fn(async () => null) }));
