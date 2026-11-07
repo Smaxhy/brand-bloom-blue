@@ -114,6 +114,9 @@ async function readCache(db: Db | null | undefined, domain: string): Promise<Sit
       "site_cache",
       `domain=eq.${encodeURIComponent(domain)}&fetched_at=gte.${encodeURIComponent(since)}&select=data`,
     );
+    // Older profiles discarded published emails solely because the website had
+    // no MX. Re-crawl those incomplete profiles rather than retaining the loss.
+    if (row?.data && !row.data.email && row.data.mx === false) return null;
     return row?.data ? { ...row.data, cached: true } : null;
   } catch {
     return null; // table missing or RLS — just crawl
@@ -422,7 +425,9 @@ export async function enrichSite(env: Env, o: EnrichSiteOpts): Promise<SiteProfi
   let email = "";
   let emailGuessed = false;
   let emailPage = "";
-  if (pick && fe.mx !== false) {
+  // Published evidence is independent of the website domain's mail server
+  // (the business may use Gmail or a separate domain). Only gate guesses.
+  if (pick) {
     email = pick.email;
     emailPage = pick.page;
   } else {

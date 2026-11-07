@@ -247,6 +247,7 @@ export async function hasMx(domain: string): Promise<boolean | null> {
     if (!res.ok) return null;
     const d = (await res.json()) as { Status?: number; Answer?: { type: number }[] };
     if (d.Status === 3) return false; // NXDOMAIN
+    if (d.Status !== undefined && d.Status !== 0) return null; // DNS failure, not absence
     if (d.Answer?.some((a) => a.type === 15)) return true;
     // Some small businesses have no MX but an A record that accepts mail; treat as unknown-ish false.
     return false;
