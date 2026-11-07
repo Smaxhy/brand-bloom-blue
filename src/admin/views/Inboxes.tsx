@@ -25,6 +25,14 @@ export function Inboxes() {
 
   useEffect(() => { void listMailboxes().then((all) => { const ghl = all.filter((m) => m.provider === "ghl"); setMailboxes(ghl); setMailboxId(ghl[0]?.id || ""); }).catch((e) => setError(e instanceof Error ? e.message : "Inboxes could not be loaded.")); }, []);
   useEffect(() => { setSelected(null); setMessages([]); setRows([]); if (mailboxId) void load(); }, [mailboxId]);
+  useEffect(() => {
+    if (!mailboxId) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState !== "visible" || busy) return;
+      if (selected) void open(selected); else void load();
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [mailboxId, selected, busy]);
   async function load(append = false) {
     const run = ++generation.current;
     setBusy(true); setError("");
