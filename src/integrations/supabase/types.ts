@@ -36,6 +36,7 @@ export type Database = {
         Row: {
           attribution: Json
           company: string | null
+          consent: boolean
           created_at: string
           email: string
           estimates: Json | null
@@ -52,6 +53,7 @@ export type Database = {
         Insert: {
           attribution?: Json
           company?: string | null
+          consent?: boolean
           created_at?: string
           email: string
           estimates?: Json | null
@@ -68,6 +70,7 @@ export type Database = {
         Update: {
           attribution?: Json
           company?: string | null
+          consent?: boolean
           created_at?: string
           email?: string
           estimates?: Json | null
