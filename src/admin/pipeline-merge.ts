@@ -12,6 +12,7 @@ const emailKey = (email: string) => email.trim().replace(/^mailto:/i, "").toLowe
 const textKey = (text: string) => text.trim().toLowerCase().replace(/\s+/g, " ");
 export function sameDeal(a: Deal, b: Deal) {
   if (a.id === b.id || (a.rawId && a.rawId === b.rawId)) return true;
+  if (a.requests?.some((r) => b.requests?.some((other) => other.id === r.id))) return true;
   const ae = emailKey(a.email), be = emailKey(b.email);
   if (ae && be) return ae === be;
   const ap = a.phone.replace(/\D/g, ""), bp = b.phone.replace(/\D/g, "");

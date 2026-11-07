@@ -27,4 +27,9 @@ describe("quote pipeline", () => {
   it("never merges unidentified contacts solely by company", () => {
     expect(cleanDuplicateDeals([deal(), deal({ id: "b" })])).toHaveLength(2);
   });
+  it("retains the linked request identity after an administrator corrects the email", () => {
+    const saved = deal({ email: "corrected@example.test", requests: [request], stage: "qualified" });
+    const result = mergeWebsiteRequests([saved], [request]);
+    expect(result).toHaveLength(1); expect(result[0].id).toBe("original"); expect(result[0].stage).toBe("qualified");
+  });
 });
