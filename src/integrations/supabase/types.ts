@@ -356,6 +356,7 @@ export type Database = {
       messages: {
         Row: {
           body_text: string | null
+          delivery_checked_at: string | null
           direction: string
           draft_reply: string | null
           enrollment_id: string | null
@@ -379,6 +380,7 @@ export type Database = {
         }
         Insert: {
           body_text?: string | null
+          delivery_checked_at?: string | null
           direction: string
           draft_reply?: string | null
           enrollment_id?: string | null
@@ -402,6 +404,7 @@ export type Database = {
         }
         Update: {
           body_text?: string | null
+          delivery_checked_at?: string | null
           direction?: string
           draft_reply?: string | null
           enrollment_id?: string | null
@@ -447,6 +450,24 @@ export type Database = {
           },
         ]
       }
+      outreach_scheduler: {
+        Row: {
+          id: string
+          token_hash: string
+          url: string
+        }
+        Insert: {
+          id?: string
+          token_hash: string
+          url: string
+        }
+        Update: {
+          id?: string
+          token_hash?: string
+          url?: string
+        }
+        Relationships: []
+      }
       outreach_settings: {
         Row: {
           ai_instructions: string
@@ -455,6 +476,7 @@ export type Database = {
           footer_style: string
           id: string
           last_cron_at: string | null
+          last_tick_source: string | null
           optout_line_eu: string
           optout_line_us: string
           plain_text: boolean
@@ -470,6 +492,7 @@ export type Database = {
           footer_style?: string
           id?: string
           last_cron_at?: string | null
+          last_tick_source?: string | null
           optout_line_eu?: string
           optout_line_us?: string
           plain_text?: boolean
@@ -485,6 +508,7 @@ export type Database = {
           footer_style?: string
           id?: string
           last_cron_at?: string | null
+          last_tick_source?: string | null
           optout_line_eu?: string
           optout_line_us?: string
           plain_text?: boolean
@@ -861,6 +885,16 @@ export type Database = {
         Args: { _key: string; _max: number; _window_seconds: number }
         Returns: boolean
       }
+      configure_outreach_scheduler: {
+        Args: {
+          _enabled: boolean
+          _token: string
+          _token_hash: string
+          _url: string
+        }
+        Returns: string
+      }
+      drain_outreach_scheduler: { Args: never; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

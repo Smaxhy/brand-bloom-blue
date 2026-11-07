@@ -187,17 +187,65 @@ const PHONE_RE =
   /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b|\+\d{1,3}[\s.-]?\d[\d\s().-]{6,}\d/g;
 /** Consumer mailboxes commonly published by small businesses. */
 const FREE_MAIL = new Set("gmail.com googlemail.com yahoo.com yahoo.co.uk yahoo.fr ymail.com hotmail.com hotmail.be hotmail.fr outlook.com outlook.be live.com live.be live.nl msn.com icloud.com me.com mac.com aol.com comcast.net att.net verizon.net sbcglobal.net bellsouth.net cox.net charter.net protonmail.com proton.me mail.com gmx.com gmx.de gmx.net zoho.com telenet.be skynet.be proximus.be scarlet.be btinternet.com sky.com orange.fr free.fr wanadoo.fr laposte.net web.de t-online.de".split(" "));
-export function emailPlausible(email: string, ctx: { domains: string[]; company?: string; owner?: string; fromOwnSite?: boolean }): boolean {
+/** Third-party services whose addresses show up on small-business sites (forms, builders, trackers). */
+const THIRD_PARTY_DOMAIN =
+  /(^|\.)(sentry\.io|sentry-next\.wixpress\.com|wixpress\.com|wix\.com|squarespace\.com|shopify\.com|godaddy\.com|secureserver\.net|mailchimp\.com|hubspot\.com|jotform\.com|typeform\.com|google\.com|facebook\.com|cloudflare\.com|wordpress\.(com|org)|wpengine\.com|yelp\.com|angi\.com|homeadvisor\.com|thumbtack\.com|bbb\.org)$/i;
+/** Role addresses that never reach the owner. */
+const DEAD_END_LOCAL = /^(privacy|abuse|dmca|postmaster|hostmaster|security|unsubscribe|bounce|mailer-daemon|example|test|your|yourname|name|user|email|someone)([._-]|$)/i;
+const GENERIC_WORDS = new Set("the and inc llc ltd co corp company services service group home homes design designs marketing media solutions construction contracting contractors contractor roofing plumbing electric electrical hvac heating cooling landscaping landscape lawn cleaning painting dental dentistry clinic law legal auto center centre studio shop store team office mail email info contact holiday lights lighting christmas pros pro experts expert bvba gmbh".split(" "));
+
+/** "smith-plumbing" from "www.smith-plumbing.co.uk", "smithplumbing" from "mail.smithplumbing.com". */
+export function mainLabel(domain: string): string {
+  const parts = cleanDomain(domain).split(".").filter(Boolean);
+  if (parts.length < 2) return parts[0] || "";
+  parts.pop();
+  if (parts.length >= 2 && /^(co|com|org|net|ac|gov|edu)$/.test(parts[parts.length - 1])) parts.pop();
+  return parts[parts.length - 1] || "";
+}
+const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** Distinctive words of a business or owner name ("Smith Plumbing & Heating" → ["smith"]). */
+export function brandTokens(...names: (string | undefined)[]): string[] {
+  return names
+    .flatMap((name) => (name || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[^a-z0-9]+/))
+    .filter((token) => token.length >= 4 && !GENERIC_WORDS.has(token));
+}
+
+/** Domains of other organisations that often appear on a business's pages. */
+const OTHER_ORG_WORDS = /web|design|media|digital|seo|marketing|studio|agency|creative|hosting|sites?$|chamber|county|cityof|township|school|library|police|sheriff|permit|realtor|supply|supplies|wholesale|distribut|directory|listing|review/;
+
+export function emailPlausible(email: string, ctx: { domains: string[]; company?: string; owner?: string; city?: string; fromOwnSite?: boolean }): boolean {
   const e = email.toLowerCase().trim();
   if (!/^[a-z0-9._%+'-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}$/i.test(e) || /\.\./.test(e) || JUNK_EMAIL.test(e)) return false;
   const [local, domain] = e.split("@");
+  if (DEAD_END_LOCAL.test(local) || THIRD_PARTY_DOMAIN.test(domain)) return false;
   const own = ctx.domains.map(cleanDomain).filter(Boolean);
   if (own.some((d) => domain === d || domain.endsWith("." + d))) return true;
-  if (!FREE_MAIL.has(domain)) return false;
-  if (ctx.fromOwnSite) return true;
-  const stop = new Set(["the", "and", "inc", "llc", "ltd", "company", "services", "service", "group", "bvba", "gmbh"]);
-  const tokens = [ctx.company, ctx.owner].flatMap((name) => (name || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[^a-z0-9]+/)).filter((token) => token.length >= 3 && !stop.has(token));
-  return tokens.some((token) => local.includes(token));
+  const tokens = brandTokens(ctx.company, ctx.owner);
+  if (FREE_MAIL.has(domain)) {
+    // A Gmail/Outlook address published on the business's own pages is theirs;
+    // from anywhere else it must carry the business or owner name.
+    if (ctx.fromOwnSite) return true;
+    return [...tokens, ...own.map((d) => squash(mainLabel(d)))].some((token) => token.length >= 4 && squash(local).includes(token));
+  }
+  // A different business domain only when it is clearly the same brand
+  // ("smithplumbing.com" site, "office@smithplumbingaz.com"), never a web
+  // designer, directory, chamber, city office or supplier mentioned on the page.
+  if (!ctx.fromOwnSite) return false;
+  if (/\.(gov|edu|mil)(\.[a-z]{2})?$/.test(domain)) return false;
+  const theirs = squash(mainLabel(domain));
+  if (theirs.length < 4 || OTHER_ORG_WORDS.test(theirs)) return false;
+  for (const d of own) {
+    const mine = squash(mainLabel(d));
+    // their domain contains our whole brand name …
+    if (mine.length >= 5 && theirs.includes(mine)) return true;
+    // … or our domain starts with theirs and theirs is a real name, not a trade word
+    if (theirs.length >= 8 && mine.startsWith(theirs) && !GENERIC_WORDS.has(theirs)) return true;
+  }
+  // The business's own first word (not the town) starting their domain: "Smith Plumbing" → smithph.com.
+  const first = brandTokens((ctx.company || "").split(/\s+/)[0]).find((t) => t.length >= 5);
+  const town = squash(ctx.city || "");
+  return !!first && first !== town && !town.startsWith(first) && theirs.startsWith(first) && theirs.length <= first.length + 4;
 }
 
 /** Search snippets must not fall back to a directory or competitor's email. */
@@ -393,6 +441,8 @@ export async function freeEnrich(input: {
   website: string;
   ownerName?: string;
   companyName?: string;
+  /** The business's town — never mistaken for its brand when judging other domains. */
+  city?: string;
   maxPages?: number;
   /** Fetch /contact + /about first and the deeper pages only when needed. */
   tiered?: boolean;
@@ -513,6 +563,7 @@ export async function freeEnrich(input: {
   // Rank emails: own-domain first, personal-looking before generic, drop junk.
   const ranked = Array.from(emailMap.entries())
     .filter(([e]) => !JUNK_EMAIL.test(e) && e.length < 80)
+    .filter(([e]) => emailPlausible(e, { domains: [finalDomain, domain], company: input.companyName, owner: input.ownerName, city: input.city, fromOwnSite: true }))
     .map(([email, meta]) => {
       const own = email.endsWith("@" + finalDomain) || email.endsWith("@" + domain);
       const generic =

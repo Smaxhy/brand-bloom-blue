@@ -5,6 +5,7 @@
  * the Worker via authFetch.
  */
 import type { LeadAi } from "@/lib/lead-filters";
+import { isCompanyDomain } from "@/lib/business-key";
 import { authFetch } from "./store";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -253,8 +254,12 @@ export async function getOutreachSettings(): Promise<OutreachSettings> {
     }
   );
 }
+/** Columns the server keeps up to date (scheduler heartbeat / timer); a form must never write stale copies back. */
+const SERVER_SETTINGS = ["last_cron_at", "last_tick_source", "scheduler_token_hash", "scheduler_url"];
 export async function saveOutreachSettings(s: Partial<OutreachSettings>): Promise<void> {
-  must(await (await tbl("outreach_settings")).upsert({ id: "singleton", ...s }).select("id"));
+  const row: Record<string, unknown> = { id: "singleton", ...s };
+  for (const key of SERVER_SETTINGS) delete row[key];
+  must(await (await tbl("outreach_settings")).upsert(row).select("id"));
 }
 export async function integrationStatus(): Promise<Record<string, boolean>> {
   const res = await authFetch("/api/outreach/status");
@@ -320,7 +325,7 @@ export async function saveSequence(
         )
         .select("id"),
     );
-  return id!;
+  return id;
 }
 export async function setSequenceStatus(id: string, status: Sequence["status"]): Promise<void> {
   must(await (await tbl("sequences")).update({ status }).eq("id", id).select("id"));
@@ -418,24 +423,39 @@ export interface EnrollInput {
 export async function enrollLeads(
   sequenceId: string,
   leads: EnrollInput[],
-  options: { allowGuessed?: boolean } = {},
+  options: { allowGuessed?: boolean; onProgress?: (done: number, total: number) => void } = {},
 ): Promise<{
   ok: boolean;
   enrolled: number;
   skipped: { email: string; reason: string }[];
   error?: string;
 }> {
-  const res = await authFetch("/api/outreach/enroll", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sequenceId, leads, allowGuessed: options.allowGuessed === true }),
-  });
-  return (await res.json()) as {
-    ok: boolean;
-    enrolled: number;
-    skipped: { email: string; reason: string }[];
-    error?: string;
-  };
+  // 100 per request: each person is checked against the suppression list and
+  // every running sequence, so one huge request used to time out half-way.
+  const out = { ok: true, enrolled: 0, skipped: [] as { email: string; reason: string }[], error: undefined as string | undefined };
+  for (let i = 0; i < leads.length; i += 100) {
+    const res = await authFetch("/api/outreach/enroll", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sequenceId, leads: leads.slice(i, i + 100), allowGuessed: options.allowGuessed === true }),
+    });
+    const j = (await res.json().catch(() => null)) as {
+      ok: boolean;
+      enrolled: number;
+      skipped: { email: string; reason: string }[];
+      error?: string;
+      message?: string;
+    } | null;
+    if (!j || !j.ok) {
+      out.ok = out.enrolled > 0;
+      out.error = j?.error || j?.message || `Server answered ${res.status}`;
+      break;
+    }
+    out.enrolled += j.enrolled;
+    out.skipped.push(...(j.skipped ?? []));
+    options.onProgress?.(Math.min(leads.length, i + 100), leads.length);
+  }
+  return out;
 }
 
 /** "Write with AI" for one sequence step. Uses Settings → AI instructions. */
@@ -509,14 +529,17 @@ export async function listSuppressions(): Promise<Suppression[]> {
   );
 }
 export async function addSuppression(email: string, reason = "manual", note = ""): Promise<void> {
-  const domain = email.split("@")[1] || null;
-  must(
-    await (
-      await tbl("suppressions")
-    )
-      .upsert({ email: email.toLowerCase().trim(), domain, reason, note }, { onConflict: "email" })
-      .select("id"),
-  );
+  const clean = email.toLowerCase().trim();
+  // The company's domain blocks the whole company — but never gmail.com & co.
+  const emailDomain = clean.split("@")[1] || "";
+  const domain = isCompanyDomain(emailDomain) ? emailDomain : null;
+  // The table is unique on lower(email), which an upsert can't target: look
+  // first, insert, and treat "already listed" as done.
+  const existing = must<{ id: string }[]>(await (await tbl("suppressions")).select("id").eq("email", clean).limit(1));
+  if (existing.length) return;
+  const res = await (await tbl("suppressions")).insert({ email: clean, domain, reason, note }).select("id");
+  if (res.error?.code === "23505") return;
+  must(res);
 }
 export async function removeSuppression(id: string): Promise<void> {
   must(await (await tbl("suppressions")).delete().eq("id", id).select("id"));
@@ -530,21 +553,146 @@ export async function runDispatchNow(
   return (await res.json()) as { ok: boolean; report?: unknown; error?: string };
 }
 
-/** Send right now, ignoring the schedule and mailbox hours (daily cap still applies). */
+/** Send right now, ignoring the schedule and mailbox hours (daily cap still applies). One call ≈ 25 s. */
 export async function sendNow(target: {
   enrollmentIds?: string[];
   sequenceId?: string;
-}): Promise<{ ok: boolean; report?: DispatchSummary; error?: string }> {
+  /** "Send all" rounds: the moment the server fixed for this action (from the first round's answer). */
+  frozenAt?: string;
+}): Promise<{ ok: boolean; report?: DispatchSummary; error?: string; frozen_at?: string }> {
   const res = await authFetch("/api/outreach/send-now", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(target),
   });
-  return (await res.json()) as { ok: boolean; report?: DispatchSummary; error?: string };
+  const body = (await res.json().catch(() => null)) as { ok: boolean; report?: DispatchSummary; error?: string; message?: string; frozen_at?: string } | null;
+  if (!body) return { ok: false, error: `Server answered ${res.status}` };
+  if (!res.ok && !body.error) return { ok: false, error: body.message || `Server answered ${res.status}` };
+  return body;
 }
 export interface DispatchSummary {
-  mailboxes?: { email: string; sent: number; skipped?: string; bounce_blocked?: number }[];
+  mailboxes?: {
+    email: string;
+    sent: number;
+    skipped?: string;
+    bounce_blocked?: number;
+    duplicates_held?: number;
+    busy?: boolean;
+    due_left?: number;
+    next_send_in_sec?: number;
+    remaining_today?: number;
+    /** Follow-ups waited because the inbox hadn't been read recently (replies/opt-outs first). */
+    followups_held?: boolean;
+  }[];
   errors?: string[];
+}
+
+export const FOLLOWUPS_HELD_NOTE =
+  "follow-ups wait until the inbox has been read, so replies and opt-outs are seen first";
+
+export interface SendAllProgress {
+  sent: number;
+  rounds: number;
+  /** People still eligible after the latest call (null = unknown). */
+  left: number | null;
+  /** Why it stopped / is waiting, in plain words. */
+  note: string;
+}
+
+/**
+ * "Send now to everyone waiting": keeps calling the server (≈ 25 s per call,
+ * a few seconds between emails) until every never-emailed person and every
+ * due follow-up in the sequence has gone out, the daily cap is reached, or
+ * `shouldStop()` says stop. The people are fixed when it starts (the server
+ * returns that moment and every round sends it back), so each person gets at
+ * most one email per press and people added meanwhile wait for the normal
+ * schedule. If the tab closes, the background scheduler finishes the rest at
+ * the sequence's normal pace.
+ */
+export async function sendAllNow(
+  sequenceId: string,
+  opts: { onProgress?: (p: SendAllProgress) => void; shouldStop?: () => boolean } = {},
+): Promise<SendAllProgress & { blocked: number; duplicates: number; errors: string[] }> {
+  const out = { sent: 0, rounds: 0, left: null as number | null, note: "", blocked: 0, duplicates: 0, errors: [] as string[] };
+  let idle = 0;
+  const people = await listEnrollments({ sequenceId, limit: 10000 });
+  const start = Date.now();
+  const remaining = new Set(people.filter((p) => ["queued", "active", "paused"].includes(p.status) &&
+    (p.current_step === 0 || (p.next_send_at && Date.parse(p.next_send_at) <= start))).map((p) => p.id));
+  if (!remaining.size) return { ...out, left: 0 };
+  while (!opts.shouldStop?.()) {
+    out.rounds++;
+    const batch = [...remaining].slice(0, 200);
+    const r = await sendNow({ sequenceId, enrollmentIds: batch });
+    if (!r.ok) {
+      out.errors.push(r.error || "Could not send");
+      if (++idle >= 3) break;
+      await new Promise((res) => setTimeout(res, 5000));
+      continue;
+    }
+    // Mailboxes that aren't part of this sequence say so and are ignored here.
+    const boxes = (r.report?.mailboxes ?? []).filter((m) => !/isn't used by that sequence/i.test(m.skipped || ""));
+    const sent = boxes.reduce((a, m) => a + m.sent, 0);
+    out.sent += sent;
+    out.blocked += boxes.reduce((a, m) => a + (m.bounce_blocked ?? 0), 0);
+    out.duplicates += boxes.reduce((a, m) => a + (m.duplicates_held ?? 0), 0);
+    out.errors.push(...(r.report?.errors ?? []).slice(0, 2));
+    const current = await listEnrollments({ sequenceId, limit: 10000 });
+    const eligible = new Set(current.filter((p) => ["queued", "active", "paused"].includes(p.status) &&
+      (p.current_step === 0 || (p.next_send_at && Date.parse(p.next_send_at) <= start))).map((p) => p.id));
+    for (const id of remaining) if (!eligible.has(id)) remaining.delete(id);
+    const lefts = boxes.map((m) => m.due_left).filter((x): x is number => typeof x === "number");
+    out.left = remaining.size;
+    const busy = boxes.some((m) => m.busy);
+    // Only a mailbox that SAYS its daily cap is reached counts as capped (a busy
+    // mailbox hasn't counted anything yet).
+    const capped = boxes.length > 0 && boxes.every((m) => !m.busy && /daily cap/i.test(m.skipped || ""));
+    out.note = capped
+      ? "Daily cap reached — the rest goes out after midnight."
+      : busy
+        ? "Background sending is using the mailbox — waiting a moment…"
+        : boxes.map((m) => m.skipped).filter(Boolean)[0] ||
+          (boxes.some((m) => m.followups_held) ? FOLLOWUPS_HELD_NOTE : "");
+    opts.onProgress?.({ sent: out.sent, rounds: out.rounds, left: out.left, note: out.note });
+    // A busy mailbox reports nothing about who's left, so "0 left" only counts when none is busy.
+    if (capped || (out.left === 0 && !busy)) break;
+    if (sent === 0) {
+      // Nothing went out this round: a busy mailbox frees up within a minute;
+      // anything else (no mailbox, hours, errors) won't change by retrying fast.
+      if (++idle >= (busy ? 12 : 2)) break;
+      await new Promise((res) => setTimeout(res, busy ? 5000 : 2000));
+    } else idle = 0;
+  }
+  return out;
+}
+
+/** Background keep-alive from an open admin tab (the server ignores it while a real scheduler runs). */
+export async function browserTick(): Promise<{ ok: boolean; sent?: number; read?: number; skipped?: string | null }> {
+  const res = await authFetch("/api/outreach/tick", { method: "POST" });
+  return (await res.json().catch(() => ({ ok: false }))) as { ok: boolean; sent?: number; read?: number; skipped?: string | null };
+}
+
+export interface SchedulerState {
+  ok: boolean;
+  enabled?: boolean;
+  url?: string | null;
+  suggested_url?: string;
+  migrated?: boolean | null;
+  last_tick_at?: string | null;
+  last_tick_source?: string | null;
+  error?: string;
+}
+export async function schedulerStatus(): Promise<SchedulerState> {
+  const res = await authFetch("/api/outreach/scheduler");
+  return (await res.json().catch(() => ({ ok: false, error: `Server answered ${res.status}` }))) as SchedulerState;
+}
+export async function setScheduler(enabled: boolean): Promise<SchedulerState> {
+  const res = await authFetch("/api/outreach/scheduler", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled }),
+  });
+  return (await res.json().catch(() => ({ ok: false, error: `Server answered ${res.status}` }))) as SchedulerState;
 }
 
 /* -------------------------------------------------------------- replies */

@@ -1,5 +1,6 @@
 import { scanJobAction } from "@/lib/scan-jobs.functions";
 import { runScanRequest } from "./scan-request";
+import { businessKey } from "@/lib/business-key";
 import type { LeadAi } from "@/lib/lead-filters";
 /** Inspirova Admin — per-account Lovable Cloud data layer. */
 
@@ -956,7 +957,7 @@ export interface ScanJobLite {
 export interface ScanJobFull extends ScanJobLite {
   people: ScanPerson[];
   results: Record<string, EnrichResult>;
-  options: { useClaude?: boolean; usePaid?: boolean; revealPhone?: boolean; findLinkedin?: boolean };
+  options: { useClaude?: boolean; usePaid?: boolean; revealPhone?: boolean; findLinkedin?: boolean; allowGuesses?: boolean };
 }
 
 async function scanCall<T>(data: unknown, canContinue?: () => Promise<boolean>): Promise<T> {
@@ -1215,6 +1216,8 @@ export async function businessDiscovery(filters: {
   maxReviews?: number;
   includeSeen?: boolean;
   noSynonyms?: boolean;
+  /** When the whole scan started (all keywords and sources). */
+  since?: string;
 }): Promise<{
   live: boolean;
   businesses: DiscoveredBusiness[];
@@ -1240,6 +1243,7 @@ export async function businessDiscovery(filters: {
         minReviews: filters.minReviews || undefined,
         maxReviews: filters.maxReviews || undefined,
         hideSeen: !filters.includeSeen,
+        since: filters.since,
         expandKeywords: !filters.noSynonyms,
       }),
     });
@@ -1381,6 +1385,12 @@ export async function discoverLeads(
   const wanted = filters.perPage;
   const sourcesById: Record<string, ScrapeSource[]> = {};
   const sources = opts.sources;
+  // "Only new" = not returned by an EARLIER scan. Everything this scan finds
+  // (any keyword, any source) counts as new; 2 minutes of slack for clock drift.
+  const since = new Date(Date.now() - 2 * 60_000).toISOString();
+  const onlyNewParams = { hideSeen: filters.includeSeen ? "0" : "1", since };
+  const keyOf = (p: { company: string; website?: string; phone?: string; city?: string; id?: string }) =>
+    businessKey(p) || p.id || "";
 
   const [apolloRes, googleRes] = await Promise.all([
     sources.apollo
@@ -1397,6 +1407,7 @@ export async function discoverLeads(
           maxReviews: filters.maxReviews,
           includeSeen: filters.includeSeen,
           noSynonyms: filters.noSynonyms,
+          since,
           providers: [
             ...(sources.google ? (["places", "serper", "serpapi"] as DiscoverProvider[]) : []),
             ...(sources.osm ? (["osm"] as DiscoverProvider[]) : []),
@@ -1416,14 +1427,14 @@ export async function discoverLeads(
   const kw = filters.industry.split(",")[0]?.trim() || "";
 
   for (const p of apolloRes.people) {
-    const key = cleanDomain(p.website) || norm(p.company) || p.id;
+    const key = keyOf(p);
     if (!merged.has(key)) {
       merged.set(key, { ...p });
       sourcesById[p.id] = ["apollo"];
     }
   }
   for (const b of googleRes.businesses) {
-    const key = cleanDomain(b.website) || norm(b.company) || b.id;
+    const key = keyOf(b);
     const existing = merged.get(key);
     if (existing) {
       // Backfill missing fields from Google
@@ -1464,12 +1475,13 @@ export async function discoverLeads(
           status: string;
           businesses?: DiscoveredBusiness[];
           error?: string;
+          notes?: string[];
         } = { done: false, status: "pending" };
         const t0 = Date.now();
         while (Date.now() - t0 < 10 * 60_000) {
           await new Promise((r) => setTimeout(r, 6000));
           opts.onProgress?.("selfhost", Math.round((Date.now() - t0) / 1000), 0);
-          const q = new URLSearchParams({ job: st.jobId, city: filters.location, industry: kw });
+          const q = new URLSearchParams({ job: st.jobId, city: filters.location, industry: kw, ...onlyNewParams });
           const r = await authFetch(`/api/discover/gmaps/status?${q}`);
           result = (await r.json()) as typeof result;
           if (result.done) break;
@@ -1477,7 +1489,7 @@ export async function discoverLeads(
         let n = 0;
         let withEmail = 0;
         for (const b of result.businesses ?? []) {
-          const key = cleanDomain(b.website) || norm(b.company) || b.id;
+          const key = keyOf(b);
           const existing = merged.get(key);
           if (existing) {
             if (!existing.phone && b.phone) existing.phone = b.phone;
@@ -1499,7 +1511,7 @@ export async function discoverLeads(
         selfNote = result.error
           ? `Own Maps scraper: ${result.error}`
           : result.done
-            ? `Own Maps scraper: ${n} new (${withEmail} with email)`
+            ? `Own Maps scraper: ${n} new (${withEmail} with email)${result.notes?.length ? `, ${result.notes.join(", ")}` : ""}`
             : `Own Maps scraper: still running after 10 min — ${n} so far`;
       }
     } catch (e) {
@@ -1537,7 +1549,7 @@ export async function discoverLeads(
       } else {
         const t0 = Date.now();
         const MAX_MS = 8 * 60_000;
-        let result: { done: boolean; status: string; businesses?: DiscoveredBusiness[] } = {
+        let result: { done: boolean; status: string; businesses?: DiscoveredBusiness[]; notes?: string[] } = {
           done: false,
           status: "RUNNING",
         };
@@ -1549,6 +1561,7 @@ export async function discoverLeads(
             dataset: st.datasetId,
             city: filters.location,
             industry: kw,
+            ...onlyNewParams,
           });
           const r = await authFetch(`/api/discover/apify/status?${q}`);
           result = (await r.json()) as typeof result;
@@ -1566,13 +1579,14 @@ export async function discoverLeads(
               dataset: st.datasetId,
               city: filters.location,
               industry: kw,
+              ...onlyNewParams,
             });
             const r = await authFetch(`/api/discover/apify/status?${q}`);
             result = (await r.json()) as typeof result;
           }
         }
         for (const b of result.businesses ?? []) {
-          const key = cleanDomain(b.website) || norm(b.company) || b.id;
+          const key = keyOf(b);
           const existing = merged.get(key);
           if (existing) {
             if (!existing.phone && b.phone) existing.phone = b.phone;
@@ -1589,7 +1603,7 @@ export async function discoverLeads(
           result.status === "ABORTED"
             ? `Apify: stopped after 8 min to save credits — ${apifyCount} new`
             : result.done
-              ? `Apify: ${apifyCount} new`
+              ? `Apify: ${apifyCount} new${result.notes?.length ? `, ${result.notes.join(", ")}` : ""}`
               : `Apify: still running — ${apifyCount} so far`;
       }
     } catch (e) {

@@ -29,11 +29,18 @@ function headers(token: string): Record<string, string> {
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-async function fetchRetry(url: string, init: RequestInit, max = 3): Promise<Response> {
+async function fetchRetry(
+  url: string,
+  init: RequestInit,
+  max = 3,
+  /** Retry 5xx too. Off for the send call: a 5xx may still have sent the email. */
+  retryServerErrors = true,
+): Promise<Response> {
   let attempt = 0;
   for (;;) {
     const res = await fetch(url, { ...init, signal: init.signal ?? AbortSignal.timeout(20000) });
-    if ((res.status !== 429 && res.status < 500) || attempt >= max) return res;
+    const retryable = res.status === 429 || (retryServerErrors && res.status >= 500);
+    if (!retryable || attempt >= max) return res;
     const ra = Number(res.headers.get("retry-after"));
     await sleep(
       Number.isFinite(ra) && ra > 0
@@ -135,6 +142,7 @@ export interface GhlSent {
 export async function ghlSendEmail(
   token: string,
   m: {
+    deadline?: number;
     contactId: string;
     subject: string;
     html: string;
@@ -145,6 +153,7 @@ export async function ghlSendEmail(
   },
 ): Promise<GhlSent> {
   const res = await fetchRetry(`${API}/conversations/messages`, {
+    signal: AbortSignal.timeout(Math.max(1, Math.min(12_000, (m.deadline ?? Date.now() + 12_000) - Date.now()))),
     method: "POST",
     headers: headers(token),
     body: JSON.stringify({
@@ -157,7 +166,7 @@ export async function ghlSendEmail(
       emailFrom: m.fromName ? `${m.fromName} <${m.fromEmail}>` : m.fromEmail,
       replyMessageId: m.replyToEmailMessageId || undefined,
     }),
-  });
+  }, 0, false);
   if (!res.ok) throw new Error(`GHL send ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const j = (await res.json()) as {
     messageId?: string;
@@ -187,6 +196,8 @@ export async function ghlInboundConversations(
   token: string,
   locationId: string,
   limit = 100,
+  /** Next page: the last conversation's lastMessageDate (GHL's search cursor). */
+  startAfterDate?: number,
 ): Promise<GhlConversation[]> {
   const u = new URL(`${API}/conversations/search`);
   u.searchParams.set("locationId", locationId);
@@ -194,6 +205,7 @@ export async function ghlInboundConversations(
   u.searchParams.set("sortBy", "last_message_date");
   u.searchParams.set("sort", "desc");
   u.searchParams.set("limit", String(limit));
+  if (startAfterDate) u.searchParams.set("startAfterDate", String(startAfterDate));
   const res = await fetchRetry(u.toString(), { headers: headers(token) });
   if (!res.ok)
     throw new Error(`GHL conversations ${res.status}: ${(await res.text()).slice(0, 200)}`);

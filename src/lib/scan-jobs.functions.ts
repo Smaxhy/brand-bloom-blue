@@ -6,7 +6,7 @@ import { scanRequestLimit } from "./scan-request-policy";
 
 const person = z.object({ id: z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/), name: z.string().max(200).default(""), domain: z.string().max(2048).default(""), organizationName: z.string().max(200).default(""), linkedin: z.string().max(2048).optional(), rating: z.number().min(0).max(5).optional(), reviews: z.number().min(0).optional(), phone: z.string().max(100).optional(), city: z.string().max(200).optional(), industry: z.string().max(200).optional() });
 const input = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("start"), people: z.array(person).min(1).max(2000), label: z.string().max(120), options: z.object({ useClaude: z.boolean().optional(), usePaid: z.boolean().optional(), revealPhone: z.boolean().optional(), findLinkedin: z.boolean().optional() }) }),
+  z.object({ action: z.literal("start"), people: z.array(person).min(1).max(2000), label: z.string().max(120), options: z.object({ useClaude: z.boolean().optional(), usePaid: z.boolean().optional(), revealPhone: z.boolean().optional(), findLinkedin: z.boolean().optional(), allowGuesses: z.boolean().optional() }) }),
   z.object({ action: z.enum(["step", "status", "cancel"]), id: z.string().uuid(), full: z.boolean().optional() }),
   z.object({ action: z.literal("list") }),
 ]);
@@ -26,16 +26,18 @@ export const scanJobAction = createServerFn({ method: "POST" })
     if (data.action === "list") return { jobs: await helpers.listScanJobs(db, context.userId) };
     if (data.action === "start") {
       if (JSON.stringify(data.people).length > 1000000) throw new Error("This scan is too large. Use fewer businesses.");
-      const active = await db.select("scan_jobs", `created_by=eq.${context.userId}&status=in.(queued,running)&select=id&limit=3`);
-      if (active.length >= 3) throw new Error("Finish or stop a current scan before starting another.");
+      // Scans queue up and run oldest first in the background; only a runaway
+      // number of unfinished ones is refused.
+      const active = await db.select("scan_jobs", `created_by=eq.${context.userId}&status=in.(queued,running)&select=id&limit=25`);
+      if (active.length >= 25) throw new Error("25 scans are still running. Stop a few under Recent scans, or let them finish in the background.");
       const [job] = await db.insert<import("./scan-jobs.server").ScanJob>("scan_jobs", { created_by: context.userId, label: data.label, people: data.people, total: data.people.length, options: data.options });
       if (!job) throw new Error("Could not save this scan.");
-      return { job, produced: [] };
+      return { job, produced: [], claimed: false };
     }
     const job = await helpers.getScanJob(db, data.id, context.userId, data.full);
     if (!job) throw new Error("Scan not found.");
     if (data.action === "cancel") { await helpers.cancelScanJob(db, data.id, context.userId); return { job: await helpers.getScanJob(db, data.id, context.userId) }; }
     if (data.action === "status") return { job };
     const { resolveIntegrationEnv } = await import("./integration-settings.server");
-    return helpers.stepScanJob(db, await resolveIntegrationEnv({}), data.id, context.userId);
+    return helpers.stepScanJob(db, await resolveIntegrationEnv({}), data.id, context.userId, undefined, { budgetMs: 20_000 });
   });

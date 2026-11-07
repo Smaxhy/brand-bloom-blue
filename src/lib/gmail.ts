@@ -4,6 +4,7 @@
  */
 
 export interface OutgoingMail {
+  deadline?: number;
   from: { name: string; email: string };
   to: { name: string; email: string };
   subject: string;
@@ -102,6 +103,8 @@ export async function gmailSend(
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    // A hung send must end well within the mailbox's send lease.
+    signal: AbortSignal.timeout(Math.max(1, Math.min(12_000, (m.deadline ?? Date.now() + 12_000) - Date.now()))),
   });
   if (!res.ok) throw new Error(`gmail send ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const j = (await res.json()) as { id: string; threadId: string };
@@ -137,31 +140,18 @@ export async function gmailListRecent(
   return (j.messages ?? []).map((m) => m.id);
 }
 
-export async function gmailGetHeaders(
-  accessToken: string,
-  id: string,
-): Promise<GmailHeaderMsg | null> {
-  const u = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}`);
-  u.searchParams.set("format", "metadata");
-  for (const h of [
-    "From",
-    "Subject",
-    "In-Reply-To",
-    "References",
-    "X-Failed-Recipients",
-    "Auto-Submitted",
-  ])
-    u.searchParams.append("metadataHeaders", h);
-  const res = await fetch(u.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
-  if (!res.ok) return null;
-  const j = (await res.json()) as {
-    id: string;
-    threadId: string;
-    snippet?: string;
-    internalDate?: string;
-    labelIds?: string[];
-    payload?: { headers?: { name: string; value: string }[] };
-  };
+const HEADER_NAMES = ["From", "Subject", "In-Reply-To", "References", "X-Failed-Recipients", "Auto-Submitted"];
+
+type RawGmailMessage = {
+  id: string;
+  threadId: string;
+  snippet?: string;
+  internalDate?: string;
+  labelIds?: string[];
+  payload?: { headers?: { name: string; value: string }[] };
+};
+
+function toHeaderMsg(j: RawGmailMessage): GmailHeaderMsg {
   const get = (n: string) =>
     j.payload?.headers?.find((h) => h.name.toLowerCase() === n.toLowerCase())?.value ?? "";
   return {
@@ -178,6 +168,66 @@ export async function gmailGetHeaders(
     labelIds: j.labelIds ?? [],
   };
 }
+
+export async function gmailGetHeaders(
+  accessToken: string,
+  id: string,
+): Promise<GmailHeaderMsg | null> {
+  const u = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}`);
+  u.searchParams.set("format", "metadata");
+  for (const h of HEADER_NAMES) u.searchParams.append("metadataHeaders", h);
+  const res = await fetch(u.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) return null;
+  return toHeaderMsg((await res.json()) as RawGmailMessage);
+}
+
+/**
+ * Every message matching `q` (newest first), page by page, up to `max`.
+ * `more` = there were more than `max`.
+ */
+export async function gmailListAll(
+  accessToken: string,
+  q: string,
+  max = 2000,
+): Promise<{ items: { id: string; threadId: string }[]; more: boolean }> {
+  const items: { id: string; threadId: string }[] = [];
+  let pageToken = "";
+  for (;;) {
+    const u = new URL("https://gmail.googleapis.com/gmail/v1/users/me/messages");
+    u.searchParams.set("q", q);
+    u.searchParams.set("maxResults", String(Math.max(1, Math.min(500, max - items.length))));
+    if (pageToken) u.searchParams.set("pageToken", pageToken);
+    const res = await fetch(u.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) throw new Error(`gmail list ${res.status}`);
+    const j = (await res.json()) as { messages?: { id: string; threadId: string }[]; nextPageToken?: string };
+    items.push(...(j.messages ?? []));
+    if (!j.nextPageToken) return { items, more: false };
+    if (items.length >= max) return { items, more: true };
+    pageToken = j.nextPageToken;
+  }
+}
+
+/** All messages of one conversation (headers only). A thread that no longer exists → null. */
+export async function gmailThreadHeaders(accessToken: string, threadId: string): Promise<GmailHeaderMsg[] | null> {
+  const u = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/threads/${encodeURIComponent(threadId)}`);
+  u.searchParams.set("format", "metadata");
+  for (const h of HEADER_NAMES) u.searchParams.append("metadataHeaders", h);
+  const res = await fetch(u.toString(), {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`gmail thread ${res.status}`);
+  const j = (await res.json()) as { messages?: RawGmailMessage[] };
+  return (j.messages ?? []).map(toHeaderMsg);
+}
+
+/** Gmail search for anything that looks like a bounce (delivery failure) notice. */
+export const GMAIL_BOUNCE_QUERY =
+  '{from:mailer-daemon from:postmaster subject:undeliverable subject:"delivery status notification" subject:"returned mail" subject:"delivery failure" subject:"mail delivery failed" subject:"undelivered mail" subject:"failure notice"}';
 
 export function isBounce(m: GmailHeaderMsg): boolean {
   return (

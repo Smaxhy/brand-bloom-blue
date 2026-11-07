@@ -113,6 +113,20 @@
       "when": 1793977719023,
       "tag": "0015_prevent_overlapping_enrollments",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1794076610023,
+      "tag": "0016_secure_admin_background_timer",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794076655536,
+      "tag": "0017_outreach_timer_wake_and_drain",
+      "breakpoints": true
     }
   ]
 }

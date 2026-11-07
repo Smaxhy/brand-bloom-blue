@@ -4,7 +4,7 @@
  */
 
 import type { LeadAi } from "@/lib/lead-filters";
-import { Db, enc } from "./db";
+import { Db, enc, pgQuote } from "./db";
 import { hasCronSecret, type ApiUser } from "./api-auth";
 import { makeState, readState, consentUrl, exchangeCode, userEmail } from "./google-oauth";
 import { sendVia } from "./channel";
@@ -12,14 +12,16 @@ import { ghlVerify } from "./ghl";
 import { runDispatch, type Lead, type Mailbox, type OutreachSettings } from "./sequencer";
 import { renderStep } from "./templates";
 import { hasMx } from "./providers/free-enrich";
-import { verifyEmail } from "./bounce";
+import { verifyEmail, addSuppression, looksLikeEmail } from "./bounce";
+import { isCompanyDomain } from "./business-key";
 import { canEnrollGuessedEmail } from "./guessed-email";
 import { writeStep, DEFAULT_AI_INSTRUCTIONS } from "./email-ai";
 import { runSavedSearch, type SavedSearch } from "./saved-searches";
+import { runTick, keepAlive, lastServerTick, randomHex, sha256Hex, forgetSchedulerTokenCache, type WaitCtx } from "./tick";
 
 type Env = Record<string, string | undefined>;
 const env = (e: Env, k: string) => e[k] || process.env?.[k];
-const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
+const JSON_HEADERS = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
 const html = (body: string, status = 200) =>
@@ -30,6 +32,7 @@ export async function handleOutreachRoute(
   request: Request,
   e: Env,
   user: ApiUser | null,
+  ctx?: WaitCtx,
 ): Promise<Response | null> {
   const url = new URL(request.url);
 
@@ -41,11 +44,17 @@ export async function handleOutreachRoute(
   if (path === "/api/cron/dispatch") {
     if (!Db.available(e))
       return json({ ok: false, error: "SUPABASE_SERVICE_ROLE_KEY missing on the server." }, 500);
-    const report = await runDispatch(e, {
-      origin: url.origin,
-      syncOnly: url.searchParams.get("sync") === "1",
-      source: hasCronSecret(request, e) ? "cron" : "manual",
-    });
+    // An outside pinger with the secret = a full background tick.
+    if (hasCronSecret(request, e)) {
+      const tick = await keepAlive(ctx, runTick(e, { trigger: "external", origin: url.origin }));
+      return json({ ok: true, report: tick.dispatch ?? null, tick });
+    }
+    // The admin's "Send due emails now" / "Sync inbox" buttons: respects the
+    // schedule, finishes inside the request's grace period.
+    const report = await keepAlive(
+      ctx,
+      runDispatch(e, { origin: url.origin, syncOnly: url.searchParams.get("sync") === "1", source: "manual" }),
+    );
     return json({ ok: true, report });
   }
 
@@ -72,7 +81,9 @@ export async function handleOutreachRoute(
   if (path === "/api/outreach/verify") return verifyEmails(request, e);
   if (path === "/api/outreach/reply") return sendReply(request, e);
   if (path === "/api/outreach/ai/write") return aiWrite(request, e);
-  if (path === "/api/outreach/send-now") return sendNow(request, e, url.origin);
+  if (path === "/api/outreach/send-now") return sendNow(request, e, url.origin, ctx);
+  if (path === "/api/outreach/tick") return browserTick(request, e, url.origin, ctx);
+  if (path === "/api/outreach/scheduler") return scheduler(request, e, url.origin);
   if (path === "/api/outreach/search/run") return runSearchNow(request, e);
   return null;
 }
@@ -409,22 +420,98 @@ interface EnrollLead {
 }
 
 /** "Send now": ignore the schedule and mailbox hours for chosen people / a sequence. */
-async function sendNow(request: Request, env: Env, origin: string): Promise<Response> {
+async function sendNow(request: Request, env: Env, origin: string, ctx?: WaitCtx): Promise<Response> {
   if (request.method !== "POST") return json({ ok: false, error: "POST only" }, 405);
   if (!Db.available(env))
     return json({ ok: false, error: "SUPABASE_SERVICE_ROLE_KEY missing on the server." }, 500);
   const b = (await request.json().catch(() => ({}))) as {
     enrollmentIds?: string[];
     sequenceId?: string;
+    frozenAt?: string;
   };
-  const ids = (b.enrollmentIds ?? []).filter((x) => /^[0-9a-f-]{36}$/i.test(x));
-  const seq = b.sequenceId && /^[0-9a-f-]{36}$/i.test(b.sequenceId) ? b.sequenceId : undefined;
+  const ids = (Array.isArray(b.enrollmentIds) ? b.enrollmentIds : [])
+    .filter((x): x is string => typeof x === "string" && /^[0-9a-f-]{36}$/i.test(x))
+    .slice(0, 200);
+  const seq = typeof b.sequenceId === "string" && /^[0-9a-f-]{36}$/i.test(b.sequenceId) ? b.sequenceId : undefined;
   if (!ids.length && !seq) return json({ ok: false, error: "nothing to send" }, 400);
-  const report = await runDispatch(env, {
-    origin,
-    force: ids.length ? { enrollmentIds: ids } : { sequenceId: seq },
-  });
-  return json({ ok: true, report });
+  // A sequence "send all" is one action over the people waiting when it began:
+  // the first call fixes that moment (server clock) and the browser sends it
+  // back on every later round. Anything odd falls back to "now".
+  const now = Date.now();
+  const askedFrozen = typeof b.frozenAt === "string" ? Date.parse(b.frozenAt) : NaN;
+  const frozenAt = new Date(
+    Number.isFinite(askedFrozen) && askedFrozen >= now - 24 * 3600_000 && askedFrozen <= now ? askedFrozen : now,
+  ).toISOString();
+  // ~25 s per call: the browser keeps calling until everyone is sent. Kept
+  // alive past a closed tab so a send is never cut in half.
+  const report = await keepAlive(
+    ctx,
+    runDispatch(env, {
+      origin,
+      source: "manual",
+      force: ids.length ? { enrollmentIds: ids } : { sequenceId: seq, frozenAt },
+    }),
+  );
+  return json(ids.length ? { ok: true, report } : { ok: true, report, frozen_at: frozenAt });
+}
+
+/**
+ * Keep-alive from an open admin tab: when no server scheduler has run in the
+ * last 90 s, this tab does one tick (send what's due + move scans on).
+ */
+async function browserTick(request: Request, env: Env, origin: string, ctx?: WaitCtx): Promise<Response> {
+  if (request.method !== "POST") return json({ ok: false, error: "POST only" }, 405);
+  if (!Db.available(env))
+    return json({ ok: false, error: "SUPABASE_SERVICE_ROLE_KEY missing on the server." }, 500);
+  const tick = await keepAlive(ctx, runTick(env, { trigger: "browser", origin }));
+  const sent = tick.dispatch?.mailboxes.reduce((a, m) => a + m.sent, 0) ?? 0;
+  return json({ ok: true, ran: !tick.dispatch_skipped || !!tick.scans, sent, read: tick.scans?.read ?? 0, skipped: tick.dispatch_skipped ?? null });
+}
+
+/** Settings → Background timer: turn the once-a-minute database timer on/off, or read its state. */
+async function scheduler(request: Request, env: Env, requestOrigin: string): Promise<Response> {
+  if (!Db.available(env))
+    return json({ ok: false, error: "SUPABASE_SERVICE_ROLE_KEY missing on the server." }, 500);
+  const db = new Db(env);
+  const configured = (env.PUBLIC_ORIGIN || process.env?.PUBLIC_ORIGIN || "").replace(/\/+$/, "");
+  const origin = configured || "https://inspirovamarketing.com";
+  if (request.method === "GET") {
+    const row = await db.one<{ token_hash: string; url: string }>("outreach_scheduler", "id=eq.singleton&select=token_hash,url");
+    const last = await lastServerTick(db);
+    return json({ ok: true, enabled: !!row?.token_hash, url: row?.url ?? null,
+      suggested_url: `${origin}/api/public/cron/tick`, migrated: true,
+      last_tick_at: last.at, last_tick_source: last.source });
+  }
+  if (request.method !== "POST") return json({ ok: false, error: "GET or POST only" }, 405);
+  const body = (await request.json().catch(() => ({}))) as { enabled?: boolean };
+  if (typeof body.enabled !== "boolean") return json({ ok: false, error: "Choose whether to enable the timer." }, 400);
+  const enabled = body.enabled;
+  if (enabled && !/^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(origin))
+    return json({ ok: false, error: `The timer needs your public https address. Set PUBLIC_ORIGIN (now: ${origin || "empty"}).` }, 400);
+  if (enabled && /(^|\/\/)(id-)?preview--|lovableproject/i.test(origin))
+    return json({ ok: false, error: "Open the admin on your live site (e.g. inspirovamarketing.com) to turn the timer on — this is a preview address." }, 400);
+  if (enabled && !["https://inspirovamarketing.com", "https://www.inspirovamarketing.com", "https://brand-bloom-blue.lovable.app"].includes(origin)) return json({ ok: false, error: "Use the approved published website address for the timer." }, 400);
+  const token = randomHex(32);
+  try {
+    const result = await db.rpc<string>("configure_outreach_scheduler", {
+      _url: `${origin}/api/public/cron/tick`,
+      _token: enabled ? token : "",
+      _token_hash: enabled ? await sha256Hex(token) : "",
+      _enabled: enabled,
+    });
+    forgetSchedulerTokenCache();
+    if (result === "pg_cron_unavailable" || result === "pg_net_unavailable")
+      return json({
+        ok: false,
+        error: `The database can't run timers (${result === "pg_cron_unavailable" ? "pg_cron" : "pg_net"} is not enabled). Enable it in your database extensions, or use the Cloudflare cron.`,
+      }, 400);
+    return json({ ok: true, enabled: result === "enabled", url: enabled ? `${origin}/api/public/cron/tick` : null });
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (/configure_outreach_scheduler|PGRST202|does not exist/i.test(msg))
+      return json({ ok: false, error: "Apply the database update 0016_background_scheduler first, then try again." }, 400);
+    return json({ ok: false, error: msg.slice(0, 300) }, 500);
+  }
 }
 
 /** "Write with AI" in the sequence editor. */
@@ -511,14 +598,16 @@ async function enroll(request: Request, e: Env, user: ApiUser): Promise<Response
   let i = 0;
   for (const l of body.leads.slice(0, 500)) {
     const email = (l.email || "").trim().toLowerCase();
-    if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(email)) {
+    // The same strict check the sender uses: a stray comma or bracket in an
+    // address can't make it into a sequence.
+    if (!looksLikeEmail(email)) {
       result.skipped.push({ email: l.email || "(none)", reason: "invalid email" });
       continue;
     }
     const domain = cleanDomain(l.website) || email.split("@")[1];
     const sup = await db.one(
       "suppressions",
-      `or=(email.eq.${enc(email)},domain.eq.${enc(domain)})&select=id`,
+      `or=(email.eq.${enc(pgQuote(email))}${isCompanyDomain(domain) ? `,domain.eq.${enc(pgQuote(domain))}` : ""})&select=id`,
     );
     if (sup) {
       result.skipped.push({ email, reason: "on suppression list" });
@@ -539,18 +628,9 @@ async function enroll(request: Request, e: Env, user: ApiUser): Promise<Response
         });
         // Remember it as bad so nobody enrols this address again. Email-level only:
         // one wrong guessed address doesn't condemn the whole company.
-        await db
-          .upsert(
-            "suppressions",
-            {
-              email,
-              domain: null,
-              reason: "bounce",
-              note: "pre-send: address failed verification",
-            },
-            "email",
-          )
-          .catch(() => {});
+        await addSuppression(db, { email, domain: null, reason: "bounce", note: "pre-send: address failed verification" }).catch(
+          (err) => console.error("suppression not saved:", (err as Error).message),
+        );
         continue;
       }
     }
@@ -565,7 +645,9 @@ async function enroll(request: Request, e: Env, user: ApiUser): Promise<Response
         email,
         email_source: l.emailSource || "",
         email_guessed: !!l.emailGuessed,
-        email_verified: verified,
+        // Only write a verification we actually just did; never reset an
+        // earlier "valid"/"invalid" back to unknown on re-enrolment.
+        ...(verified !== "unknown" ? { email_verified: verified } : {}),
         phone: l.phone || "",
         linkedin: l.linkedin || "",
         city: l.city || "",
@@ -581,13 +663,11 @@ async function enroll(request: Request, e: Env, user: ApiUser): Promise<Response
       },
       "email",
     );
-    // Round-robin mailboxes; spread first sends over the day so they don't all fire at once.
+    // Round-robin mailboxes. Everyone is due straight away, in this order: the
+    // dispatcher sends them one by one at the sequence's own gap (and only in
+    // the mailbox's hours unless the sequence is "Send any time").
     const mailboxId = seq.mailbox_ids.length ? seq.mailbox_ids[i % seq.mailbox_ids.length] : null;
-    // "Send any time" sequences: everyone is due now (the dispatcher paces them
-    // with the sequence's own gap). Otherwise spread first sends over the day.
-    const nextSendAt = seq.send_anytime
-      ? new Date(start.getTime() + i * 1000)
-      : new Date(start.getTime() + i * 4 * 60_000 + Math.floor(Math.random() * 120_000));
+    const nextSendAt = new Date(start.getTime() + i * 1000);
     const existing = await db.one<{ id: string; status: string }>(
       "enrollments",
       `sequence_id=eq.${seq.id}&lead_id=eq.${lead.id}&select=id,status`,
@@ -603,15 +683,25 @@ async function enroll(request: Request, e: Env, user: ApiUser): Promise<Response
       result.skipped.push({ email, reason: "already in another running sequence" });
       continue;
     }
-    await db.insert("enrollments", {
-      sequence_id: seq.id,
-      lead_id: lead.id,
-      mailbox_id: mailboxId,
-      status: "queued",
-      current_step: 0,
-      next_send_at: nextSendAt.toISOString(),
-      created_by: user.id,
-    });
+    try {
+      await db.insert("enrollments", {
+        sequence_id: seq.id,
+        lead_id: lead.id,
+        mailbox_id: mailboxId,
+        status: "queued",
+        current_step: 0,
+        next_send_at: nextSendAt.toISOString(),
+        variant: Math.random() < 0.5 ? "A" : "B",
+        created_by: user.id,
+      });
+    } catch (err) {
+      const msg = (err as Error).message;
+      result.skipped.push({
+        email,
+        reason: /23505|already belongs|duplicate/i.test(msg) ? "already in another running sequence" : `could not add: ${msg.slice(0, 120)}`,
+      });
+      continue;
+    }
     result.enrolled++;
     i++;
   }
@@ -709,24 +799,26 @@ async function unsubscribe(request: Request, e: Env): Promise<Response> {
     "leads",
     `id=eq.${en.lead_id}&select=email,domain`,
   );
+  // Both steps are tried; if either fails the person is told so (never a false "done").
+  let saved = true;
   if (lead?.email)
-    await db
-      .upsert(
-        "suppressions",
-        {
-          email: lead.email.toLowerCase(),
-          domain: lead.domain,
-          reason: "unsubscribe",
-          note: "link",
-        },
-        "email",
-      )
-      .catch(() => {});
+    await addSuppression(db, { email: lead.email, domain: lead.domain, reason: "unsubscribe", note: "link" }).catch((err) => {
+      saved = false;
+      console.error("unsubscribe: suppression not saved:", (err as Error).message);
+    });
   await db
     .update("enrollments", `lead_id=eq.${en.lead_id}&status=in.(queued,active,paused)`, {
       status: "unsubscribed",
     })
-    .catch(() => {});
+    .catch((err) => {
+      saved = false;
+      console.error("unsubscribe: enrolments not stopped:", (err as Error).message);
+    });
+  if (!saved)
+    return page(
+      "Almost done",
+      'We couldn\'t finish removing you just now. Please try the link again in a minute, or reply to the email with "unsubscribe" and we\'ll remove you by hand.',
+    );
   return page(
     "You're unsubscribed",
     `${lead?.email ? `<strong>${lead.email}</strong> has` : "You have"} been removed. You won't hear from us again.`,

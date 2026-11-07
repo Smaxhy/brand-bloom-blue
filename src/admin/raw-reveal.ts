@@ -39,6 +39,7 @@ export async function runRawReveal(people: ScanPerson[], deps: {
   onProgress: (done: number, total: number) => void;
 }) {
   const warnings = new Set<string>();
+  let lastFull = { cursor: -1, at: 0 };
   for (let offset = 0; offset < people.length; offset += 2000) {
     if (!(await deps.canContinue())) break;
     const started = await deps.start(people.slice(offset, offset + 2000));
@@ -63,11 +64,20 @@ export async function runRawReveal(people: ScanPerson[], deps: {
         deps.onRows(next.produced);
         job = next.job;
         if (!(await deps.canContinue())) return [...warnings];
-        // Read back another runner's results only when we did not own the slice.
-        // Our own rows are already returned; the final read reconciles all saved data.
+        // Another runner (the background timer) holds the scan right now: read
+        // its saved results only when it has moved on, at most every 15 s, and
+        // back off ~4 s instead of asking again straight away. Our own rows are
+        // already returned; the final read reconciles all saved data.
         if (next.claimed === false && job) {
-          const full = await deps.status(job.id);
-          if (full) { deps.onRows(Object.values(full.results)); job = full; }
+          if (job.cursor > lastFull.cursor && Date.now() - lastFull.at > 15_000) {
+            lastFull = { cursor: job.cursor, at: Date.now() };
+            const full = await deps.status(job.id);
+            if (full) { deps.onRows(Object.values(full.results)); job = full; }
+          }
+          for (let i = 0; i < 9; i++) {
+            if (!(await deps.canContinue())) return [...warnings];
+            await deps.wait();
+          }
         }
         failures = 0;
       } catch (error) {

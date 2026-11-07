@@ -2,7 +2,6 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { getSendingStatus } from "@/lib/sending-status.functions";
-import { eligibleSendBatches } from "../send-batches";
 import { inboxCheck } from "@/lib/inbox-check";
 type SendingStatus = Awaited<ReturnType<typeof getSendingStatus>>;
 import {
@@ -68,7 +67,10 @@ import {
   aiWriteStep,
   enrollLeads,
   sendNow,
+  sendAllNow,
+  FOLLOWUPS_HELD_NOTE,
   liveEnrolledEmails,
+  type SendAllProgress,
   type DispatchSummary,
   type ReplyIntent,
 } from "../outreach";
@@ -84,6 +86,7 @@ function toastDispatch(rep: DispatchSummary | undefined, prefix = "") {
   const parts = [
     `${prefix}Sent ${sent}`,
     blocked ? `${blocked} held back by the bounce check` : "",
+    rep?.mailboxes?.some((m) => m.followups_held) ? FOLLOWUPS_HELD_NOTE : "",
     ...skips,
     ...errs.slice(0, 2),
   ].filter(Boolean);
@@ -212,7 +215,7 @@ export function Outreach({
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <StatCard
           label="In sequences"
           value={String((counts.queued ?? 0) + (counts.active ?? 0))}
@@ -336,8 +339,8 @@ function Overview({
   const noSequence = sequences.length === 0;
   const nothingQueued = !(counts.queued || counts.active);
   return (
-    <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
-      <div className="lg:col-span-2"><SendingStatusPanel /></div>
+    <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr] lg:items-start">
+      <div className="lg:col-span-2"><SendingStatusPanel go={go} /></div>
       <Panel>
         <h3 className="font-display text-lg font-bold">Sent per day</h3>
         <p className="text-xs text-muted-foreground">
@@ -347,7 +350,7 @@ function Overview({
           {series.map((d) => (
             <div
               key={d.day}
-              className="group relative flex flex-1 flex-col items-center justify-end"
+              className="group relative flex h-full flex-1 flex-col items-center justify-end"
               title={`${d.day}: ${d.sent} sent, ${d.replies} replies`}
             >
               {d.replies > 0 && (
@@ -355,7 +358,7 @@ function Overview({
               )}
               <div
                 className="w-full rounded-t-md bg-[var(--brand-violet)]/80 transition-all group-hover:bg-[var(--brand-violet)]"
-                style={{ height: `${Math.max(3, (d.sent / max) * 100)}%` }}
+                style={{ height: `${Math.max(2, (d.sent / max) * 82)}%` }}
               />
               <span className="mt-1 text-[.55rem] text-muted-foreground">{d.day.slice(8)}</span>
             </div>
@@ -391,7 +394,7 @@ function Overview({
               sequences.some((s) => s.status === "active")
             }
             label="Set the sequence to Active"
-            sub="Emails then go out every 10 minutes within each mailbox's hours and daily cap"
+            sub="Emails then go out one by one at the sequence's pace, within each mailbox's hours (or any time) and daily cap"
             onClick={() => setTab("sequences")}
           />
         </ol>
@@ -623,8 +626,9 @@ function Sequences({
     await setSequenceStatus(seq.id, starting ? "active" : "paused");
     await refresh();
     if (starting) {
-      // Pressing play sends the first batch right now; the scheduler takes it from there.
-      toast.message("Sequence started — sending the first batch…");
+      // Pressing play sends the first emails right now; the scheduler sends the
+      // rest one by one at the sequence's gap.
+      toast.message("Sequence started — the first emails go out now, the rest one by one in the background.");
       const r = await sendNow({ sequenceId: seq.id });
       if (r.ok) toastDispatch(r.report, `"${seq.name}": `);
       else toast.error(r.error || "Could not send");
@@ -742,7 +746,7 @@ function Sequences({
                           seq: {
                             ...editing.seq,
                             mailbox_ids: on
-                              ? editing.seq.mailbox_ids!.filter((x) => x !== m.id)
+                              ? (editing.seq.mailbox_ids ?? []).filter((x) => x !== m.id)
                               : [...(editing.seq.mailbox_ids ?? []), m.id],
                           },
                         })
@@ -801,6 +805,28 @@ function Sequences({
                 />{" "}
                 Stop when they reply
               </label>
+            </div>
+            <div className="-mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-muted-foreground">Pace:</span>
+              {([
+                ["Careful", 90, 240, "≈ 20 an hour per mailbox — safest for new mailboxes"],
+                ["Normal", 45, 180, "≈ 30 an hour per mailbox"],
+                ["Faster", 20, 60, "≈ 90 an hour — for warmed-up mailboxes or GoHighLevel"],
+              ] as const).map(([label, lo, hi, hint]) => {
+                const on = (editing.seq.gap_min_sec ?? 45) === lo && (editing.seq.gap_max_sec ?? 180) === hi;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    title={hint}
+                    onClick={() => setEditing({ ...editing, seq: { ...editing.seq, gap_min_sec: lo, gap_max_sec: hi } })}
+                    className={`rounded-full border px-2.5 py-0.5 font-semibold transition-colors ${on ? "border-[var(--brand-violet)] bg-[var(--brand-violet)]/10 text-[var(--brand-violet)]" : "border-border hover:bg-secondary"}`}
+                  >
+                    {label} {lo}–{hi}s
+                  </button>
+                );
+              })}
+              <span className="text-muted-foreground">Emails go out one by one at this gap until everyone has had theirs (inside sending hours unless “Send any time” is on).</span>
             </div>
             <label className="flex items-start gap-2 rounded-xl border border-border px-3 py-2.5 text-sm">
               <input
@@ -953,11 +979,16 @@ function Sequences({
                       })
                     }
                   />
-                  {st.body.trim() && <div className="mt-2 text-xs text-muted-foreground" role="status">
-                    <span className="font-semibold">Content check: {inboxCheck(st.subject, st.body).score}/100</span>
-                    <ul className="mt-1 list-disc pl-4">{inboxCheck(st.subject, st.body).issues.map((issue) => <li key={issue.text}>{issue.text}</li>)}</ul>
-                    <span>Inbox placement is not guaranteed.</span>
-                  </div>}
+                  {st.body.trim() && (() => {
+                    const check = inboxCheck(st.subject, st.body);
+                    return (
+                      <div className="mt-2 text-xs text-muted-foreground" role="status">
+                        <span className="font-semibold">Content check: {check.score}/100</span>
+                        {check.issues.length > 0 && <ul className="mt-1 list-disc pl-4">{check.issues.map((issue) => <li key={issue.text} className={issue.level === "block" ? "text-destructive" : undefined}>{issue.text}</li>)}</ul>}
+                        <span>Inbox placement is not guaranteed.</span>
+                      </div>
+                    );
+                  })()}
                 </div>
               ))}
               <Btn
@@ -1001,7 +1032,7 @@ function Sequences({
         title={deleting ? `Delete "${deleting.name}"?` : "Delete sequence?"}
         description={`${
           counts[deleting?.id ?? ""]?.total
-            ? `${counts[deleting!.id].total} people are in it — they will get no further emails, and their send history for this sequence is removed. `
+            ? `${counts[deleting?.id ?? ""]?.total} people are in it — they will get no further emails, and their send history for this sequence is removed. `
             : ""
         }Suppressions (opt-outs, bounces) are kept. This cannot be undone.`}
         confirmLabel="Delete sequence"
@@ -1042,7 +1073,7 @@ function Sequences({
 }
 
 /** "Is it sending right now, and if not, why?" — the dispatcher's own checks, in words. */
-function SendingStatusPanel() {
+function SendingStatusPanel({ go }: { go?: (v: "settings" | "raw") => void }) {
   const checkStatus = useServerFn(getSendingStatus);
   const checking = useRef(false);
   const [st, setSt] = useState<SendingStatus | null>(null);
@@ -1101,6 +1132,15 @@ function SendingStatusPanel() {
                 : "Sending may be waiting. Check the details below:"}
             </div>
             <div className="mt-1 text-xs text-muted-foreground">{st.scheduler.note}</div>
+            {!st.scheduler.ok && go && (
+              <button
+                type="button"
+                onClick={() => go("settings")}
+                className="mt-2 inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-xs font-semibold hover:bg-secondary"
+              >
+                Turn on the background timer <ChevronRight className="h-3 w-3" />
+              </button>
+            )}
             {st.blockers.length > 0 && (
               <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
                 {st.blockers.map((b, i) => (
@@ -1139,11 +1179,24 @@ function SendingStatusPanel() {
                     {m.provider === "ghl" ? "GoHighLevel" : "Google"} ·{" "}
                     {m.sequences.length ? m.sequences.join(", ") : "no active sequence"}
                   </span>
+                  {m.pace && <span>{m.pace}</span>}
+                  {m.eta && m.waiting_total > 0 && (
+                    <span>
+                      queue through <b className="text-foreground">{m.eta}</b>
+                    </span>
+                  )}
                 </div>
                 {m.reasons.length > 0 && (
                   <ul className="mt-2 list-disc space-y-1 pl-4">
                     {m.reasons.map((r, i) => (
                       <li key={i}>{r}</li>
+                    ))}
+                  </ul>
+                )}
+                {(m.notes ?? []).length > 0 && (
+                  <ul className="mt-2 space-y-1 text-muted-foreground">
+                    {(m.notes ?? []).map((n, i) => (
+                      <li key={i}>ⓘ {n}</li>
                     ))}
                   </ul>
                 )}
@@ -1220,6 +1273,7 @@ function AddPeople({
   const [busy, setBusy] = useState(false);
   const [activate, setActivate] = useState(true);
   const [allowGuessed, setAllowGuessed] = useState(false);
+  const [addProgress, setAddProgress] = useState("");
   const [live, setLive] = useState<Set<string>>(new Set());
   const [loadingLive, setLoadingLive] = useState(false);
   const [liveError, setLiveError] = useState("");
@@ -1272,14 +1326,20 @@ function AddPeople({
     if (!picked.length) return toast.error("Tick at least one person.");
     setBusy(true);
     try {
-      const res = await enrollLeads(seq.id, picked.map(rawToEnroll), { allowGuessed });
+      const res = await enrollLeads(seq.id, picked.map(rawToEnroll), {
+        allowGuessed,
+        onProgress: (done, total) => setAddProgress(total > 100 ? `${done} / ${total}` : ""),
+      });
       if (!res.ok) throw new Error(res.error || "Could not add people");
       setResult({ enrolled: res.enrolled, skipped: res.skipped });
+      if (res.error) toast.warning(`Stopped part-way: ${res.error}. ${res.enrolled} were added.`);
       if (res.enrolled) {
+        // Only the people who were really added count as emailed.
+        const skipped = new Set(res.skipped.map((x) => x.email.toLowerCase()));
         update?.((p) => ({
           ...p,
           raw: p.raw.map((r) =>
-            sel.has(r.id)
+            sel.has(r.id) && r.email && !skipped.has(r.email.toLowerCase())
               ? { ...r, status: "accepted" as const, lastEmailedAt: r.lastEmailedAt ?? Date.now() }
               : r,
           ),
@@ -1296,6 +1356,7 @@ function AddPeople({
       toast.error((e as Error).message);
     } finally {
       setBusy(false);
+      setAddProgress("");
     }
   }
 
@@ -1459,7 +1520,7 @@ function AddPeople({
               <Btn onClick={() => void add()} disabled={busy || !sel.size}>
                 {busy ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" /> Adding…
+                    <Loader2 className="h-4 w-4 animate-spin" /> Adding{addProgress ? ` ${addProgress}` : "…"}
                   </>
                 ) : (
                   <>
@@ -1522,59 +1583,57 @@ function Queue({
   const [history, setHistory] = useState<Record<string, Message[]>>({});
   const [sending, setSending] = useState<string | null>(null); // enrollment id or "all"
 
+  const stopSending = useRef(false);
+  const [progress, setProgress] = useState<SendAllProgress | null>(null);
+  // Leaving this screen ends a running "send to everyone" after its current round.
+  useEffect(
+    () => () => {
+      stopSending.current = true;
+    },
+    [],
+  );
   async function sendNowFor(
     target: { enrollmentIds?: string[]; sequenceId?: string },
     key: string,
   ) {
     setSending(key);
+    stopSending.current = false;
     try {
-      // Each call sends up to 20 (short gaps). For a whole sequence keep calling
-      // until nothing more goes out, so 250 waiting people don't need 13 clicks.
-      let total = 0;
-      let blocked = 0;
-      let last: DispatchSummary | undefined;
-      // Freeze eligible people before the first batch so later rounds never
-      // immediately send a newly scheduled follow-up to the same person.
-      const waiting = target.sequenceId ? await listEnrollments({ sequenceId: target.sequenceId, limit: 500 }) : [];
-      const batches = eligibleSendBatches(waiting);
-      const rounds = target.sequenceId ? batches.length : 1;
-      for (let i = 0; i < rounds; i++) {
-        const batch = target.sequenceId ? { enrollmentIds: batches[i] } : target;
-        const r = await sendNow(batch);
-        if (!r.ok) throw new Error(r.error || "Could not send");
-        last = r.report;
-        const sent = r.report?.mailboxes?.reduce((a, m) => a + m.sent, 0) ?? 0;
-        blocked += r.report?.mailboxes?.reduce((a, m) => a + (m.bounce_blocked ?? 0), 0) ?? 0;
-        total += sent;
-        if (target.sequenceId && sent > 0)
-          toast.message(`Sending… ${total} out so far`, {
-            id: "sendnow-progress",
-            duration: 60000,
-          });
-        if (sent === 0) break;
-        await load();
-      }
-      toast.dismiss("sendnow-progress");
       if (target.sequenceId) {
-        const skips = (last?.mailboxes ?? [])
-          .filter((m) => m.skipped)
-          .map((m) => `${m.email}: ${m.skipped}`);
+        // Keeps going (≈ 25 s per round) until everyone waiting has had their
+        // email, the daily cap is hit, or you press Stop. Close the tab and the
+        // background scheduler carries on at the sequence's normal pace.
+        setProgress({ sent: 0, rounds: 0, left: null, note: "Starting…" });
+        const r = await sendAllNow(target.sequenceId, {
+          shouldStop: () => stopSending.current,
+          onProgress: (p) => {
+            setProgress(p);
+            void load();
+          },
+        });
         const msg = [
-          `Sent ${total}`,
-          blocked ? `${blocked} held back by the bounce check` : "",
-          ...skips,
+          `Sent ${r.sent}`,
+          r.left ? `${r.left} still waiting` : r.sent ? "everyone waiting has had their email" : "",
+          r.blocked ? `${r.blocked} held back by the bounce check` : "",
+          r.duplicates ? `${r.duplicates} already emailed by another sequence` : "",
+          stopSending.current ? "stopped" : r.note,
+          ...r.errors.slice(0, 1),
         ]
           .filter(Boolean)
           .join(" · ");
-        if (total > 0) toast.success(msg, { duration: 8000 });
+        if (r.sent > 0) toast.success(msg, { duration: 9000 });
         else toast.warning(msg, { duration: 10000 });
-      } else toastDispatch(last);
+      } else {
+        const r = await sendNow(target);
+        if (!r.ok) throw new Error(r.error || "Could not send");
+        toastDispatch(r.report);
+      }
       await Promise.all([load(), refresh()]);
     } catch (e) {
-      toast.dismiss("sendnow-progress");
       toast.error((e as Error).message);
     } finally {
       setSending(null);
+      setProgress(null);
     }
   }
 
@@ -1770,18 +1829,20 @@ function Queue({
           <Download className="h-4 w-4" />
         </Btn>
         {seqId && (counts.queued || counts.active || counts.paused) ? (
-          <Btn
-            onClick={() => void sendNowFor({ sequenceId: seqId }, "all")}
-            disabled={sending !== null}
-            title="Ignore the schedule and mailbox hours; the daily cap still applies. Up to 20 per click."
-          >
-            {sending === "all" ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
+          sending === "all" ? (
+            <Btn variant="ghost" onClick={() => (stopSending.current = true)} title="Stops after the current round (a few seconds; at most ~25 s)">
+              <Pause className="h-4 w-4" /> Stop sending
+            </Btn>
+          ) : (
+            <Btn
+              onClick={() => void sendNowFor({ sequenceId: seqId }, "all")}
+              disabled={sending !== null}
+              title="Sends everyone who hasn't had an email yet (and follow-ups that are due), one by one a few seconds apart, until done. Ignores the schedule and mailbox hours; the daily cap still applies."
+            >
               <Send className="h-4 w-4" />
-            )}
-            Send now to everyone waiting
-          </Btn>
+              Send now to everyone waiting
+            </Btn>
+          )
         ) : null}
         <span className="ml-auto text-xs text-muted-foreground">
           {visible.length} shown
@@ -1792,6 +1853,15 @@ function Queue({
             .join(" · ")}
         </span>
       </div>
+      {progress && (
+        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-[var(--brand-violet)]/30 bg-[var(--brand-violet)]/5 px-3 py-2 text-xs" role="status" aria-live="polite">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--brand-violet)]" />
+          <span className="font-semibold tabular-nums">{progress.sent} sent</span>
+          {progress.left != null && <span className="tabular-nums text-muted-foreground">{progress.left} still waiting</span>}
+          {progress.note && <span className="text-muted-foreground">{progress.note}</span>}
+          <span className="ml-auto text-muted-foreground">Closing this tab stops the fast send; the rest still goes out at the sequence's normal pace.</span>
+        </div>
+      )}
       <p className="mb-3 text-xs text-muted-foreground">
         Everyone enrolled in a sequence, which mailbox sends to them, how many of the emails have
         gone out, and what's next. Click a row for the exact emails sent and any replies.
@@ -1806,7 +1876,17 @@ function Queue({
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[980px] table-fixed text-sm">
+            <colgroup>
+              <col className="w-[19%]" />
+              <col className="w-[21%]" />
+              <col className="w-[13%]" />
+              <col className="w-[14%]" />
+              <col className="w-[7%]" />
+              <col className="w-[8%]" />
+              <col className="w-[12%]" />
+              <col className="w-[6%]" />
+            </colgroup>
             <thead className="text-left text-xs text-muted-foreground">
               <tr className="border-b border-border">
                 <th className="px-2 py-2 font-medium">Who</th>
@@ -1816,7 +1896,7 @@ function Queue({
                 <th className="px-2 py-2 font-medium">Sent</th>
                 <th className="px-2 py-2 font-medium">Status</th>
                 <th className="px-2 py-2 font-medium">Next / last</th>
-                <th className="w-24 px-2 py-2" />
+                <th className="px-2 py-2" />
               </tr>
             </thead>
             <tbody>
@@ -1834,17 +1914,17 @@ function Queue({
                           <ChevronRight
                             className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`}
                           />
-                          <div>
-                            <div className="font-medium">
+                          <div className="min-w-0">
+                            <div className="truncate font-medium" title={e.leads?.contact_name || e.leads?.company || ""}>
                               {e.leads?.contact_name || e.leads?.company || "—"}
                             </div>
                             {e.leads?.contact_name && (
-                              <div className="text-xs text-muted-foreground">{e.leads.company}</div>
+                              <div className="truncate text-xs text-muted-foreground" title={e.leads.company}>{e.leads.company}</div>
                             )}
                           </div>
                         </div>
                       </td>
-                      <td className="px-2 py-2.5">
+                      <td className="px-2 py-2.5 [overflow-wrap:anywhere]">
                         <span className="font-mono text-xs">{e.leads?.email}</span>
                         {e.leads?.email_guessed && (
                           <span className="ml-1 rounded bg-[oklch(.8_.16_80)]/30 px-1 text-[.6rem] font-semibold uppercase text-[oklch(.45_.1_70)]">
@@ -1857,8 +1937,8 @@ function Queue({
                           </span>
                         )}
                       </td>
-                      <td className="px-2 py-2.5 text-xs">{e.sequences?.name || "—"}</td>
-                      <td className="px-2 py-2.5 text-xs text-muted-foreground">
+                      <td className="truncate px-2 py-2.5 text-xs" title={e.sequences?.name || ""}>{e.sequences?.name || "—"}</td>
+                      <td className="truncate px-2 py-2.5 text-xs text-muted-foreground" title={e.mailboxes?.email || "The first free mailbox of the sequence takes it"}>
                         {e.mailboxes?.email || <span className="italic">next free mailbox</span>}
                       </td>
                       <td className="px-2 py-2.5">
@@ -1876,14 +1956,15 @@ function Queue({
                               ? `done ${fmt(e.completed_at)}`
                               : fmt(e.updated_at)}
                         {e.last_error && (
-                          <div className="truncate text-destructive">{e.last_error}</div>
+                          <div className="line-clamp-2 text-destructive" title={e.last_error}>{e.last_error}</div>
                         )}
                       </td>
                       <td className="px-2 py-2.5" onClick={(ev) => ev.stopPropagation()}>
                         <div className="flex justify-end gap-1">
                           {(e.status === "queued" ||
                             e.status === "active" ||
-                            e.status === "paused") && (
+                            e.status === "paused" ||
+                            e.status === "failed") && (
                             <button
                               aria-label="Send now"
                               title="Send the next email right now (ignores the schedule and mailbox hours)"
@@ -1907,7 +1988,7 @@ function Queue({
                               <Pause className="h-3.5 w-3.5" />
                             </button>
                           )}
-                          {e.status === "paused" && (
+                          {(e.status === "paused" || e.status === "failed") && (
                             <button
                               aria-label="Resume"
                               onClick={() =>
