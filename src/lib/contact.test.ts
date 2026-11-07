@@ -22,6 +22,26 @@ describe("quote abuse protection", () => {
     expect(db.insert.mock.calls[0][0].request_key).not.toBe(db.insert.mock.calls[2][0].request_key);
   });
   it("requires quote contact consent", () => expect(contactSchema.safeParse({ ...payload, consent: false }).success).toBe(false));
+  it("accepts a complete quote with all ten available services and consent", async () => {
+    const db = { insert: vi.fn(), rpc: vi.fn(async () => true) };
+    const body = { ...payload, website: "", services: ["ads_setup", "ads_management", "video_creation", "email_sms", "website", "pixel_ecom", "pixel_leadgen", "seo", "sea", "sea_setup"] };
+    expect((await handleContactRequest(request(body), async () => db)).status).toBe(200);
+    expect(db.insert.mock.calls[0][0].services).toHaveLength(10);
+  });
+  it("identifies invalid email without incorrectly blaming confirmed consent", async () => {
+    const getDb = vi.fn();
+    const response = await handleContactRequest(request({ ...payload, email: "visitor@invalid..com" }), getDb);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Please enter a valid e-mail address.", field: "email" });
+    expect(getDb).not.toHaveBeenCalled();
+  });
+  it("identifies autofilled bot-trap values without blaming confirmed consent", async () => {
+    const getDb = vi.fn();
+    const response = await handleContactRequest(request({ ...payload, website: "https://example.test" } as typeof payload), getDb);
+    expect(response.status).toBe(400);
+    expect((await response.json()).field).toBe("website");
+    expect(getDb).not.toHaveBeenCalled();
+  });
   it("rejects cross-site submissions before accessing storage", async () => {
     const getDb = vi.fn();
     expect((await handleContactRequest(request(payload, "https://attacker.test"), getDb)).status).toBe(403);

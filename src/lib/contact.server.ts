@@ -20,7 +20,22 @@ export async function handleContactRequest(request: Request, getDb: () => Promis
     return securityJson({ error: status === 413 ? "Your message is too long." : "Invalid request." }, status);
   }
   const parsed = contactSchema.safeParse(raw);
-  if (!parsed.success) return securityJson({ error: "Please check your details and consent before submitting." }, 400);
+  if (!parsed.success) {
+    const field = String(parsed.error.issues[0]?.path[0] ?? "");
+    const errors: Record<string, string> = {
+      name: "Please enter your name (up to 100 characters).",
+      email: "Please enter a valid e-mail address.",
+      company: "Please enter your company name (up to 120 characters).",
+      consent: "Please tick the consent box so we can contact you.",
+      phone: "Please shorten your phone number to 40 characters or fewer.",
+      personalMessage: "Please shorten your personal message to 1,000 characters or fewer.",
+      message: "Please enter a message of up to 2,000 characters.",
+      services: "Please refresh the page and select your services again.",
+      attribution: "Please reopen the quote form and try again.",
+      website: "Please refresh the page and try again without automatic form filling.",
+    };
+    return securityJson({ error: errors[field] ?? "Please refresh the page and check your quote details.", field }, 400);
+  }
   const data = parsed.data;
   try {
     const db = await getDb();
