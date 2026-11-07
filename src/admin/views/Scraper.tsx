@@ -968,6 +968,7 @@ export function Scraper({
         people,
         { useClaude: sources.claude, usePaid, revealPhone, findLinkedin },
         `${filters.industry || "scan"} · ${filters.location} · ${list.length}`,
+        control.canContinue,
       );
       let job: ScanJobLite | null = started.job;
       setScanJob(job);
@@ -980,7 +981,7 @@ export function Scraper({
         if (!(await control.canContinue())) break;
         let r: Awaited<ReturnType<typeof stepScan>>;
         try {
-          r = await stepScan(job.id);
+          r = await stepScan(job.id, control.canContinue);
           failures = 0;
         } catch {
           if (!(await control.canContinue())) break;

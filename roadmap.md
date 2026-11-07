@@ -87,3 +87,7 @@
 - [x] Merge safe new archive fixes while preserving saved data, Stop reveal, secure integrations and request protection.
 - [x] Verify 80 regression tests and preview build; admin entry renders without runtime errors and signed-out enrichment is denied; no emails or paid searches.
 - [ ] Verify new admin checks and Reveal against saved rows: blocked by unavailable own-account session; user must sign in. Live verifier and production publishing remain unverified.
+
+# Reveal request-limit repair
+- [x] Isolate scan action budgets, wait and retry explicit throttling, preserve Stop and saved results, and reduce redundant result reads.
+- [ ] Verify throttling recovery and cancellation regressions; signed-in saved-row check depends on an available own-account session.

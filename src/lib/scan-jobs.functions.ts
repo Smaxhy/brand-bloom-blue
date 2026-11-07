@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { scanRequestLimit } from "./scan-request-policy";
 
 const person = z.object({ id: z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/), name: z.string().max(200).default(""), domain: z.string().max(2048).default(""), organizationName: z.string().max(200).default(""), linkedin: z.string().max(2048).optional(), rating: z.number().min(0).max(5).optional(), reviews: z.number().min(0).optional(), phone: z.string().max(100).optional(), city: z.string().max(200).optional(), industry: z.string().max(200).optional() });
 const input = z.discriminatedUnion("action", [
@@ -17,8 +18,9 @@ export const scanJobAction = createServerFn({ method: "POST" })
     const { data: role, error } = await context.supabase.from("user_roles").select("role").eq("user_id", context.userId).in("role", ["admin", "ceo"]).limit(1).maybeSingle();
     if (error || !role) throw new Error("Only administrators can manage scans.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: allowed, error: limitError } = await supabaseAdmin.rpc("check_rate_limit", { _key: `scan:${context.userId}`, _max: data.action === "start" ? 3 : 30, _window_seconds: 60 });
-    if (limitError || !allowed) throw new Error("Please wait a minute before trying again.");
+    const { data: allowed, error: limitError } = await supabaseAdmin.rpc("check_rate_limit", scanRequestLimit(data.action, context.userId));
+    if (limitError || (allowed !== true && allowed !== false)) throw new Error("Scan protection is temporarily unavailable. Your saved details are unchanged.");
+    if (allowed === false) return { rateLimited: true as const, retryAfterMs: 61000 };
     const { Db } = await import("./db"); const db = new Db({});
     const helpers = await import("./scan-jobs.server");
     if (data.action === "list") return { jobs: await helpers.listScanJobs(db, context.userId) };
