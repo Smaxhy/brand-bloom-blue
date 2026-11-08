@@ -4,6 +4,13 @@
   ],
   "capabilities": [
     {
+      "capability": "admin-nov8-update",
+      "source": "inspirova-admin-update-2026-11-08.zip",
+      "outcome": "Inspected safe 66-file incremental admin archive; comparing new changes against prior archive while preserving current Cloud data, accounts, public website, authorization, providers, endpoints, schedules and managed migrations.",
+      "status": "in_progress",
+      "next_action": "Merge genuinely new changes and verify without outbound emails or paid searches."
+    },
+    {
       "capability": "admin-fix-2",
       "source": "inspirova-admin-update_2.zip",
       "outcome": "Merged new company-level first-contact/history checks across enrollment, saved searches and dispatch with 90-day cooldown, shared-host exclusions and explicit picked-send override. Hardened company leases to acquire before history reads and fail closed; paginated company history instead of archive 50-row cap. Added opt-in Serper-to-SerpApi fallback. Retained existing deadline budgets, sent-but-unlogged markers, security limits, scheduler protection, cancellation, ID/current-step snapshots and email cleanup; managed schema/data/public pages unchanged. 240 tests pass; preview build OK; signed-in dashboard and scraper with saved searches render without runtime errors.",
