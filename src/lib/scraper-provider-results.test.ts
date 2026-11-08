@@ -37,6 +37,36 @@ async function reveal() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("scraper provider result handling", () => {
+  it.each([true, false])("walks Serper then Brave then paid-only SerpApi: %s", async (usePaid) => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      calls.push(String(url));
+      if (String(url).includes("serper.dev")) return Response.json({ message: "Not enough credits" }, { status: 400 });
+      if (String(url).includes("search.brave.com")) return Response.json({ message: "monthly quota exhausted" }, { status: 429 });
+      return Response.json({ organic_results: [{ link: "https://holidaylightingco.com", snippet: "hello@holidaylightingco.com" }] });
+    }));
+    const response = await handleApiRequest(new Request("https://example.com/api/enrich", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ people: [{ id: "b1", organizationName: "Holiday Lighting Co" }], usePaid, useClaude: false }),
+    }), { SERPER_API_KEY: "test-serper", BRAVE_SEARCH_API_KEY: "test-brave", SERPAPI_API_KEY: "test-serpapi" });
+    if (!response) throw new Error("Missing response");
+    const result = await response.json();
+    expect(calls[0]).toContain("serper.dev");
+    expect(calls[1]).toContain("search.brave.com");
+    expect(calls.some((url) => url.includes("serpapi.com"))).toBe(usePaid);
+    expect(result.results[0].email).toBe(usePaid ? "hello@holidaylightingco.com" : "");
+  });
+  it("recovers a business email through Brave after Serper exhaustion", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => String(url).includes("serper.dev")
+      ? Response.json({ message: "no credits" }, { status: 400 })
+      : Response.json({ web: { results: [{ url: "https://holidaylightingco.com", description: "hello@holidaylightingco.com" }] } })));
+    const response = await handleApiRequest(new Request("https://example.com/api/enrich", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ people: [{ id: "b1", organizationName: "Holiday Lighting Co" }], useClaude: false }),
+    }), { SERPER_API_KEY: "test-serper", BRAVE_SEARCH_API_KEY: "test-brave" });
+    if (!response) throw new Error("Missing response");
+    expect((await response.json()).results[0].email).toBe("hello@holidaylightingco.com");
+  });
   it("keeps the business domain instead of provider metadata links", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({
       organic_results: [{ link: "https://holidaylighting.example/contact", title: "Holiday Lighting Co", snippet: "Contact hello@holidaylighting.example", serpapi_link: "https://serpapi.com/search.json" }],

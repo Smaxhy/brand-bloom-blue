@@ -1,8 +1,18 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { decodeCfEmail, freeEnrich, hasMx, hiddenEmails, emailPlausible, pickBusinessEmail, extractJsonLdEmails, discoverContactLinks, sitemapContactPaths } from "./free-enrich";
+import { decodeCfEmail, freeEnrich, hasMx, hiddenEmails, emailPlausible, pickBusinessEmail, extractJsonLdEmails, discoverContactLinks, sitemapContactPaths, ownScriptEmails } from "./free-enrich";
 const fetchSite = vi.hoisted(() => vi.fn());
 vi.mock("../public-site-fetch", () => ({ fetchPublicSite: fetchSite }));
 afterEach(() => vi.unstubAllGlobals());
+it("never truncates another domain into a business address", () => {
+  expect(ownScriptEmails('<script>owner@business.test.attacker.com owner@business.test-other.com owner@business.test</script>', ["business.test"])).toEqual(["owner@business.test"]);
+});
+it("honors the supplied total crawl page budget", async () => {
+  fetchSite.mockReset();
+  fetchSite.mockImplementation(async (url: string) => ({ html: '<a href="/quote">Contact</a>', finalUrl: url }));
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ Status: 3 })));
+  await freeEnrich({ website: "business.test", tiered: true, maxPages: 3 });
+  expect(fetchSite).toHaveBeenCalledTimes(3);
+});
 it("rejects unrelated business emails and keeps published consumer mailboxes", () => {
   const ctx = { domains: ["business.test"], fromOwnSite: true };
   expect(emailPlausible("designer@agency.test", ctx)).toBe(false);
