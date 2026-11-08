@@ -42,8 +42,8 @@ function HomePage() {
         var path = link.getAttribute('href');
         link.addEventListener('click', function(event) {
           event.preventDefault();
-          try { window.parent.postMessage({ type: 'inspirova:navigate', path: path }, '*'); }
-          catch (e) { window.top.location.href = path; }
+          try { window.top.location.assign(path); }
+          catch (e) { window.parent.postMessage({ type: 'inspirova:navigate', path: path }, '*'); }
         });
       });
     </script></body>`,
