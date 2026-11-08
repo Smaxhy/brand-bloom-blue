@@ -412,7 +412,7 @@ export async function enrichSite(env: Env, o: EnrichSiteOpts): Promise<SiteProfi
           // it ONLY when it literally appears in the text we sent (no invented
           // addresses) and it belongs to this business.
           !pick &&
-          (fe.text.toLowerCase().match(/[a-z0-9._%+'-]+@[a-z0-9.-]+\.[a-z]{2,}/gi) ?? []).includes(ex.email) &&
+          !!fe.text.toLowerCase().match(/[a-z0-9._%+'-]+@[a-z0-9.-]+\.[a-z]{2,}/gi)?.some((email) => email === ex.email) &&
           emailPlausible(ex.email, {
             domains: [fe.website, domain].filter(Boolean),
             company: o.company,
