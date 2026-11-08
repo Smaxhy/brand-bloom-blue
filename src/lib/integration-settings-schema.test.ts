@@ -2,6 +2,9 @@ import { describe, it, expect } from "vitest";
 import { integrationInputSchema } from "./integration-settings-schema";
 
 describe("integration entry validation", () => {
+  it("accepts the optional Brave Search credential", () => {
+    expect(integrationInputSchema.safeParse({ values: { BRAVE_SEARCH_API_KEY: "test-only" } }).success).toBe(true);
+  });
   it("accepts Google client ID and secret together", () => {
     expect(integrationInputSchema.safeParse({ values: { GOOGLE_OAUTH_CLIENT_ID: "example.apps.googleusercontent.com", GOOGLE_OAUTH_CLIENT_SECRET: "test-only" } }).success).toBe(true);
   });

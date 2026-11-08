@@ -286,6 +286,9 @@ export function hiddenEmails(html: string): string[] {
     if (email) found.add(email.toLowerCase());
   }
   const entities = content
+    // JS/JSON unicode escapes that hide the @ and . in script/JSON blobs (Wix, Squarespace).
+    .replace(/\\u0*40|\\x40/gi, "@")
+    .replace(/\\u0*2e|\\x2e/gi, ".")
     .replace(/&#0*64;|&#x0*40;|&commat;/gi, "@")
     .replace(/&#0*46;|&#x0*2e;|&period;/gi, ".");
   // Use visible text rather than script/style content to avoid tracking addresses.
@@ -391,6 +394,96 @@ function extractJsonLdPeople(html: string): { name: string; title: string; sourc
   return out;
 }
 
+/** Pull any `email` field out of JSON-LD (LocalBusiness, Organization, ContactPoint, Person). */
+export function extractJsonLdEmails(html: string): string[] {
+  const out = new Set<string>();
+  const blocks = html.match(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi) ?? [];
+  const take = (v: unknown) => {
+    if (typeof v !== "string") return;
+    const e = v.replace(/^mailto:/i, "").trim().toLowerCase();
+    if (/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(e)) out.add(e);
+  };
+  for (const b of blocks) {
+    const inner = b.replace(/^<script[^>]*>/i, "").replace(/<\/script>$/i, "");
+    try {
+      const walk = (node: unknown, depth = 0) => {
+        if (!node || depth > 6) return;
+        if (Array.isArray(node)) return node.forEach((n) => walk(n, depth + 1));
+        if (typeof node !== "object") return;
+        const o = node as Record<string, unknown>;
+        if ("email" in o) Array.isArray(o.email) ? o.email.forEach(take) : take(o.email);
+        for (const v of Object.values(o)) if (v && typeof v === "object") walk(v, depth + 1);
+      };
+      walk(JSON.parse(inner));
+    } catch {
+      /* ignore malformed JSON-LD */
+    }
+  }
+  return [...out];
+}
+
+/** Match full address tokens before comparing domains; never truncate suffixes. */
+export function ownScriptEmails(html: string, domains: string[]): string[] {
+  const decoded = html.replace(/\\u0*40|\\x40/gi, "@").replace(/\\u0*2e|\\x2e/gi, ".");
+  return (decoded.match(EMAIL_RE) ?? []).map((email) => email.toLowerCase())
+    .filter((email) => domains.includes(cleanDomain(email.split("@")[1])) && !JUNK_EMAIL.test(email));
+}
+
+/** Paths that look like a contact/about/quote page, for crawling non-standard URLs. */
+const CONTACT_LINK_RE =
+  /contact|about|our[\s-]?team|meet[\s-]?the[\s-]?team|meet[\s-]?us|staff|reach[\s-]?us|get[\s-]?in[\s-]?touch|quote|estimate|appointment|book|schedule|connect|enquir|inquir/i;
+
+/**
+ * Contact-ish links the homepage/nav/footer points to, so a business whose
+ * contact page is at a non-standard path (/pages/contact, /get-a-quote,
+ * /contact-us-today) still gets read. Same-site only, images/files skipped.
+ */
+export function discoverContactLinks(html: string, baseDomain: string, already: Set<string>): string[] {
+  const out: string[] = [];
+  const seen = new Set(already);
+  for (const m of html.matchAll(/<a\b[^>]*\bhref\s*=\s*["']([^"'<>]+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+    const href = m[1].trim();
+    if (/^(mailto:|tel:|javascript:|#)/i.test(href)) continue;
+    if (!CONTACT_LINK_RE.test(href) && !CONTACT_LINK_RE.test(htmlToText(m[2] || ""))) continue;
+    let path = "";
+    try {
+      const u = new URL(href, `https://${baseDomain}`);
+      if (cleanDomain(u.hostname) !== baseDomain) continue; // same-site only
+      path = u.pathname + (u.search || "");
+    } catch {
+      continue;
+    }
+    if (!path || path === "/" || seen.has(path) || /\.(png|jpe?g|gif|webp|svg|pdf|zip|mp4|css|js)$/i.test(path))
+      continue;
+    seen.add(path);
+    out.push(path);
+    if (out.length >= 6) break;
+  }
+  return out;
+}
+
+/** Contact-ish URLs listed in sitemap.xml — the last resort for finding a contact page. */
+export function sitemapContactPaths(xml: string, baseDomain: string, already: Set<string>): string[] {
+  const out: string[] = [];
+  const seen = new Set(already);
+  for (const m of xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)) {
+    if (!CONTACT_LINK_RE.test(m[1])) continue;
+    try {
+      const u = new URL(m[1]);
+      if (cleanDomain(u.hostname) !== baseDomain) continue;
+      const path = u.pathname;
+      if (path && path !== "/" && !seen.has(path) && !/\.(png|jpe?g|gif|webp|svg|pdf|zip|xml)$/i.test(path)) {
+        seen.add(path);
+        out.push(path);
+      }
+    } catch {
+      /* skip */
+    }
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
 /** "Owner John Smith", "John Smith, Owner", "Dr. Jane Doe" patterns in plain text. */
 function extractNamesFromText(text: string): { name: string; title: string; source: string }[] {
   const out: { name: string; title: string; source: string }[] = [];
@@ -475,7 +568,9 @@ export async function freeEnrich(input: {
   if (!domain) return { ...empty, error: "no website" };
 
   const base = `https://${domain}`;
-  const maxPages = Math.min(input.maxPages ?? PAGES.length, PAGES.length);
+  const maxPages = Math.max(1, Math.min(input.maxPages ?? (input.tiered ? 19 : PAGES.length), 19));
+  const crawlDeadline = Date.now() + 23_000;
+  let remainingPages = maxPages - 1;
 
   // Homepage first (follows redirects → canonical domain), then the rest in parallel.
   const home = (await fetchPage(base, 8000)) ?? (await fetchPage(`http://${domain}`, 6000));
@@ -485,8 +580,11 @@ export async function freeEnrich(input: {
 
   const grab = (paths: string[], ms: number) =>
     Promise.all(
-      paths.map(async (p) => {
-        const r = await fetchPage(root + p, ms);
+      paths.slice(0, remainingPages).map(async (p) => {
+        remainingPages--;
+        const timeLeft = crawlDeadline - Date.now();
+        if (timeLeft <= 0) return null;
+        const r = await fetchPage(root + p, Math.min(ms, timeLeft));
         return r ? { path: p, html: r.html } : null;
       }),
     );
@@ -496,14 +594,27 @@ export async function freeEnrich(input: {
   let extras: { path: string; html: string }[];
   if (input.tiered) {
     extras = (await grab(TIER1, 5000)).filter(notNull);
-    const seen = [home.html, ...extras.map((e) => e.html)].join("\n");
-    const ownEmailRe = new RegExp(
-      `[a-z0-9._%+-]+@(?:www\\.)?${finalDomain.replace(/\./g, "\\.")}`,
-      "i",
-    );
-    const haveEmail = hiddenEmails(seen).some((email) => !JUNK_EMAIL.test(email)) || ownEmailRe.test(seen);
-    const havePerson = OWNER_HINT_RE.test(seen) || /"@type"\s*:\s*"Person"/i.test(seen);
-    if (!haveEmail || !havePerson) extras.push(...(await grab(TIER2, 5000)).filter(notNull));
+    const queued = new Set<string>(["/", ...TIER1, ...TIER2]);
+    const everything = () => [home.html, ...extras.map((e) => e.html)].join("\n");
+    const haveEmail = () => {
+      const seen = everything();
+      return [...hiddenEmails(seen), ...extractJsonLdEmails(seen), ...ownScriptEmails(seen, [finalDomain, domain])]
+        .some((email) => emailPlausible(email, { domains: [finalDomain, domain], company: input.companyName, owner: input.ownerName, city: input.city, fromOwnSite: true }));
+    };
+    const havePerson = () => OWNER_HINT_RE.test(everything()) || /"@type"\s*:\s*"Person"/i.test(everything());
+    if (!haveEmail() || !havePerson()) {
+      // The deeper standard pages PLUS whatever contact-ish links the pages point to.
+      const discovered = discoverContactLinks(everything(), finalDomain, queued);
+      discovered.forEach((p) => queued.add(p));
+      extras.push(...(await grab([...TIER2, ...discovered], 5000)).filter(notNull));
+    }
+    // Still nothing usable: consult the sitemap for a contact page we haven't tried.
+    if (!haveEmail() && remainingPages > 0 && Date.now() < crawlDeadline) {
+      remainingPages--;
+      const sm = await fetchPage(`${root}/sitemap.xml`, Math.min(5000, crawlDeadline - Date.now()));
+      const smPaths = sm ? sitemapContactPaths(sm.html, finalDomain, queued) : [];
+      if (smPaths.length) extras.push(...(await grab(smPaths, 5000)).filter(notNull));
+    }
   } else {
     extras = (await grab(PAGES.slice(1, maxPages), 7000)).filter(notNull);
   }
@@ -531,6 +642,11 @@ export async function freeEnrich(input: {
     }
     for (const email of hiddenEmails(html))
       emailMap.set(email, emailMap.get(email) ?? { page: pg.path });
+    // Emails buried in script/JSON blobs (Wix, Squarespace) with the @ and .
+    // escaped. Restricted to the site's OWN domain, so trackers on other
+    // domains (sentry.io, analytics…) can never slip in from script content.
+    for (const email of ownScriptEmails(html, [finalDomain, domain]))
+      emailMap.set(email, emailMap.get(email) ?? { page: pg.path });
     for (const m of html.matchAll(/tel:([+\d()\s.-]{7,})/gi)) phones.add(m[1].trim());
     // social links
     const li = html.match(
@@ -543,8 +659,10 @@ export async function freeEnrich(input: {
     if (fb && !socials.facebook) socials.facebook = fb[0];
     const ig = html.match(/https?:\/\/(?:www\.)?instagram\.com\/(?!p\/|share)[A-Za-z0-9_.%-]+/i);
     if (ig && !socials.instagram) socials.instagram = ig[0];
-    // structured data people
+    // structured data people + business email
     names.push(...extractJsonLdPeople(html));
+    for (const email of extractJsonLdEmails(html))
+      emailMap.set(email, emailMap.get(email) ?? { page: pg.path });
     // obfuscated emails: "name [at] domain [dot] com"
     const deob = html
       .replace(/\s*\[\s*at\s*\]\s*|\s*\(\s*at\s*\)\s*/gi, "@")

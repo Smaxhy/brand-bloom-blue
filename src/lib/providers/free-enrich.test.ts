@@ -1,8 +1,18 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { decodeCfEmail, freeEnrich, hasMx, hiddenEmails, emailPlausible, pickBusinessEmail } from "./free-enrich";
+import { decodeCfEmail, freeEnrich, hasMx, hiddenEmails, emailPlausible, pickBusinessEmail, extractJsonLdEmails, discoverContactLinks, sitemapContactPaths, ownScriptEmails } from "./free-enrich";
 const fetchSite = vi.hoisted(() => vi.fn());
 vi.mock("../public-site-fetch", () => ({ fetchPublicSite: fetchSite }));
 afterEach(() => vi.unstubAllGlobals());
+it("never truncates another domain into a business address", () => {
+  expect(ownScriptEmails('<script>owner@business.test.attacker.com owner@business.test-other.com owner@business.test</script>', ["business.test"])).toEqual(["owner@business.test"]);
+});
+it("honors the supplied total crawl page budget", async () => {
+  fetchSite.mockReset();
+  fetchSite.mockImplementation(async (url: string) => ({ html: '<a href="/quote">Contact</a>', finalUrl: url }));
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ Status: 3 })));
+  await freeEnrich({ website: "business.test", tiered: true, maxPages: 3 });
+  expect(fetchSite).toHaveBeenCalledTimes(3);
+});
 it("rejects unrelated business emails and keeps published consumer mailboxes", () => {
   const ctx = { domains: ["business.test"], fromOwnSite: true };
   expect(emailPlausible("designer@agency.test", ctx)).toBe(false);
@@ -39,7 +49,7 @@ it("avoids deeper crawling only after a decoded usable email and owner are found
   fetchSite.mockClear();
   fetchSite.mockImplementation(async (url: string) => ({ html: 'Owner Alex Smith <span data-cfemail="0000"></span>', finalUrl: url }));
   await freeEnrich({ website: "business.test", tiered: true });
-  expect(fetchSite).toHaveBeenCalledTimes(9);
+  expect(fetchSite).toHaveBeenCalledTimes(10);
 });
 it("treats DNS failure as unknown rather than claiming no mail server", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => Response.json({ Status: 2 })));
@@ -82,4 +92,50 @@ it("keeps decoded published addresses and phone details when another mailto is m
   expect(result.emails).toContainEqual({ email: "owner@business.test", source: "site", page: "/", mx: true });
   expect(result.emails.some((email) => email.source === "guess")).toBe(false);
   expect(result.phones).toContain("+32470123456");
+});
+it("pulls the business email out of JSON-LD (LocalBusiness and nested contactPoint)", () => {
+  expect(extractJsonLdEmails('<script type="application/ld+json">{"@type":"LocalBusiness","name":"Biz","email":"mailto:owner@business.test"}</script>')).toEqual(["owner@business.test"]);
+  expect(extractJsonLdEmails('<script type="application/ld+json">{"@type":"Organization","contactPoint":[{"@type":"ContactPoint","email":"hello@business.test"}]}</script>')).toEqual(["hello@business.test"]);
+  expect(extractJsonLdEmails('<script type="application/ld+json">{"@type":"WebSite","name":"x"}</script>')).toEqual([]);
+});
+
+it("recovers an own-domain email hidden in a Wix-style escaped JSON blob, but never a tracker", async () => {
+  fetchSite.mockReset();
+  fetchSite.mockResolvedValue({
+    html: '<script>window.__INITIAL__={"contact":"owner\\u0040business\\u002etest","err":"logger@sentry.io"}</script>',
+    finalUrl: "https://business.test",
+  });
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ Status: 0, Answer: [{ type: 15 }] })));
+  const result = await freeEnrich({ website: "business.test", maxPages: 1 });
+  expect(result.emails.map((e) => e.email)).toContain("owner@business.test");
+  expect(result.emails.some((e) => /sentry\.io/.test(e.email))).toBe(false);
+});
+
+it("follows a contact link at a non-standard path to find the email", async () => {
+  fetchSite.mockReset();
+  fetchSite.mockImplementation(async (url: string) => {
+    if (url.endsWith("/say-hello")) return { html: '<a href="mailto:owner@business.test">Email us</a>', finalUrl: url };
+    if (/business\.test\/?$/.test(url)) return { html: '<header><a href="/say-hello">Get in touch</a></header>', finalUrl: "https://business.test" };
+    return { html: "<p>no contact details here</p>", finalUrl: url };
+  });
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ Status: 0, Answer: [{ type: 15 }] })));
+  const result = await freeEnrich({ website: "business.test", tiered: true });
+  expect(result.emails.map((e) => e.email)).toContain("owner@business.test");
+  expect(fetchSite.mock.calls.some((c) => String(c[0]).endsWith("/say-hello"))).toBe(true);
+});
+
+it("finds same-site contact links and ignores external, asset and mailto hrefs", () => {
+  const html = `
+    <a href="/pages/contact-us">Contact</a>
+    <a href="https://business.test/get-a-quote">Request a quote</a>
+    <a href="https://facebook.com/business">About us</a>
+    <a href="/brochure-about.pdf">About PDF</a>
+    <a href="mailto:x@business.test">Email</a>
+    <a href="/services">Services</a>`;
+  expect(discoverContactLinks(html, "business.test", new Set(["/contact", "/about"]))).toEqual(["/pages/contact-us", "/get-a-quote"]);
+});
+
+it("reads contact URLs from a sitemap, same-site only", () => {
+  const xml = "<urlset><url><loc>https://business.test/home</loc></url><url><loc>https://business.test/contact-us</loc></url><url><loc>https://other.test/contact</loc></url></urlset>";
+  expect(sitemapContactPaths(xml, "business.test", new Set())).toEqual(["/contact-us"]);
 });

@@ -32,3 +32,4 @@
 
 - First-contact company checks are shared by manual enrollment, saved searches and dispatch; acquire the company lease before history reads and fail closed on lookup/lease errors to prevent parallel duplicate starts. Individual explicit sends retain the override but never bypass suppressions.
 - Search fallback can switch from exhausted Serper to SerpApi only with the existing paid opt-in; keep provider warnings sanitized and preserve bounded reveal concurrency.
+- Optional Brave fallback runs server-side between Serper and paid-opt-in SerpApi with serialized provider advancement and pacing; extraction compares complete email tokens and bounds expanded contact/sitemap crawling to preserve safety.

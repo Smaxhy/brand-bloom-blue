@@ -39,7 +39,7 @@ it("avoids deeper crawling only after a decoded usable email and owner are found
   fetchSite.mockClear();
   fetchSite.mockImplementation(async (url: string) => ({ html: 'Owner Alex Smith <span data-cfemail="0000"></span>', finalUrl: url }));
   await freeEnrich({ website: "business.test", tiered: true });
-  expect(fetchSite).toHaveBeenCalledTimes(9);
+  expect(fetchSite).toHaveBeenCalledTimes(10);
 });
 it("treats DNS failure as unknown rather than claiming no mail server", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => Response.json({ Status: 2 })));

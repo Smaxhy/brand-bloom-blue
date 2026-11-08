@@ -202,6 +202,7 @@ async function diag(env: Env): Promise<Response> {
     apifyKeyPresent: apifyAvailable(env),
     gmapsSelfPresent: gmapsSelfAvailable(env),
     serperKeyPresent: !!secret(env, "SERPER_API_KEY"),
+    braveKeyPresent: !!secret(env, "BRAVE_SEARCH_API_KEY"),
     anthropicKeyPresent: !!secret(env, "ANTHROPIC_API_KEY"),
   };
   if (apolloKey) {
@@ -438,22 +439,46 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
   const usePaid = opts.usePaid === true;
   const apolloKey = usePaid ? secret(env, "APOLLO_API_KEY") : undefined;
   const hunterKey = usePaid ? secret(env, "HUNTER_API_KEY") : undefined;
-  // Cheap Google (Serper ≈ $1/1k) is allowed as a fallback even without usePaid; SerpApi only with usePaid.
+  // Free Google-style search first (Serper ≈ $1/1k after a free tier, then Brave's
+  // free tier), and SerpApi only as a paid fallback. We walk down the chain as
+  // each provider runs out, so one empty account no longer stops discovery.
   const serperKey = secret(env, "SERPER_API_KEY");
+  const braveKey = secret(env, "BRAVE_SEARCH_API_KEY");
   const serpapiKey = usePaid ? secret(env, "SERPAPI_API_KEY") : undefined;
-  let googleKey = serperKey || serpapiKey;
+  const providers: SearchKey[] = [];
+  if (serperKey) providers.push({ kind: "serper", key: serperKey });
+  if (braveKey) providers.push({ kind: "brave", key: braveKey });
+  if (serpapiKey) providers.push({ kind: "serpapi", key: serpapiKey });
   // Provider problems (quota used up, bad key) — shown once in the scraper banner.
   const warnings = new Set<string>();
   const warn = (w: string) => warnings.add(w);
-  // No searches left / key rejected: don't ask again for every next business.
-  let googleOff = false;
-  const stopGoogle = () => {
-    // Serper empty (or its key rejected) and "Paid fallback" is on with a
-    // SerpApi key: carry on with SerpApi instead of stopping.
-    if (googleKey && googleKey === serperKey && serpapiKey && serpapiKey !== serperKey) {
-      googleKey = serpapiKey;
-      warn("Switched to SerpApi for the Google lookups (Serper has no searches left)");
-    } else googleOff = true;
+  // Serialize fallback selection so concurrent contacts cannot skip a provider.
+  let providerIndex = 0;
+  let searchTail: Promise<unknown> = Promise.resolve();
+  let lastBraveSearch = 0;
+  const search = (q: string): ReturnType<typeof googleSearch> => {
+    const deadline = Date.now() + 11_000;
+    const run = searchTail.then(async () => {
+      while (providerIndex < providers.length && Date.now() < deadline) {
+        const provider = providers[providerIndex];
+        if (!provider) break;
+        if (provider.kind === "brave") {
+          const wait = Math.max(0, lastBraveSearch + 1050 - Date.now());
+          if (Date.now() + wait >= deadline) break;
+          if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
+          lastBraveSearch = Date.now();
+        }
+        const result = await withTimeout(googleSearch(provider, q), Math.max(1, deadline - Date.now()), "search");
+        if (result.error) warn(result.error);
+        if (!result.stop) return result;
+        providerIndex++;
+        const next = providers[providerIndex];
+        if (next) warn(`Switched to ${next.kind === "serpapi" ? "SerpApi" : next.kind === "brave" ? "Brave" : "Serper"} for the Google lookups (the previous provider is unavailable)`);
+      }
+      return { blob: "", firstLink: "" };
+    });
+    searchTail = run.catch(() => undefined);
+    return run;
   };
 
   const results = people.map((p) => ({
@@ -567,17 +592,11 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
     if (r.email && (!opts.revealPhone || r.phone)) return;
 
     // 2a) Find the company website via Google if we still don't have one.
-    if (!r.website && googleKey && !googleOff && p.organizationName) {
+    if (!r.website && providers.length && p.organizationName) {
       try {
-        const key = googleKey;
-        let site = await withTimeout(googleFindWebsite(key, p.organizationName, warn, stopGoogle), 12_000, "website search");
-        // Just switched provider (the first one is out of searches): ask the new one.
-        if (!site && googleKey && googleKey !== key && !googleOff)
-          site = await withTimeout(googleFindWebsite(googleKey, p.organizationName, warn, stopGoogle), 12_000, "website search");
+        const site = await withTimeout(googleFindWebsite(search, p.organizationName), 12_000, "website search");
         if (site && !NOT_A_WEBSITE.test(site)) r.website = site;
-      } catch {
-        /* skip */
-      }
+      } catch { /* keep the remaining enrichment paths available */ }
     }
     const domain = cleanDomain(r.website);
 
@@ -612,7 +631,7 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
 
     // 2c) Email via Google search (last resort), tracking the source URL. Only
     //     an address that belongs to THIS business is accepted.
-    if (!r.email && googleKey && !googleOff) {
+    if (!r.email && providers.length) {
       const q = [
         p.name ? `"${p.name}"` : "",
         p.organizationName ? `"${p.organizationName}"` : "",
@@ -622,18 +641,7 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
         .filter(Boolean)
         .join(" ");
       try {
-        const key = googleKey;
-        let { blob, firstLink, error, stop } = await withTimeout(googleSearch(key, q), 12_000, "email search");
-        if (error) warn(error);
-        if (stop) {
-          stopGoogle();
-          // Switched to the other provider: ask it instead.
-          if (googleKey && googleKey !== key && !googleOff) {
-            ({ blob, firstLink, error, stop } = await withTimeout(googleSearch(googleKey, q), 12_000, "email search"));
-            if (error) warn(error);
-            if (stop) stopGoogle();
-          }
-        }
+        const { blob, firstLink } = await withTimeout(search(q), 12_000, "email search");
         const found = pickBusinessEmail(blob, domain, { company: p.organizationName, owner: r.name || p.name });
         if (found) {
           r.email = found;
@@ -736,7 +744,7 @@ const PROVIDER_URL_RE =
  * old message only showed "HTTP 400".
  */
 export function searchProviderProblem(
-  provider: "SerpApi" | "Serper",
+  provider: "SerpApi" | "Serper" | "Brave",
   status: number,
   body = "",
 ): { text: string; stop: boolean } {
@@ -749,6 +757,10 @@ export function searchProviderProblem(
   } catch {
     said = body;
   }
+  // Brave's free tier allows one query per second, so a 429 there is a momentary
+  // rate limit, not an empty account — keep that provider, just skip this lookup.
+  if (status === 429 && provider === "Brave" && !/credit|quota|plan|monthly|exhaust/i.test(said))
+    return { text: `${provider}: busy for a moment (one search per second) — a few lookups skipped`, stop: false };
   if (/credit|quota|plan|run out|limit|exceed/i.test(said) || status === 429 || status === 402)
     return {
       text: `${provider}: no searches left on your ${provider} account — finding websites/emails through Google is skipped until you top it up; free website reading carries on`,
@@ -761,16 +773,46 @@ export function searchProviderProblem(
 }
 
 /** Run a Google search via whichever provider the key belongs to. */
+type SearchProvider = "serper" | "serpapi" | "brave";
+interface SearchKey {
+  kind: SearchProvider;
+  key: string;
+}
+
 async function googleSearch(
-  key: string,
+  p: SearchKey,
   q: string,
 ): Promise<{ blob: string; firstLink: string; error?: string; stop?: boolean }> {
-  if (isSerpApi(key)) {
+  if (p.kind === "brave") {
+    // Brave Search — a free tier (≈2,000 searches/mo) that keeps website/email
+    // discovery working after Serper runs out. Returns the real result links.
+    const u = new URL("https://api.search.brave.com/res/v1/web/search");
+    u.searchParams.set("q", q);
+    u.searchParams.set("count", "10");
+    const res = await fetch(u.toString(), {
+      headers: { "X-Subscription-Token": p.key, Accept: "application/json" },
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!res.ok) {
+      const prob = searchProviderProblem("Brave", res.status, await res.text().catch(() => ""));
+      return { blob: "", firstLink: "", error: prob.text, stop: prob.stop };
+    }
+    const d = (await res.json()) as {
+      web?: { results?: { url?: string; title?: string; description?: string; extra_snippets?: string[] }[] };
+    };
+    const organic = (d.web?.results ?? []).map((o) => ({
+      link: o.url,
+      title: o.title,
+      snippet: [o.description, ...(o.extra_snippets ?? [])].filter(Boolean).join(" "),
+    }));
+    return { blob: JSON.stringify(organic).replace(PROVIDER_URL_RE, ""), firstLink: organic[0]?.link ?? "" };
+  }
+  if (p.kind === "serpapi") {
     const u = new URL("https://serpapi.com/search.json");
     u.searchParams.set("engine", "google");
     u.searchParams.set("q", q);
     u.searchParams.set("num", "10");
-    u.searchParams.set("api_key", key);
+    u.searchParams.set("api_key", p.key);
     const res = await fetch(u.toString());
     if (!res.ok) {
       const p = searchProviderProblem("SerpApi", res.status, await res.text().catch(() => ""));
@@ -809,7 +851,7 @@ async function googleSearch(
   // Serper.dev
   const res = await fetch("https://google.serper.dev/search", {
     method: "POST",
-    headers: { "X-API-KEY": key, "Content-Type": "application/json" },
+    headers: { "X-API-KEY": p.key, "Content-Type": "application/json" },
     body: JSON.stringify({ q, num: 10 }),
   });
   if (!res.ok) {
@@ -839,14 +881,10 @@ const SOCIAL_RE =
 
 /** Find a company's website domain via Google (skips social/directory links). */
 async function googleFindWebsite(
-  key: string,
+  search: (q: string) => ReturnType<typeof googleSearch>,
   company: string,
-  warn?: (w: string) => void,
-  onStop?: () => void,
 ): Promise<string> {
-  const { blob, firstLink, error, stop } = await googleSearch(key, `${company} official website`);
-  if (error) warn?.(error);
-  if (stop) onStop?.();
+  const { blob, firstLink } = await search(`${company} official website`);
   if (firstLink && !SOCIAL_RE.test(firstLink)) {
     const dom = cleanDomain(firstLink);
     if (dom && dom.includes(".")) return dom;

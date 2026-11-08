@@ -26,7 +26,7 @@ const secret = (e: Env, k: string) => e[k] || process.env?.[k];
 const OWNERISH =
   /\b(owner|founder|co-founder|ceo|president|principal|proprietor|managing director|director|zaakvoerder|eigenaar|oprichter|bestuurder|g[ée]rant|fondateur|directeur|inhaber|geschäftsführer)\b/i;
 const CACHE_DAYS = 30;
-const EMAIL_EXTRACTION_VERSION = 3;
+const EMAIL_EXTRACTION_VERSION = 4;
 const BUSINESS_WORDS =
   /\b(roofing|roofers?|plumbing|plumbers?|hvac|heating|cooling|electric(al)?|landscap\w*|lawn|tree|dental|dentistry|clinic|law|legal|realty|real estate|construction|contractors?|services?|solutions|group|company|co\.?|inc\.?|llc|ltd|bv|bvba|nv|gmbh|sarl|srl|studio|salon|spa|shop|store|center|centre|agency|partners|associates|brothers|sons|team|home|house|auto|motors?|cleaning|painting|design|media|marketing|consulting|insurance|bank|church|school|academy)\b/i;
 
@@ -403,8 +403,27 @@ export async function enrichSite(env: Env, o: EnrichSiteOpts): Promise<SiteProfi
     if (ex) {
       if (ex.ownerName && !o.ownerName) name = ex.ownerName;
       if (ex.ownerTitle) title = ex.ownerTitle;
-      const cePick = ex.email && siteEmails.find((e) => e.email === ex.email);
-      if (cePick) pick = cePick;
+      if (ex.email) {
+        const known = siteEmails.find((e) => e.email === ex.email);
+        if (known) {
+          pick = known;
+        } else if (
+          // Claude read the page and named an address our patterns missed. Accept
+          // it ONLY when it literally appears in the text we sent (no invented
+          // addresses) and it belongs to this business.
+          !pick &&
+          !!fe.text.toLowerCase().match(/[a-z0-9._%+'-]+@[a-z0-9.-]+\.[a-z]{2,}/gi)?.some((email) => email === ex.email) &&
+          emailPlausible(ex.email, {
+            domains: [fe.website, domain].filter(Boolean),
+            company: o.company,
+            owner: name,
+            city: o.city,
+            fromOwnSite: true,
+          })
+        ) {
+          pick = { email: ex.email, source: "site", page: "", mx: fe.mx };
+        }
+      }
       ai = {
         need: ex.need,
         reasons: ex.reasons,
