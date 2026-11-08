@@ -42,7 +42,8 @@ function HomePage() {
         var path = link.getAttribute('href');
         link.addEventListener('click', function(event) {
           event.preventDefault();
-          window.parent.postMessage({ type: 'inspirova:navigate', path: path }, window.location.origin);
+          try { window.parent.postMessage({ type: 'inspirova:navigate', path: path }, '*'); }
+          catch (e) { window.top.location.href = path; }
         });
       });
     </script></body>`,
@@ -53,7 +54,6 @@ function HomePage() {
     const handleMessage = (event: MessageEvent) => {
       if (
         event.source === frame.current?.contentWindow &&
-        event.origin === window.location.origin &&
         event.data?.type === "inspirova:navigate" &&
         typeof event.data.path === "string" &&
         allowedPaths.includes(event.data.path)
