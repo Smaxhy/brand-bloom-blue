@@ -118,5 +118,6 @@
 - [ ] Live new company contact/send and paid fallback verification: requires real provider calls; not performed to avoid outreach and search charges.
 
 # November 8 admin update
-- [ ] Merge new archived admin changes without reverting existing data, website or security protections.
-- [ ] Verify changed flows and regression tests without sending emails or paid searches.
+- [x] Merge new archived admin changes without reverting existing data, website or security protections.
+- [x] Verify 272 regression tests, build, Results navigation and admin sign-in without sending emails or paid searches.
+- [ ] November 8 signed-in live discovery verification: requires preview sign-in and optional Brave configuration; no emails or paid searches performed.

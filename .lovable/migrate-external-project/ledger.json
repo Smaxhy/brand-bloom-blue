@@ -6,9 +6,9 @@
     {
       "capability": "admin-nov8-update",
       "source": "inspirova-admin-update-2026-11-08.zip",
-      "outcome": "Inspected safe 66-file incremental admin archive; comparing new changes against prior archive while preserving current Cloud data, accounts, public website, authorization, providers, endpoints, schedules and managed migrations.",
-      "status": "in_progress",
-      "next_action": "Merge genuinely new changes and verify without outbound emails or paid searches."
+      "outcome": "Merged genuinely new November 8 changes: JSON-LD/escaped email extraction, same-site contact and sitemap discovery with page/deadline bounds, exact-token AI recovery, extraction cache version 4, secure optional Brave settings/status and serialized Serper\u2192Brave\u2192paid-only SerpApi fallback. Preserved Inboxes, Pipeline deletions/full quote details, cleanup, Stop, frozen send snapshots, company leases, request limits, encrypted credentials, managed Cloud schema/accounts/data and public website. 272 tests pass; preview build OK; Results link opens and admin sign-in renders without runtime errors.",
+      "status": "code_verified",
+      "next_action": "Signed-in saved-row checks require preview sign-in: own-account session mint has no matching account. Optional Brave must be configured in Settings before use. Live provider calls, sends, schedules and publication not performed."
     },
     {
       "capability": "admin-fix-2",
