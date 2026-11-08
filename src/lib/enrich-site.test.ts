@@ -62,6 +62,12 @@ describe("AI email recovery", () => {
   const claudeReply = (email: string) =>
     Response.json({ content: [{ text: JSON.stringify({ ownerName: "Alex Smith", ownerTitle: "Owner", email, need: 80, reasons: ["No online booking"], pitch: "", gap: "", siteQuality: "poor", teamSize: "1-10", revenueBand: "<250k", locations: 0, sizeConfidence: "low" }) }] });
 
+  it("rejects an AI address that only matches part of another literal address", async () => {
+    crawl.mockReset();
+    crawl.mockResolvedValue({ ok: true, website: "business.test", mx: true, emails: [], names: [], socials: { linkedin: "" }, phones: [], text: "owner@business.test.attacker.com", signals: null });
+    vi.stubGlobal("fetch", vi.fn(async () => claudeReply("owner@business.test")));
+    expect((await enrichSite({ ANTHROPIC_API_KEY: "test-only" }, { website: "business.test", findLinkedin: false }))?.email).toBe("");
+  });
   it("accepts a Claude-named email that our patterns missed when it is on the page", async () => {
     crawl.mockReset();
     crawl.mockResolvedValue({ ok: true, website: "business.test", mx: true, emails: [], names: [], socials: { linkedin: "" }, phones: [], text: "Reach us any time at hello@business.test for a quote.", signals: null });

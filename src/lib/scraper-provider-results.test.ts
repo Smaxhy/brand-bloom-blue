@@ -51,8 +51,9 @@ describe("scraper provider result handling", () => {
     }), { SERPER_API_KEY: "test-serper", BRAVE_SEARCH_API_KEY: "test-brave", SERPAPI_API_KEY: "test-serpapi" });
     if (!response) throw new Error("Missing response");
     const result = await response.json();
-    expect(calls[0]).toContain("serper.dev");
-    expect(calls[1]).toContain("search.brave.com");
+    const searches = calls.filter((url) => /serper.dev|search.brave.com|serpapi.com/.test(url));
+    expect(searches[0]).toContain("serper.dev");
+    expect(searches[1]).toContain("search.brave.com");
     expect(calls.some((url) => url.includes("serpapi.com"))).toBe(usePaid);
     expect(result.results[0].email).toBe(usePaid ? "hello@holidaylightingco.com" : "");
   });
