@@ -422,6 +422,13 @@ export function extractJsonLdEmails(html: string): string[] {
   return [...out];
 }
 
+/** Match full address tokens before comparing domains; never truncate suffixes. */
+export function ownScriptEmails(html: string, domains: string[]): string[] {
+  const decoded = html.replace(/\\u0*40|\\x40/gi, "@").replace(/\\u0*2e|\\x2e/gi, ".");
+  return (decoded.match(EMAIL_RE) ?? []).map((email) => email.toLowerCase())
+    .filter((email) => domains.includes(cleanDomain(email.split("@")[1])) && !JUNK_EMAIL.test(email));
+}
+
 /** Paths that look like a contact/about/quote page, for crawling non-standard URLs. */
 const CONTACT_LINK_RE =
   /contact|about|our[\s-]?team|meet[\s-]?the[\s-]?team|meet[\s-]?us|staff|reach[\s-]?us|get[\s-]?in[\s-]?touch|quote|estimate|appointment|book|schedule|connect|enquir|inquir/i;
@@ -561,7 +568,9 @@ export async function freeEnrich(input: {
   if (!domain) return { ...empty, error: "no website" };
 
   const base = `https://${domain}`;
-  const maxPages = Math.min(input.maxPages ?? PAGES.length, PAGES.length);
+  const maxPages = Math.max(1, Math.min(input.maxPages ?? (input.tiered ? 19 : PAGES.length), 19));
+  const crawlDeadline = Date.now() + 23_000;
+  let remainingPages = maxPages - 1;
 
   // Homepage first (follows redirects → canonical domain), then the rest in parallel.
   const home = (await fetchPage(base, 8000)) ?? (await fetchPage(`http://${domain}`, 6000));
@@ -571,8 +580,11 @@ export async function freeEnrich(input: {
 
   const grab = (paths: string[], ms: number) =>
     Promise.all(
-      paths.map(async (p) => {
-        const r = await fetchPage(root + p, ms);
+      paths.slice(0, remainingPages).map(async (p) => {
+        remainingPages--;
+        const timeLeft = crawlDeadline - Date.now();
+        if (timeLeft <= 0) return null;
+        const r = await fetchPage(root + p, Math.min(ms, timeLeft));
         return r ? { path: p, html: r.html } : null;
       }),
     );
@@ -586,11 +598,8 @@ export async function freeEnrich(input: {
     const everything = () => [home.html, ...extras.map((e) => e.html)].join("\n");
     const haveEmail = () => {
       const seen = everything();
-      return (
-        hiddenEmails(seen).some((email) => !JUNK_EMAIL.test(email)) ||
-        extractJsonLdEmails(seen).length > 0 ||
-        new RegExp(`[a-z0-9._%+-]+@(?:www\\.)?${finalDomain.replace(/\./g, "\\.")}`, "i").test(seen)
-      );
+      return [...hiddenEmails(seen), ...extractJsonLdEmails(seen), ...ownScriptEmails(seen, [finalDomain, domain])]
+        .some((email) => emailPlausible(email, { domains: [finalDomain, domain], company: input.companyName, owner: input.ownerName, city: input.city, fromOwnSite: true }));
     };
     const havePerson = () => OWNER_HINT_RE.test(everything()) || /"@type"\s*:\s*"Person"/i.test(everything());
     if (!haveEmail() || !havePerson()) {
@@ -600,8 +609,9 @@ export async function freeEnrich(input: {
       extras.push(...(await grab([...TIER2, ...discovered], 5000)).filter(notNull));
     }
     // Still nothing usable: consult the sitemap for a contact page we haven't tried.
-    if (!haveEmail()) {
-      const sm = await fetchPage(`${root}/sitemap.xml`, 5000);
+    if (!haveEmail() && remainingPages > 0 && Date.now() < crawlDeadline) {
+      remainingPages--;
+      const sm = await fetchPage(`${root}/sitemap.xml`, Math.min(5000, crawlDeadline - Date.now()));
       const smPaths = sm ? sitemapContactPaths(sm.html, finalDomain, queued) : [];
       if (smPaths.length) extras.push(...(await grab(smPaths, 5000)).filter(notNull));
     }
@@ -635,13 +645,8 @@ export async function freeEnrich(input: {
     // Emails buried in script/JSON blobs (Wix, Squarespace) with the @ and .
     // escaped. Restricted to the site's OWN domain, so trackers on other
     // domains (sentry.io, analytics…) can never slip in from script content.
-    const ownScan = html.replace(/\\u0*40|\\x40/gi, "@").replace(/\\u0*2e|\\x2e/gi, ".");
-    const ownRe = new RegExp(
-      `[a-z0-9._%+-]+@(?:www\\.)?(?:${finalDomain.replace(/\./g, "\\.")}|${domain.replace(/\./g, "\\.")})\\b`,
-      "gi",
-    );
-    for (const m of ownScan.match(ownRe) ?? [])
-      if (!JUNK_EMAIL.test(m.toLowerCase())) emailMap.set(m.toLowerCase(), emailMap.get(m.toLowerCase()) ?? { page: pg.path });
+    for (const email of ownScriptEmails(html, [finalDomain, domain]))
+      emailMap.set(email, emailMap.get(email) ?? { page: pg.path });
     for (const m of html.matchAll(/tel:([+\d()\s.-]{7,})/gi)) phones.add(m[1].trim());
     // social links
     const li = html.match(
