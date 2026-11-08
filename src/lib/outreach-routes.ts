@@ -246,6 +246,7 @@ async function status(e: Env): Promise<Response> {
     cronSecret: !!env(e, "CRON_SECRET"),
     places: !!env(e, "GOOGLE_PLACES_API_KEY"),
     serper: !!env(e, "SERPER_API_KEY"),
+    brave: !!env(e, "BRAVE_SEARCH_API_KEY"),
     apify: !!env(e, "APIFY_TOKEN"),
     anthropic: !!env(e, "ANTHROPIC_API_KEY"),
     reoon: !!env(e, "REOON_API_KEY"),

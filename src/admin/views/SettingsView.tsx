@@ -908,6 +908,13 @@ const INTEGRATIONS: {
     how: "Cheap Google / Maps backup and owner lookups.",
   },
   {
+    key: "brave",
+    name: "Brave Search (BRAVE_SEARCH_API_KEY)",
+    cost: "≈ 2,000 free / mo",
+    need: "optional",
+    how: "Free website & email discovery that keeps working after Serper runs out. Get a key at api-dashboard.search.brave.com (Free plan).",
+  },
+  {
     key: "reoon",
     name: "Reoon verifier (REOON_API_KEY)",
     cost: "20 free/day, then $1.19 / 1,000",
