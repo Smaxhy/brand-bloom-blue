@@ -659,7 +659,7 @@ function MailboxesPanel() {
           </div>
           <p className="text-xs text-muted-foreground">
             Where to find these: GHL → Settings → Private Integrations (token); the Location ID is
-            in Settings → Business Profile. Daily cap starts at 100; raise it under the mailbox once
+            in Settings → Business Profile. Daily cap starts at 1000; change it under the mailbox once
             connected.
           </p>
           <div className="flex justify-end gap-2 pt-1">
