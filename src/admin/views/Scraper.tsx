@@ -1006,6 +1006,11 @@ export function Scraper({
             inFlight.current.delete(job.id);
             continue;
           }
+          if (pageAway()) {
+            await waitUntilBack(1000);
+            if (stopRequested.current) break;
+            if (pageAway()) continue;
+          }
           const attemptAt = Date.now();
           try {
             const r = await stepScan(job.id, async () => !stopRequested.current);
@@ -1034,7 +1039,7 @@ export function Scraper({
             // minute) and carry on where it left off.
             if (wasAwaySince(attemptAt)) {
               failures.delete(job.id);
-              await waitUntilBack(60_000);
+              await waitUntilBack(1000);
               continue;
             }
             const n = (failures.get(job.id) ?? 0) + 1;

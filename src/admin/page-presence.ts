@@ -90,14 +90,17 @@ export async function pollWhilePresent<T extends { done?: boolean }>(opts: {
   const now = opts.now ?? Date.now;
   const away = opts.away ?? wasAwaySince;
   const maxFailures = opts.maxFailures ?? 5;
-  const started = now();
   let result = opts.initial;
+  if (result.done) return { result, timedOut: false };
   let used = 0;
   let failures = 0;
   while (used < opts.budgetMs) {
     const t = now();
-    await sleep(opts.everyMs);
-    opts.onTick?.(now() - started);
+    await sleep(Math.min(opts.everyMs, opts.budgetMs - used));
+    if (!away(t)) used += now() - t;
+    opts.onTick?.(used);
+    if (used >= opts.budgetMs) break;
+    const checkedAt = now();
     try {
       result = await opts.check();
       failures = 0;
@@ -106,7 +109,7 @@ export async function pollWhilePresent<T extends { done?: boolean }>(opts: {
       if (!away(t) && ++failures >= maxFailures)
         return { result, timedOut: false, error: (e as Error)?.message || String(e) };
     }
-    if (!away(t)) used += now() - t;
+    if (!away(checkedAt)) used += now() - checkedAt;
   }
   return { result, timedOut: true };
 }

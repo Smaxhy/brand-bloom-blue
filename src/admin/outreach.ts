@@ -375,31 +375,31 @@ export const RECONTACT_COOLDOWN_DAYS = 90;
 export async function liveEnrolledEmails(): Promise<Set<string>> {
   const since = new Date(Date.now() - RECONTACT_COOLDOWN_DAYS * 86_400_000).toISOString();
   type Row = { leads: { email: string | null } | null };
-  const read = async (query: () => Promise<any>) => {
+  const read = async (table: string, query: (handle: any) => any) => {
     const rows: Row[] = [];
     for (let page = 0; page < 100; page++) {
-      const batch = must<Row[]>(await (await query()).order("id").range(page * 500, page * 500 + 499));
+      const batch = must<Row[]>(await query(await tbl(table)).order("id").range(page * 500, page * 500 + 499));
       rows.push(...batch);
       if (batch.length < 500) return rows;
     }
     throw new Error("Too much outreach history to safely check. No people were added.");
   };
   const [running, held, emailed] = await Promise.all([
-    read(async () =>
-      (await tbl("enrollments"))
+    read("enrollments", (handle) =>
+      handle
         .select("leads(email)")
         .in("status", ["queued", "active", "paused"])
         .limit(500),
     ),
-    read(async () =>
-      (await tbl("enrollments"))
+    read("enrollments", (handle) =>
+      handle
         .select("leads(email)")
         .eq("status", "failed")
         .like("last_error", "Possibly sent%")
         .limit(500),
     ),
-    read(async () =>
-      (await tbl("messages"))
+    read("messages", (handle) =>
+      handle
         .select("leads(email)")
         .eq("direction", "out")
         .in("status", ["sent", "bounced"])
