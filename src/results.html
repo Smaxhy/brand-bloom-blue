@@ -14,50 +14,144 @@
   This page shares the homepage's stylesheet. The route (src/routes/results.tsx)
   copies the first <style> block of src/inspirova.html in here, so the header,
   buttons, cards, scroller and footer always look exactly like the homepage.
-  Only the few results-only pieces are styled below.
+  Only the results-only pieces are styled below.
 -->
 <style>/*__SITE_CSS__*/</style>
 <style>
   /* ---------- results-only pieces ---------- */
-  .rs-eye{color:var(--violet-bright);font-family:var(--mono);font-size:.72rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;margin-bottom:18px}
-  .rs-total{margin-top:18px;font-family:var(--display);font-weight:800;letter-spacing:-.03em;line-height:1;
-    font-size:clamp(2.6rem,6.2vw,4.6rem);font-variant-numeric:tabular-nums;
-    background:linear-gradient(110deg,#fff 35%,#A88BFF 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
   .rs-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-  .rs-hero-shot{margin:0;padding:12px;border-radius:26px;border:1px solid rgba(255,255,255,.1);
+  .rs-eye{color:var(--violet-bright);font-family:var(--mono);font-size:.72rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;margin-bottom:18px}
+
+  /* hero */
+  .rs-hero h1{font-size:clamp(2.2rem,4.6vw,3.6rem);line-height:1.04}
+  .rs-total{margin-top:22px;font-family:var(--display);font-weight:800;letter-spacing:-.035em;line-height:.95;
+    font-size:clamp(3rem,7vw,5.4rem);font-variant-numeric:tabular-nums;
+    background:linear-gradient(110deg,#fff 30%,#A88BFF 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .rs-hero p.sub{margin-top:16px}
+  .rs-platforms{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px;padding:0;list-style:none}
+  .rs-platforms li{display:inline-flex;align-items:center;gap:8px;padding:7px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.12);
+    background:rgba(255,255,255,.04);font-size:.8rem;font-weight:600;color:rgba(255,255,255,.86)}
+  .rs-platforms li::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--violet-bright);box-shadow:0 0 0 3px rgba(168,139,255,.18)}
+  .rs-hero .hero-cta{margin-top:30px}
+  .rs-hero-shot{position:relative;margin:0;padding:12px;border-radius:26px;border:1px solid rgba(255,255,255,.1);
     background:linear-gradient(160deg,rgba(255,255,255,.06),rgba(255,255,255,.02));
-    box-shadow:0 30px 80px -40px rgba(124,92,255,.55)}
+    box-shadow:0 40px 90px -40px rgba(124,92,255,.6)}
   .rs-hero-shot img{width:100%;height:auto;border-radius:16px}
-  .rs-hero-shot figcaption{margin-top:12px;font-size:.8rem;color:rgba(255,255,255,.6);text-align:center}
+  .rs-hero-shot figcaption{display:flex;justify-content:center;align-items:center;gap:10px;margin:12px 0 2px;font-size:.8rem;color:rgba(255,255,255,.62);text-align:center}
+  .rs-hero-shot figcaption .pcard-tag{flex:none}
 
-  .rs-gallery-lead{margin-bottom:20px}
-  .rs-gallery{columns:2;column-gap:20px}
-  .rs-shot{break-inside:avoid;margin:0 0 20px;padding:12px 12px 0;border-radius:22px;border:1px solid rgba(255,255,255,.09);
-    background:linear-gradient(160deg,rgba(255,255,255,.055),rgba(255,255,255,.02));transition:border-color .3s,transform .3s var(--ease)}
-  .rs-shot:hover{border-color:rgba(168,139,255,.45);transform:translateY(-3px)}
-  .rs-zoom{display:grid;place-items:center;width:100%;padding:0;border:0;border-radius:14px;overflow:hidden;
-    background:rgba(255,255,255,.03);cursor:zoom-in;color:inherit}
-  .rs-zoom img{width:auto;max-width:100%;height:auto;max-height:560px;border-radius:14px}
-  .rs-shot figcaption{display:flex;gap:12px;align-items:baseline;padding:14px 6px 16px;font-size:.88rem;line-height:1.5;color:rgba(255,255,255,.78)}
-  .rs-shot figcaption b{font-family:var(--mono);font-size:.7rem;font-weight:700;letter-spacing:.12em;color:var(--violet-bright);flex:none}
-
-  .rs-lightbox{max-width:min(1100px,94vw);max-height:92vh;margin:auto;padding:56px 16px 16px;border-radius:24px;
-    border:1px solid rgba(255,255,255,.14);background:#0C0820;color:#fff;overflow:auto}
-  .rs-lightbox::backdrop{background:rgba(6,4,18,.85);backdrop-filter:blur(8px)}
-  .rs-lightbox img{width:auto;max-width:100%;max-height:74vh;margin:0 auto;border-radius:14px}
-  .rs-lightbox p{margin-top:12px;text-align:center;font-size:.88rem;color:rgba(255,255,255,.75)}
-
+  /* client work */
   #work{padding:60px 0}
+  #work .pcard{display:flex;flex-direction:column}
+  #work .pcard p{flex:1}
+  .rs-proof-link{display:none;align-items:center;gap:8px;margin-top:18px;padding:0;border:0;background:none;
+    color:var(--violet-bright);font-weight:600;font-size:.88rem;cursor:pointer;align-self:flex-start}
+  .js .rs-proof-link{display:inline-flex}
+  .rs-proof-link .arr{transition:transform .25s var(--ease)}
+  .rs-proof-link:hover{color:#fff}
+  .rs-proof-link:hover .arr{transform:translateX(4px)}
+
+  /* receipts */
   #receipts{padding:60px 0 40px}
+  .rs-filters{display:none;flex-wrap:wrap;justify-content:center;gap:8px;margin:-24px 0 30px}
+  .js .rs-filters{display:flex}
+  .rs-chip{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.14);
+    background:rgba(255,255,255,.04);color:rgba(255,255,255,.8);font-weight:600;font-size:.88rem;cursor:pointer;
+    transition:background .2s,border-color .2s,color .2s}
+  .rs-chip span{font-family:var(--mono);font-size:.7rem;color:rgba(255,255,255,.5)}
+  .rs-chip:hover{border-color:var(--violet-bright);color:#fff}
+  .rs-chip[aria-pressed="true"]{background:rgba(124,92,255,.24);border-color:var(--violet-bright);color:#fff}
+  .rs-chip[aria-pressed="true"] span{color:var(--violet-bright)}
+
+  .rs-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+  .rs-card{margin:0;display:flex;flex-direction:column;border-radius:20px;border:1px solid rgba(255,255,255,.09);
+    background:linear-gradient(160deg,rgba(255,255,255,.055),rgba(255,255,255,.02));
+    transition:border-color .3s,transform .3s var(--ease),box-shadow .3s}
+  .rs-card[hidden]{display:none}
+  .rs-card:hover{border-color:rgba(168,139,255,.45);transform:translateY(-3px);box-shadow:0 24px 50px -30px rgba(124,92,255,.55)}
+  .rs-zoom{position:relative;display:block;aspect-ratio:4/3;margin:10px 10px 0;padding:10px;border:0;border-radius:14px;
+    background:rgba(255,255,255,.035);cursor:zoom-in;color:#fff;overflow:hidden}
+  .rs-zoom img{width:100%;height:100%;object-fit:contain}
+  .rs-zoom::after{content:"";position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:50%;
+    background:rgba(12,8,32,.78) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7'/%3E%3C/svg%3E") center/15px no-repeat;
+    border:1px solid rgba(255,255,255,.18);opacity:0;transform:scale(.9);transition:opacity .2s,transform .2s}
+  .rs-card:hover .rs-zoom::after,.rs-zoom:focus-visible::after{opacity:1;transform:none}
+  .rs-card figcaption{display:flex;flex-direction:column;gap:6px;padding:14px 16px 18px}
+  .rs-card-tag{font-family:var(--mono);font-size:.66rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--violet-bright)}
+  .rs-card-title{font-family:var(--display);font-weight:700;font-size:1.05rem;line-height:1.25;color:#fff}
+  .rs-card-cap{font-size:.84rem;line-height:1.5;color:rgba(255,255,255,.7)}
+
+  /* full-size viewer */
+  .rs-lightbox{width:min(1100px,94vw);max-width:none;max-height:94vh;margin:auto;padding:0;border-radius:24px;
+    border:1px solid rgba(255,255,255,.14);background:#0C0820;color:#fff;overflow:hidden}
+  .rs-lightbox[open]{display:flex;flex-direction:column}
+  .rs-lightbox::backdrop{background:rgba(6,4,18,.86);backdrop-filter:blur(8px)}
+  .rs-lb-top{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 10px 10px 20px;border-bottom:1px solid rgba(255,255,255,.08)}
+  .rs-lb-count{font-family:var(--mono);font-size:.72rem;font-weight:700;letter-spacing:.14em;color:var(--violet-bright)}
+  .rs-lb-btn{display:grid;place-items:center;flex:none;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.2);
+    background:rgba(255,255,255,.06);color:#fff;font-size:1.15rem;line-height:1;cursor:pointer;transition:background .2s,border-color .2s}
+  .rs-lb-btn:hover{background:rgba(255,255,255,.14);border-color:var(--violet-bright)}
+  .rs-lb-stage{flex:1;min-height:0;display:grid;place-items:center;padding:16px;background:rgba(255,255,255,.02)}
+  .rs-lb-stage img{max-width:100%;max-height:calc(94vh - 200px);width:auto;height:auto;border-radius:12px}
+  .rs-lb-bottom{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;gap:14px;align-items:center;padding:14px 16px 16px;border-top:1px solid rgba(255,255,255,.08)}
+  .rs-lb-text{text-align:center}
+  .rs-lb-text b{display:block;font-family:var(--display);font-weight:700;font-size:1.02rem}
+  .rs-lb-text p{margin-top:4px;font-size:.84rem;line-height:1.5;color:rgba(255,255,255,.7)}
+
+  /* closing */
   .rs-cta{position:relative;padding:40px 0 110px;color:#fff;overflow:hidden;
     background:radial-gradient(50% 55% at 50% 60%, rgba(124,92,255,.14) 0%, transparent 70%),var(--ink)}
   .rs-cta .proof-head{margin-top:56px;margin-bottom:34px}
 
-  @media (max-width:880px){
-    .rs-hero-shot{margin-top:36px}
-    .rs-gallery{columns:1}
+  /* tablet */
+  @media (max-width:900px){
+    .rs-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   }
-  @media (prefers-reduced-motion:reduce){.rs-shot:hover{transform:none}}
+  @media (max-width:880px){
+    .rs-hero h1{font-size:clamp(2rem,8.6vw,2.6rem)}
+    .rs-hero-shot{margin-top:4px}
+  }
+  @media (min-width:521px) and (max-width:880px){
+    .rs-hero .hero-cta{flex-direction:row}
+    .rs-hero .hero-cta .btn{width:auto}
+    .rs-hero-shot{max-width:620px}
+  }
+  /* phone */
+  @media (max-width:520px){
+    .rs-total{font-size:clamp(2.6rem,13vw,3.4rem);margin-top:18px}
+    .rs-platforms li{font-size:.74rem;padding:6px 11px}
+    .rs-hero-shot{padding:8px;border-radius:20px}
+    .rs-hero-shot img{border-radius:13px}
+    .rs-hero-shot figcaption{flex-direction:column;gap:8px}
+    #work{padding:40px 0}
+    #work .proof-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:28px}
+    #work .pstat{padding:18px 14px;border-radius:16px}
+    #work .pstat-num{font-size:1.65rem}
+    #work .pstat-lbl{font-size:.84rem;line-height:1.3}
+    #work .pstat-sub{font-size:.7rem;line-height:1.35}
+    #work .proof-grid{gap:14px}
+    .rs-filters{gap:5px;margin:-28px -8px 22px}
+    .rs-chip{padding:8px 10px;font-size:.78rem;gap:5px}
+    .rs-grid{gap:10px}
+    .rs-card{border-radius:16px}
+    .rs-card:hover{transform:none}
+    .rs-zoom{margin:6px 6px 0;padding:6px;border-radius:11px}
+    .rs-zoom::after{opacity:1;transform:none;width:28px;height:28px;top:8px;right:8px;background-size:12px}
+    .rs-card figcaption{padding:10px 10px 13px;gap:4px}
+    .rs-card-tag{font-size:.58rem;letter-spacing:.1em}
+    .rs-card-title{font-size:.86rem}
+    .rs-card-cap{display:none}
+    .rs-lightbox{width:calc(100vw - 16px);max-height:calc(100dvh - 16px);border-radius:20px}
+    .rs-lb-stage{padding:10px}
+    .rs-lb-stage img{max-height:calc(100dvh - 230px)}
+    .rs-lb-bottom{gap:10px;padding:12px}
+    .rs-cta .proof-badges{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .rs-cta .pbadge{padding:14px}
+    .rs-cta .pbadge b{font-size:.84rem}
+    .rs-cta .pbadge span{font-size:.7rem}
+    .rs-cta .proof-head{margin-top:40px}
+  }
+  @media (prefers-reduced-motion:reduce){.rs-card:hover{transform:none}}
 </style>
 </head>
 <body>
@@ -86,14 +180,19 @@
 <main id="main-content">
 
 <!-- ============ HERO ============ -->
-<section class="hero">
+<section class="hero rs-hero">
   <div class="wrap">
     <div class="hero-grid">
       <div>
         <div class="rs-eye">The work, in numbers</div>
-        <h1>Inspirova. <span class="lime">The results.</span></h1>
+        <h1>Inspirova.<br><span class="lime">The results.</span></h1>
         <p class="rs-total"><span id="rsTotal" aria-hidden="true">$1,037,785</span><span class="rs-sr">$1,037,785</span></p>
-        <p class="sub">In tracked client revenue across Shopify, Meta Ads and GHL, straight from client dashboards.</p>
+        <p class="sub">Tracked client revenue, straight from client dashboards.</p>
+        <ul class="rs-platforms" aria-label="Tracked in">
+          <li>Shopify</li>
+          <li>Meta Ads</li>
+          <li>GoHighLevel</li>
+        </ul>
         <div class="hero-cta">
           <a href="/#quoteForm" target="_top" class="btn btn-primary">Request your quote <span class="arr">→</span></a>
           <a href="#receipts" class="btn btn-pill-ghost">See the receipts</a>
@@ -102,8 +201,8 @@
       </div>
 
       <figure class="rs-hero-shot">
-        <img src="__PROOF_08__" width="1000" height="860" alt="Shopify live view: $116,355 in sales and 1,300 orders in 30 days">
-        <figcaption>$116,355 in 30 days, from a client's Shopify dashboard.</figcaption>
+        <img src="__PROOF_08__" width="1000" height="860" fetchpriority="high" alt="Shopify live view: $116,355 in sales and 1,300 orders in 30 days">
+        <figcaption><span class="pcard-tag">Shopify · 30 days</span><span>$116,355 in sales from one client's store.</span></figcaption>
       </figure>
     </div>
   </div>
@@ -145,6 +244,7 @@
           <div><b>+23%</b><span>Orders</span></div>
           <div><b>+17%</b><span>Conversion rate</span></div>
         </div>
+        <button type="button" class="rs-proof-link" data-open-shot="4">See the screenshot <span class="arr">→</span></button>
       </article>
 
       <article class="pcard" aria-label="Case study: DTC Meta Ads">
@@ -156,6 +256,7 @@
           <div><b>$2.4K</b><span>Ad spend</span></div>
           <div><b>$68K</b><span>Conversion value</span></div>
         </div>
+        <button type="button" class="rs-proof-link" data-open-shot="5">See the screenshot <span class="arr">→</span></button>
       </article>
 
       <article class="pcard" aria-label="Case study: lead gen">
@@ -167,6 +268,7 @@
           <div><b>15,869</b><span>Reach</span></div>
           <div><b>6,657</b><span>Total leads</span></div>
         </div>
+        <button type="button" class="rs-proof-link" data-open-shot="3">See the screenshot <span class="arr">→</span></button>
       </article>
 
       <article class="pcard" aria-label="Case study: Shopify retention">
@@ -178,6 +280,7 @@
           <div><b>6.91%</b><span>Conv. rate</span></div>
           <div><b>11.45%</b><span>Top segment CR</span></div>
         </div>
+        <button type="button" class="rs-proof-link" data-open-shot="7">See the screenshot <span class="arr">→</span></button>
       </article>
 
       <article class="pcard" aria-label="Case study: premium ads">
@@ -189,6 +292,7 @@
           <div><b>1.96%</b><span>CTR</span></div>
           <div><b>$18.8K</b><span>Conv. value</span></div>
         </div>
+        <button type="button" class="rs-proof-link" data-open-shot="2">See the screenshot <span class="arr">→</span></button>
       </article>
 
       <article class="pcard" aria-label="Case study: email marketing">
@@ -214,56 +318,61 @@
       <p>Campaign performance and store results, shown in the platforms where the work happens. Tap any screenshot to see it full size.</p>
     </div>
 
-    <div class="rs-gallery-lead">
-      <figure class="rs-shot">
-        <button type="button" class="rs-zoom" data-zoom data-caption="2× revenue in 60 days — client broke their first $35K month." aria-label="Open screenshot 01 full size"><img src="__PROOF_04__" width="1112" height="670" loading="lazy" decoding="async" alt="2× revenue in 60 days — client broke their first $35K month."></button>
-        <figcaption><b>01</b><span>2× revenue in 60 days — client broke their first $35K month.</span></figcaption>
-      </figure>
+    <div class="rs-filters" role="group" aria-label="Filter screenshots">
+      <button type="button" class="rs-chip" data-filter="all" aria-pressed="true">All <span>12</span></button>
+      <button type="button" class="rs-chip" data-filter="shopify" aria-pressed="false">Shopify <span>6</span></button>
+      <button type="button" class="rs-chip" data-filter="meta" aria-pressed="false">Meta Ads <span>4</span></button>
+      <button type="button" class="rs-chip" data-filter="leads" aria-pressed="false">Lead gen <span>2</span></button>
     </div>
-    <div class="rs-gallery">
-      <figure class="rs-shot">
-        <button type="button" class="rs-zoom" data-zoom data-caption="$68K in conversion value from $2.4K ad spend — 28× blended ROAS." aria-label="Open screenshot 02 full size"><img src="__PROOF_05__" width="1005" height="815" loading="lazy" decoding="async" alt="$68K in conversion value from $2.4K ad spend — 28× blended ROAS."></button>
-        <figcaption><b>02</b><span>$68K in conversion value from $2.4K ad spend — 28× blended ROAS.</span></figcaption>
+    <p class="rs-sr" id="rsLive" aria-live="polite"></p>
+    <div class="rs-grid" id="rsGrid">
+      <figure class="rs-card" id="shot-4" data-cat="shopify" data-title="2× revenue in 60 days" data-caption="Client broke their first $35K month.">
+        <button type="button" class="rs-zoom" aria-label="Open full size: 2× revenue in 60 days"><img src="__PROOF_04__" width="1112" height="670" loading="lazy" decoding="async" alt="2× revenue in 60 days. Client broke their first $35K month."></button>
+        <figcaption><span class="rs-card-tag">Shopify</span><b class="rs-card-title">2× revenue in 60 days</b><span class="rs-card-cap">Client broke their first $35K month.</span></figcaption>
       </figure>
-      <figure class="rs-shot">
-        <button type="button" class="rs-zoom" data-zoom data-caption="4,056 leads from a single lead-gen campaign." aria-label="Open screenshot 03 full size"><img src="__PROOF_03__" width="1110" height="560" loading="lazy" decoding="async" alt="4,056 leads from a single lead-gen campaign."></button>
-        <figcaption><b>03</b><span>4,056 leads from a single lead-gen campaign.</span></figcaption>
+      <figure class="rs-card" id="shot-5" data-cat="meta" data-title="$68K from $2.4K in ad spend" data-caption="$68K in conversion value from $2.4K ad spend, a 28× blended ROAS.">
+        <button type="button" class="rs-zoom" aria-label="Open full size: $68K from $2.4K in ad spend"><img src="__PROOF_05__" width="1005" height="815" loading="lazy" decoding="async" alt="$68K from $2.4K in ad spend. $68K in conversion value from $2.4K ad spend, a 28× blended ROAS."></button>
+        <figcaption><span class="rs-card-tag">Meta Ads</span><b class="rs-card-title">$68K from $2.4K in ad spend</b><span class="rs-card-cap">$68K in conversion value from $2.4K ad spend, a 28× blended ROAS.</span></figcaption>
       </figure>
-      <figure class="rs-shot">
-        <button type="button" class="rs-zoom" data-zoom data-caption="Conversion rate up to 11.45% on top retargeting segment." aria-label="Open screenshot 04 full size"><img src="__PROOF_07__" width="1113" height="1150" loading="lazy" decoding="async" alt="Conversion rate up to 11.45% on top retargeting segment."></button>
-        <figcaption><b>04</b><span>Conversion rate up to 11.45% on top retargeting segment.</span></figcaption>
+      <figure class="rs-card" id="shot-3" data-cat="leads" data-title="4,056 leads from one campaign" data-caption="4,056 leads from a single lead-gen campaign.">
+        <button type="button" class="rs-zoom" aria-label="Open full size: 4,056 leads from one campaign"><img src="__PROOF_03__" width="1110" height="560" loading="lazy" decoding="async" alt="4,056 leads from one campaign. 4,056 leads from a single lead-gen campaign."></button>
+        <figcaption><span class="rs-card-tag">Lead gen</span><b class="rs-card-title">4,056 leads from one campaign</b><span class="rs-card-cap">4,056 leads from a single lead-gen campaign.</span></figcaption>
       </figure>
-      <figure class="rs-shot">
-        <button type="button" class="rs-zoom" data-zoom data-caption="Scaling individual campaigns to 89× purchase ROAS." aria-label="Open screenshot 05 full size"><img src="__PROOF_01__" width="1284" height="310" loading="lazy" decoding="async" alt="Scaling individual campaigns to 89× purchase ROAS."></button>
-        <figcaption><b>05</b><span>Scaling individual campaigns to 89× purchase ROAS.</span></figcaption>
+      <figure class="rs-card" id="shot-7" data-cat="shopify" data-title="11.45% conversion rate" data-caption="Conversion rate up to 11.45% on the top retargeting segment.">
+        <button type="button" class="rs-zoom" aria-label="Open full size: 11.45% conversion rate"><img src="__PROOF_07__" width="1113" height="1150" loading="lazy" decoding="async" alt="11.45% conversion rate. Conversion rate up to 11.45% on the top retargeting segment."></button>
+        <figcaption><span class="rs-card-tag">Shopify</span><b class="rs-card-title">11.45% conversion rate</b><span class="rs-card-cap">Conversion rate up to 11.45% on the top retargeting segment.</span></figcaption>
       </figure>
-      <figure class="rs-shot">
-        <button type="button" class="rs-zoom" data-zoom data-caption="1,508% ROAS on a single hero ad — $18.8K conversion value." aria-label="Open screenshot 06 full size"><img src="__PROOF_02__" width="624" height="111" loading="lazy" decoding="async" alt="1,508% ROAS on a single hero ad — $18.8K conversion value."></button>
-        <figcaption><b>06</b><span>1,508% ROAS on a single hero ad — $18.8K conversion value.</span></figcaption>
+      <figure class="rs-card" id="shot-1" data-cat="meta" data-title="89× purchase ROAS" data-caption="Scaling individual campaigns to 89× purchase ROAS.">
+        <button type="button" class="rs-zoom" aria-label="Open full size: 89× purchase ROAS"><img src="__PROOF_01__" width="1284" height="310" loading="lazy" decoding="async" alt="89× purchase ROAS. Scaling individual campaigns to 89× purchase ROAS."></button>
+        <figcaption><span class="rs-card-tag">Meta Ads</span><b class="rs-card-title">89× purchase ROAS</b><span class="rs-card-cap">Scaling individual campaigns to 89× purchase ROAS.</span></figcaption>
       </figure>
-      <figure class="rs-shot">
-        <button type="button" class="rs-zoom" data-zoom data-caption="Shopify store green for 4 straight months under our system." aria-label="Open screenshot 07 full size"><img src="__PROOF_06__" width="460" height="690" loading="lazy" decoding="async" alt="Shopify store green for 4 straight months under our system."></button>
-        <figcaption><b>07</b><span>Shopify store green for 4 straight months under our system.</span></figcaption>
+      <figure class="rs-card" id="shot-2" data-cat="meta" data-title="1,508% ROAS on a hero ad" data-caption="1,508% ROAS on a single hero ad, with $18.8K in conversion value.">
+        <button type="button" class="rs-zoom" aria-label="Open full size: 1,508% ROAS on a hero ad"><img src="__PROOF_02__" width="624" height="111" loading="lazy" decoding="async" alt="1,508% ROAS on a hero ad. 1,508% ROAS on a single hero ad, with $18.8K in conversion value."></button>
+        <figcaption><span class="rs-card-tag">Meta Ads</span><b class="rs-card-title">1,508% ROAS on a hero ad</b><span class="rs-card-cap">1,508% ROAS on a single hero ad, with $18.8K in conversion value.</span></figcaption>
       </figure>
-      <figure class="rs-shot">
-        <button type="button" class="rs-zoom" data-zoom data-caption="$116,355 in sales and 1,300 orders in 30 days — up 79% and 74% on the period before." aria-label="Open screenshot 08 full size"><img src="__PROOF_08__" width="1000" height="860" loading="lazy" decoding="async" alt="$116,355 in sales and 1,300 orders in 30 days — up 79% and 74% on the period before."></button>
-        <figcaption><b>08</b><span>$116,355 in sales and 1,300 orders in 30 days — up 79% and 74% on the period before.</span></figcaption>
+      <figure class="rs-card" id="shot-6" data-cat="shopify" data-title="4 straight months in the green" data-caption="Shopify store green for 4 straight months under our system.">
+        <button type="button" class="rs-zoom" aria-label="Open full size: 4 straight months in the green"><img src="__PROOF_06__" width="460" height="690" loading="lazy" decoding="async" alt="4 straight months in the green. Shopify store green for 4 straight months under our system."></button>
+        <figcaption><span class="rs-card-tag">Shopify</span><b class="rs-card-title">4 straight months in the green</b><span class="rs-card-cap">Shopify store green for 4 straight months under our system.</span></figcaption>
       </figure>
-      <figure class="rs-shot">
-        <button type="button" class="rs-zoom" data-zoom data-caption="$72,804 generated from ads alone in 60 days — individual campaigns at 74×, 78× and 89× purchase ROAS." aria-label="Open screenshot 09 full size"><img src="__PROOF_09__" width="1000" height="470" loading="lazy" decoding="async" alt="$72,804 generated from ads alone in 60 days — individual campaigns at 74×, 78× and 89× purchase ROAS."></button>
-        <figcaption><b>09</b><span>$72,804 generated from ads alone in 60 days — individual campaigns at 74×, 78× and 89× purchase ROAS.</span></figcaption>
+      <figure class="rs-card" id="shot-8" data-cat="shopify" data-title="$116K in 30 days" data-caption="$116,355 in sales and 1,300 orders in 30 days, up 79% and 74% on the period before.">
+        <button type="button" class="rs-zoom" aria-label="Open full size: $116K in 30 days"><img src="__PROOF_08__" width="1000" height="860" loading="lazy" decoding="async" alt="$116K in 30 days. $116,355 in sales and 1,300 orders in 30 days, up 79% and 74% on the period before."></button>
+        <figcaption><span class="rs-card-tag">Shopify</span><b class="rs-card-title">$116K in 30 days</b><span class="rs-card-cap">$116,355 in sales and 1,300 orders in 30 days, up 79% and 74% on the period before.</span></figcaption>
       </figure>
-      <figure class="rs-shot">
-        <button type="button" class="rs-zoom" data-zoom data-caption="$49,834 in 7 days — 370 orders at a 12.84% conversion rate, +171% week over week." aria-label="Open screenshot 10 full size"><img src="__PROOF_10__" width="1000" height="830" loading="lazy" decoding="async" alt="$49,834 in 7 days — 370 orders at a 12.84% conversion rate, +171% week over week."></button>
-        <figcaption><b>10</b><span>$49,834 in 7 days — 370 orders at a 12.84% conversion rate, +171% week over week.</span></figcaption>
+      <figure class="rs-card" id="shot-9" data-cat="meta" data-title="$72.8K from ads in 60 days" data-caption="$72,804 generated from ads alone in 60 days, with campaigns at 74×, 78× and 89× purchase ROAS.">
+        <button type="button" class="rs-zoom" aria-label="Open full size: $72.8K from ads in 60 days"><img src="__PROOF_09__" width="1000" height="470" loading="lazy" decoding="async" alt="$72.8K from ads in 60 days. $72,804 generated from ads alone in 60 days, with campaigns at 74×, 78× and 89× purchase ROAS."></button>
+        <figcaption><span class="rs-card-tag">Meta Ads</span><b class="rs-card-title">$72.8K from ads in 60 days</b><span class="rs-card-cap">$72,804 generated from ads alone in 60 days, with campaigns at 74×, 78× and 89× purchase ROAS.</span></figcaption>
       </figure>
-      <figure class="rs-shot">
-        <button type="button" class="rs-zoom" data-zoom data-caption="Client shoutout: $71,595 gross sales (+165%) to open Q4, plus 115 qualified website leads at $21.51 each." aria-label="Open screenshot 11 full size"><img src="__PROOF_11__" width="1000" height="1579" loading="lazy" decoding="async" alt="Client shoutout: $71,595 gross sales (+165%) to open Q4, plus 115 qualified website leads at $21.51 each."></button>
-        <figcaption><b>11</b><span>Client shoutout: $71,595 gross sales (+165%) to open Q4, plus 115 qualified website leads at $21.51 each.</span></figcaption>
+      <figure class="rs-card" id="shot-10" data-cat="shopify" data-title="$49.8K in 7 days" data-caption="$49,834 in 7 days: 370 orders at a 12.84% conversion rate, +171% week over week.">
+        <button type="button" class="rs-zoom" aria-label="Open full size: $49.8K in 7 days"><img src="__PROOF_10__" width="1000" height="830" loading="lazy" decoding="async" alt="$49.8K in 7 days. $49,834 in 7 days: 370 orders at a 12.84% conversion rate, +171% week over week."></button>
+        <figcaption><span class="rs-card-tag">Shopify</span><b class="rs-card-title">$49.8K in 7 days</b><span class="rs-card-cap">$49,834 in 7 days: 370 orders at a 12.84% conversion rate, +171% week over week.</span></figcaption>
       </figure>
-      <figure class="rs-shot">
-        <button type="button" class="rs-zoom" data-zoom data-caption="Lead-gen client closing a $4,000 job from a single lead." aria-label="Open screenshot 12 full size"><img src="__PROOF_12__" width="1000" height="660" loading="lazy" decoding="async" alt="Lead-gen client closing a $4,000 job from a single lead."></button>
-        <figcaption><b>12</b><span>Lead-gen client closing a $4,000 job from a single lead.</span></figcaption>
+      <figure class="rs-card" id="shot-11" data-cat="shopify" data-title="$71.6K to open Q4" data-caption="Client shoutout: $71,595 gross sales (+165%) to open Q4, plus 115 qualified website leads at $21.51 each.">
+        <button type="button" class="rs-zoom" aria-label="Open full size: $71.6K to open Q4"><img src="__PROOF_11__" width="1000" height="1579" loading="lazy" decoding="async" alt="$71.6K to open Q4. Client shoutout: $71,595 gross sales (+165%) to open Q4, plus 115 qualified website leads at $21.51 each."></button>
+        <figcaption><span class="rs-card-tag">Shopify</span><b class="rs-card-title">$71.6K to open Q4</b><span class="rs-card-cap">Client shoutout: $71,595 gross sales (+165%) to open Q4, plus 115 qualified website leads at $21.51 each.</span></figcaption>
+      </figure>
+      <figure class="rs-card" id="shot-12" data-cat="leads" data-title="A $4,000 job from one lead" data-caption="Lead-gen client closing a $4,000 job from a single lead.">
+        <button type="button" class="rs-zoom" aria-label="Open full size: A $4,000 job from one lead"><img src="__PROOF_12__" width="1000" height="660" loading="lazy" decoding="async" alt="A $4,000 job from one lead. Lead-gen client closing a $4,000 job from a single lead."></button>
+        <figcaption><span class="rs-card-tag">Lead gen</span><b class="rs-card-title">A $4,000 job from one lead</b><span class="rs-card-cap">Lead-gen client closing a $4,000 job from a single lead.</span></figcaption>
       </figure>
     </div>
   </div>
@@ -305,10 +414,17 @@
 </footer>
 </main>
 
-<dialog class="rs-lightbox" id="rsLightbox" aria-label="Screenshot, full size">
-  <button type="button" class="contact-close rs-close" aria-label="Close">×</button>
-  <img alt="">
-  <p></p>
+<dialog class="rs-lightbox" id="rsLightbox" aria-labelledby="rsLbTitle">
+  <div class="rs-lb-top">
+    <span class="rs-lb-count" id="rsLbCount">1 / 12</span>
+    <button type="button" class="rs-lb-btn" data-close aria-label="Close">×</button>
+  </div>
+  <div class="rs-lb-stage"><img alt=""></div>
+  <div class="rs-lb-bottom">
+    <button type="button" class="rs-lb-btn" data-dir="-1" aria-label="Previous screenshot">←</button>
+    <div class="rs-lb-text"><b id="rsLbTitle"></b><p></p></div>
+    <button type="button" class="rs-lb-btn" data-dir="1" aria-label="Next screenshot">→</button>
+  </div>
 </dialog>
 
 <script>
@@ -324,16 +440,59 @@
     requestAnimationFrame(tick);
   })();
 
-  /* ---- open a screenshot full size ---- */
+  /* ---- screenshot filters and the full-size viewer ---- */
   (function(){
-    var d=document.getElementById("rsLightbox"); if(!d||typeof d.showModal!=="function") return;
-    var big=d.querySelector("img"), cap=d.querySelector("p");
-    document.querySelectorAll("[data-zoom]").forEach(function(b){
-      b.addEventListener("click",function(){ var i=b.querySelector("img");
-        big.src=i.currentSrc||i.src; big.alt=i.alt; cap.textContent=b.getAttribute("data-caption")||""; d.showModal(); });
+    var grid=document.getElementById("rsGrid"); if(!grid) return;
+    var cards=[].slice.call(grid.querySelectorAll(".rs-card"));
+    var chips=[].slice.call(document.querySelectorAll(".rs-chip"));
+    var live=document.getElementById("rsLive");
+    chips.forEach(function(chip){
+      chip.addEventListener("click",function(){
+        var f=chip.getAttribute("data-filter"), n=0;
+        chips.forEach(function(c){ c.setAttribute("aria-pressed",String(c===chip)); });
+        cards.forEach(function(card){ var on=f==="all"||card.getAttribute("data-cat")===f; card.hidden=!on; if(on) n++; });
+        if(live) live.textContent="Showing "+n+" screenshot"+(n===1?"":"s");
+      });
     });
-    d.querySelector(".rs-close").addEventListener("click",function(){ d.close(); });
+
+    var d=document.getElementById("rsLightbox"); if(!d||typeof d.showModal!=="function") return;
+    var big=d.querySelector(".rs-lb-stage img"), title=d.querySelector(".rs-lb-text b"),
+        cap=d.querySelector(".rs-lb-text p"), count=d.querySelector(".rs-lb-count");
+    var list=[], at=0;
+    function show(i){
+      at=(i+list.length)%list.length;
+      var card=list[at], img=card.querySelector("img");
+      big.src=img.src; big.alt=img.alt;
+      title.textContent=card.getAttribute("data-title");
+      cap.textContent=card.getAttribute("data-caption");
+      count.textContent=(at+1)+" / "+list.length;
+    }
+    function open(card,pool){ list=pool; show(Math.max(0,pool.indexOf(card))); if(!d.open) d.showModal(); }
+    cards.forEach(function(card){
+      card.querySelector(".rs-zoom").addEventListener("click",function(){
+        open(card,cards.filter(function(c){ return !c.hidden; }));
+      });
+    });
+    document.querySelectorAll("[data-open-shot]").forEach(function(b){
+      b.addEventListener("click",function(){
+        var card=document.getElementById("shot-"+b.getAttribute("data-open-shot")); if(card) open(card,cards);
+      });
+    });
+    d.querySelectorAll("[data-dir]").forEach(function(b){
+      b.addEventListener("click",function(){ show(at+Number(b.getAttribute("data-dir"))); });
+    });
+    d.querySelector("[data-close]").addEventListener("click",function(){ d.close(); });
     d.addEventListener("click",function(e){ if(e.target===d) d.close(); });
+    d.addEventListener("keydown",function(e){
+      if(e.key==="ArrowRight"){ show(at+1); e.preventDefault(); }
+      else if(e.key==="ArrowLeft"){ show(at-1); e.preventDefault(); }
+    });
+    var x0=null;
+    d.addEventListener("touchstart",function(e){ x0=e.touches[0].clientX; },{passive:true});
+    d.addEventListener("touchend",function(e){
+      if(x0===null) return; var dx=e.changedTouches[0].clientX-x0; x0=null;
+      if(Math.abs(dx)>50) show(at+(dx<0?1:-1));
+    });
   })();
 </script>
 <script>
