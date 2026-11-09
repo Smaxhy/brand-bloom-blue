@@ -1053,7 +1053,7 @@ export function Scraper({
           syncRevealProgress();
         }
         if (driven.current.size && !stopRequested.current)
-          await new Promise((res) => setTimeout(res, progressed ? 250 : 4000));
+          await new Promise((res) => setTimeout(res, progressed ? 2000 : 5000));
       }
     } finally {
       driving.current = false;
