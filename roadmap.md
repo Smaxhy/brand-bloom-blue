@@ -121,3 +121,8 @@
 - [x] Merge new archived admin changes without reverting existing data, website or security protections.
 - [x] Verify 272 regression tests, build, Results navigation and admin sign-in without sending emails or paid searches.
 - [ ] November 8 signed-in live discovery verification: requires preview sign-in and optional Brave configuration; no emails or paid searches performed.
+
+# Sequence overlap after deletion
+- [x] Keep sent history when a sequence is deleted or a person is removed, archive deleted sequences instead of erasing them, and block re-adding anyone emailed in the last 90 days.
+- [x] Verify 276 tests, build, and the migration plus delete behaviour on a local Postgres 16 replay of all migrations; no emails sent.
+- [ ] Apply migration 0021 in Lovable Cloud and verify Delete sequence signed in; until applied, Delete shows an error and deletes nothing. Sequences deleted before this fix already lost their history.

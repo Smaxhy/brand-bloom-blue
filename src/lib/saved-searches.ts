@@ -132,12 +132,14 @@ export async function runSavedSearch(env: Env, db: Db, ss: SavedSearch): Promise
   // Mark everything as seen (even the ones we don't enrich this run get retried next time? No — only mark enriched ones).
 
   const todo = fresh.slice(0, MAX_ENRICH_PER_RUN);
-  const seq = ss.auto_enroll_sequence_id
+  const linked = ss.auto_enroll_sequence_id
     ? await db.one<{ id: string; mailbox_ids: string[]; status: string }>(
         "sequences",
         `id=eq.${ss.auto_enroll_sequence_id}&select=id,mailbox_ids,status`,
       )
     : null;
+  // A deleted (archived) sequence never takes new people, even if the link survived.
+  const seq = linked && linked.status !== "archived" ? linked : null;
   let i = 0;
 
   const profiles = new Map<string, Awaited<ReturnType<typeof enrichSite>>>();
