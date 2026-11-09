@@ -4,6 +4,13 @@
   ],
   "capabilities": [
     {
+      "capability": "outreach-scraper-nov9-update",
+      "source": "inspirova-outreach-and-scraper-update.zip",
+      "outcome": "Inspected incremental archive: retained sent history on sequence deletion, automatic bounced Raw Data removal, shared scrape limit and background-page recovery. Existing Cloud records, auth, providers, endpoints, secrets and website remain in place.",
+      "status": "reviewing",
+      "next_action": "Merge reviewed code, apply additive migrations and verify changed flows without outbound sends or paid searches."
+    },
+    {
       "capability": "admin-nov8-update",
       "source": "inspirova-admin-update-2026-11-08.zip",
       "outcome": "Merged genuinely new November 8 changes: JSON-LD/escaped email extraction, same-site contact and sitemap discovery with page/deadline bounds, exact-token AI recovery, extraction cache version 4, secure optional Brave settings/status and serialized Serper\u2192Brave\u2192paid-only SerpApi fallback. Preserved Inboxes, Pipeline deletions/full quote details, cleanup, Stop, frozen send snapshots, company leases, request limits, encrypted credentials, managed Cloud schema/accounts/data and public website. 272 tests pass; preview build OK; Results link opens and admin sign-in renders without runtime errors.",
