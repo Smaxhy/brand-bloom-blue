@@ -1,7 +1,8 @@
 # Public website refresh
 # November 9 outreach and scraper update
-- [ ] Install safe history preservation, bounced Raw Data cleanup and larger/background scrape changes while retaining current website, security, data and daily mailbox cap.
-- [ ] Verify regression tests, migrations and signed-in admin flows without emails or paid searches.
+- [x] Install history-preserving sequence deletion, automatic bounced Raw Data cleanup, shared 2,000-result scrape ceiling and background/offline recovery; retain Stop, provider safeguards, website, security and 1,000 daily mailbox cap.
+- [x] Verify 286 regression tests, transactional database history/bounce tests, cleaned saved Raw Data, preview build and public/admin entry rendering without emails or paid searches.
+- [ ] Signed-in live scraper/recovery verification requires an available authorized preview session; own-account mint found no matching account. Keeping Scraper mounted across admin tabs was omitted pending Stop/lifecycle verification.
 
 # Public website refresh
 - [x] Make website quotes deletable from Pipeline with account-specific dismissals; confirmed deletion survives reopening and refresh, original requests retained, temporary verification data removed.
