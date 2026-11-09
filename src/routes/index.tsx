@@ -3,6 +3,10 @@ import { useEffect, useRef } from "react";
 import siteHtml from "../inspirova.html?raw";
 import logo from "@/assets/inspirova-logo.png";
 import proof from "@/assets/proof-1.png";
+import caseDtc from "@/assets/results/proof-05.webp";
+import caseLeads from "@/assets/results/proof-03.webp";
+import caseShopify from "@/assets/results/proof-07.webp";
+import clientMessage from "@/assets/results/proof-12.webp";
 import publicCss from "../styles.css?url";
 
 export const Route = createFileRoute("/")({
@@ -20,7 +24,14 @@ export const Route = createFileRoute("/")({
 function HomePage() {
   const frame = useRef<HTMLIFrameElement>(null);
   const navigate = useNavigate({ from: "/" });
-  const renderedHtml = siteHtml.replaceAll("__LOGO__", logo).replaceAll("__PROOF__", proof).replaceAll("__PUBLIC_CSS__", publicCss).replace(
+  const renderedHtml = siteHtml
+    .replaceAll("__LOGO__", logo)
+    .replaceAll("__PROOF__", proof)
+    .replaceAll("__CASE_DTC__", caseDtc)
+    .replaceAll("__CASE_LEADS__", caseLeads)
+    .replaceAll("__CASE_SHOPIFY__", caseShopify)
+    .replaceAll("__CLIENT_MSG__", clientMessage)
+    .replaceAll("__PUBLIC_CSS__", publicCss).replace(
     "</body>",
     `<script>
       document.querySelectorAll('a[href^="#"]').forEach(function(link) {
@@ -73,7 +84,9 @@ function HomePage() {
       id="main-content"
       srcDoc={renderedHtml}
       className="block h-screen w-px min-w-full max-w-full border-0"
-      sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
+      // allow-forms: without it the browser blocks the contact form's submit
+      // event, so its script (which posts to /api/public/contact) never runs.
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
     />
   );
 }

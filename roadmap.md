@@ -137,3 +137,10 @@
 - [x] Keep the Scraper running when switching admin pages; reveal scans and Apify/own-Maps polling pause while the tab is hidden, asleep or offline and continue after, instead of giving up or cancelling Apify runs.
 - [x] Verify 284 tests, typecheck, build and the signed-out admin page in Chromium with simulated tab switching; no paid searches or emails.
 - [ ] Signed-in check of a 1,000+ scrape across page and tab switches; closing the tab entirely still needs the background timer for reveal scans.
+
+# Homepage redesign with installed design skills
+- [x] Install 23 vetted design and marketing skills (Anthropic, impeccable, hallmark, marketingskills, Addy Osmani) into .claude/skills with licences; no hooks.
+- [x] Redesign the homepage as "the honest quote" inside its existing HTML document: real client screenshots as proof, itemised services, sticky estimate beside the calculator, all script IDs and the navigation bridge preserved; add the missing phone menu button.
+- [x] Fix the contact form never submitting (iframe sandbox lacked allow-forms).
+- [x] Verify calculator math, bundles, slider, quote and contact validation and intercepted submission, dialog, phone menu, no sideways scroll; independent review "fix" then "ship" on the six material findings. No real emails or quotes sent.
+- [ ] Signed-in check of the published homepage on Lovable, including a real quote and contact submission.
