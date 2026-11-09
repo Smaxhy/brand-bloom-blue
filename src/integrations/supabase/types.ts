@@ -918,6 +918,10 @@ export type Database = {
         }
         Returns: string
       }
+      delete_sequence_keep_history: {
+        Args: { _sequence_id: string }
+        Returns: number
+      }
       drain_outreach_scheduler: { Args: never; Returns: boolean }
       has_role: {
         Args: {
