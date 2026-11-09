@@ -29,10 +29,14 @@ function HomePage() {
           if (target) { event.preventDefault(); target.scrollIntoView({ block: 'start' }); }
         });
       });
+      // Links from the results page land here as /#how, /#faq, /#contact and so on.
       var initialAnchor = window.parent.location.hash.slice(1);
-      if (initialAnchor === 'quoteForm' || initialAnchor === 'pricing') {
+      if (['quoteForm', 'pricing', 'services', 'how', 'faq', 'contact'].indexOf(initialAnchor) !== -1) {
         window.addEventListener('load', function() {
-          setTimeout(function() { document.getElementById(initialAnchor)?.scrollIntoView({ block: 'start' }); }, 100);
+          setTimeout(function() {
+            if (initialAnchor === 'contact') { document.querySelector('[data-open-contact]')?.click(); return; }
+            document.getElementById(initialAnchor)?.scrollIntoView({ block: 'start' });
+          }, 100);
         });
       }
       // Route any internal link (e.g. /results, /admin) through the parent SPA
