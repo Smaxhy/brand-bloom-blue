@@ -3,71 +3,26 @@ import { useEffect, useRef } from "react";
 import siteHtml from "../inspirova.html?raw";
 import logo from "@/assets/inspirova-logo.png";
 import proof from "@/assets/proof-1.png";
-import caseDtc from "@/assets/results/proof-05.webp";
-import caseLeads from "@/assets/results/proof-03.webp";
-import caseShopify from "@/assets/results/proof-07.webp";
-import reel1 from "@/assets/results/proof-04.webp";
-import reel2 from "@/assets/results/proof-08.webp";
-import reel3 from "@/assets/results/proof-10.webp";
-import reel4 from "@/assets/results/proof-09.webp";
-import reel5 from "@/assets/results/proof-06.webp";
-import reel6 from "@/assets/results/proof-11.webp";
 import publicCss from "../styles.css?url";
 
-// Search engines read the parent page, not the iframe, so the business details live here.
-const organizationJsonLd = {
-  "@context": "https://schema.org",
-  "@type": "ProfessionalService",
-  name: "Inspirova",
-  description:
-    "Growth marketing agency for service businesses and e-commerce brands: paid ads, websites, email and SMS automation, tracking and SEO, for one flat monthly fee.",
-  email: "Management@inspirovamarketing.com",
-  address: { "@type": "PostalAddress", addressCountry: "BE" },
-  areaServed: ["Belgium", "Europe"],
-  founder: { "@type": "Person", name: "Max", email: "max@inspirovamarketing.com" },
-};
-
 export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title: "Inspirova — Marketing That Moves Brands" },
-      {
-        name: "description",
-        content:
-          "Inspirova builds paid media, websites, automation and creative that help ambitious brands grow.",
-      },
-      { property: "og:title", content: "Inspirova — Marketing That Moves Brands" },
-      {
-        property: "og:description",
-        content: "Paid media, websites, automation and creative built for measurable growth.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-    scripts: [{ type: "application/ld+json", children: JSON.stringify(organizationJsonLd) }],
-  }),
+  head: () => ({ meta: [
+    { title: "Inspirova — Marketing That Moves Brands" },
+    { name: "description", content: "Inspirova builds paid media, websites, automation and creative that help ambitious brands grow." },
+    { property: "og:title", content: "Inspirova — Marketing That Moves Brands" },
+    { property: "og:description", content: "Paid media, websites, automation and creative built for measurable growth." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary_large_image" },
+  ] }),
   component: HomePage,
 });
 
 function HomePage() {
   const frame = useRef<HTMLIFrameElement>(null);
   const navigate = useNavigate({ from: "/" });
-  const renderedHtml = siteHtml
-    .replaceAll("__LOGO__", logo)
-    .replaceAll("__PROOF__", proof)
-    .replaceAll("__CASE_DTC__", caseDtc)
-    .replaceAll("__CASE_LEADS__", caseLeads)
-    .replaceAll("__CASE_SHOPIFY__", caseShopify)
-    .replaceAll("__REEL_1__", reel1)
-    .replaceAll("__REEL_2__", reel2)
-    .replaceAll("__REEL_3__", reel3)
-    .replaceAll("__REEL_4__", reel4)
-    .replaceAll("__REEL_5__", reel5)
-    .replaceAll("__REEL_6__", reel6)
-    .replaceAll("__PUBLIC_CSS__", publicCss)
-    .replace(
-      "</body>",
-      `<script>
+  const renderedHtml = siteHtml.replaceAll("__LOGO__", logo).replaceAll("__PROOF__", proof).replaceAll("__PUBLIC_CSS__", publicCss).replace(
+    "</body>",
+    `<script>
       document.querySelectorAll('a[href^="#"]').forEach(function(link) {
         link.addEventListener('click', function(event) {
           var target = document.getElementById(link.getAttribute('href').slice(1));
@@ -75,7 +30,7 @@ function HomePage() {
         });
       });
       var initialAnchor = window.parent.location.hash.slice(1);
-      if (['quoteForm', 'pricing', 'services', 'how', 'results', 'faq'].indexOf(initialAnchor) !== -1) {
+      if (initialAnchor === 'quoteForm' || initialAnchor === 'pricing') {
         window.addEventListener('load', function() {
           setTimeout(function() { document.getElementById(initialAnchor)?.scrollIntoView({ block: 'start' }); }, 100);
         });
@@ -92,7 +47,7 @@ function HomePage() {
         });
       });
     </script></body>`,
-    );
+  );
 
   useEffect(() => {
     const allowedPaths = ["/results", "/admin", "/privacy"];
@@ -118,9 +73,7 @@ function HomePage() {
       id="main-content"
       srcDoc={renderedHtml}
       className="block h-screen w-px min-w-full max-w-full border-0"
-      // allow-forms: without it the browser blocks the contact form's submit
-      // event, so its script (which posts to /api/public/contact) never runs.
-      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
+      sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
     />
   );
 }
