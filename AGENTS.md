@@ -6,7 +6,7 @@
 - Email dispatch checks a per-run time budget before claiming another recipient or sleeping; keep reply/opt-out sync fail-closed and existing atomic claims while carrying remaining work into later runs.
 - Quote/contact writes use bounded same-origin requests and atomic server-only request counters; admin proxies require explicit verified roles and fail closed if abuse protection is unavailable.
 - Keep the public homepage inside its existing HTML document and iframe navigation bridge; this preserves its calculator and quote interactions.
-- The results page (src/results.html) renders through the same iframe pattern and reuses the homepage's first stylesheet block at render time; keep shared header, button, card and footer styles in inspirova.html so both pages stay identical.
+- src/results.html uses the homepage iframe pattern and reuses its first style block; keep shared styles in inspirova.html.
 - Scope public editorial theme tokens to public pages so redesigns do not alter account-side CRM appearance.
 - When importing replacement archives, retain generated Cloud clients/types and existing migration tooling; archive copies may be stale and must not replace managed configuration or replay applied migrations.
 - Shared outreach integration credentials are admin/CEO-managed through authenticated server functions and encrypted in a server-only table; API requests and scheduled jobs resolve them without exposing stored values to browsers.
