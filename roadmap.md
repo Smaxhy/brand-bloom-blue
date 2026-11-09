@@ -126,3 +126,8 @@
 - [x] Keep sent history when a sequence is deleted or a person is removed, archive deleted sequences instead of erasing them, and block re-adding anyone emailed in the last 90 days.
 - [x] Verify 276 tests, build, and the migration plus delete behaviour on a local Postgres 16 replay of all migrations; no emails sent.
 - [ ] Apply migration 0021 in Lovable Cloud and verify Delete sequence signed in; until applied, Delete shows an error and deletes nothing. Sequences deleted before this fix already lost their history.
+
+# Automatic bounced contact removal
+- [x] Remove hard-bounced and confirmed-invalid addresses from every account's Raw Data automatically (on bounce and on every save), with a one-time cleanup of earlier bounces; opt-outs, domain-only suppressions and outreach history are untouched.
+- [x] Verify on a local Postgres 16 replay: sender bounce removes the row from all accounts with no tab open, stale tab saves are stripped and refreshed, mixed-case/mailto addresses match, 5,000-contact saves take ~30–60 ms; no emails sent.
+- [ ] Apply migration 0022 in Lovable Cloud (after 0021) and confirm a bounced contact disappears from Raw Data while signed in.
