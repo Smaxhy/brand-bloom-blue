@@ -931,6 +931,7 @@ export type Database = {
         Returns: boolean
       }
       is_team_member: { Args: { _uid: string }; Returns: boolean }
+      without_bounced_raw_contacts: { Args: { _data: Json }; Returns: Json }
     }
     Enums: {
       app_role: "admin" | "user" | "ceo"
