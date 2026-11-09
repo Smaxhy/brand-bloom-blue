@@ -106,7 +106,7 @@ describe("tab presence", () => {
     const listeners = new Map<string, Set<() => void>>();
     const on = (type: string, fn: () => void) => {
       if (!listeners.has(type)) listeners.set(type, new Set());
-      listeners.get(type)!.add(fn);
+      listeners.get(type)?.add(fn);
     };
     const off = (type: string, fn: () => void) => listeners.get(type)?.delete(fn);
     const fire = (type: string) => listeners.get(type)?.forEach((fn) => fn());

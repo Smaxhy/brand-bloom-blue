@@ -139,10 +139,11 @@ export async function apifyItems(
   datasetId: string,
   fallbackCity: string,
   fallbackIndustry: string,
-  limit = 1000,
+  limit = MAX_SCRAPE_RESULTS,
 ): Promise<PlaceBusiness[]> {
   const token = secret(env, "APIFY_TOKEN");
   if (!token) return [];
+  limit = Math.min(MAX_SCRAPE_RESULTS, Math.max(1, Math.floor(limit)));
   try {
     const res = await fetch(
       `${API}/datasets/${encodeURIComponent(datasetId)}/items?token=${encodeURIComponent(token)}&clean=true&limit=${limit}&fields=placeId,title,website,phone,phoneUnformatted,address,city,state,categoryName,totalScore,reviewsCount,permanentlyClosed,temporarilyClosed,location,url`,

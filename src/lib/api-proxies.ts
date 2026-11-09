@@ -337,7 +337,7 @@ async function apolloSearch(request: Request, env: Env): Promise<Response> {
 
   const queries = keywords.length ? keywords : [""]; // at least one (no keyword) query
   // Per-keyword target so a multi-keyword search still lands near `wanted` total.
-  const perQuery = Math.min(Math.ceil(wanted / queries.length) + 25, wanted);
+  const perQuery = Math.min(Math.ceil(wanted / queries.length) + 25, wanted, 200);
   const PER_PAGE = 100;
 
   const byId = new Map<string, ApolloPerson>();

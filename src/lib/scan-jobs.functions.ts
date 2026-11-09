@@ -29,8 +29,9 @@ export const scanJobAction = createServerFn({ method: "POST" })
       if (JSON.stringify(data.people).length > 1000000) throw new Error("This scan is too large. Use fewer businesses.");
       // Scans queue up and run oldest first in the background; only a runaway
       // number of unfinished ones is refused.
-      const active = await db.select("scan_jobs", `created_by=eq.${context.userId}&status=in.(queued,running)&select=id&limit=25`);
-      if (active.length >= 25) throw new Error("25 scans are still running. Stop a few under Recent scans, or let them finish in the background.");
+      // Keep the backend healthy: only a few unfinished scans at once per account.
+      const active = await db.select("scan_jobs", `created_by=eq.${context.userId}&status=in.(queued,running)&select=id&limit=3`);
+      if (active.length >= 3) throw new Error("3 scans are already running. Let one finish or stop one under Recent scans before starting another.");
       const [job] = await db.insert<import("./scan-jobs.server").ScanJob>("scan_jobs", { created_by: context.userId, label: data.label, people: data.people, total: data.people.length, options: data.options });
       if (!job) throw new Error("Could not save this scan.");
       return { job, produced: [], claimed: false };

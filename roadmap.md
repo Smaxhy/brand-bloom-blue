@@ -1,4 +1,10 @@
 # Public website refresh
+# November 9 outreach and scraper update
+- [x] Install history-preserving sequence deletion, automatic bounced Raw Data cleanup, shared 2,000-result scrape ceiling and background/offline recovery; retain Stop, provider safeguards, website, security and 1,000 daily mailbox cap.
+- [x] Verify 286 regression tests, transactional database history/bounce tests, cleaned saved Raw Data, preview build and public/admin entry rendering without emails or paid searches.
+- [ ] Signed-in live scraper/recovery verification requires an available authorized preview session; own-account mint found no matching account. Keeping Scraper mounted across admin tabs was omitted pending Stop/lifecycle verification.
+
+# Public website refresh
 - [x] Make website quotes deletable from Pipeline with account-specific dismissals; confirmed deletion survives reopening and refresh, original requests retained, temporary verification data removed.
 - [x] Add admin Inboxes with live GoHighLevel email conversations, sent bodies, reply status, search, older pages and one-minute refresh; verified real sent email and phone layout, 27 tests pass, no emails sent. New incoming reply arrival not exercised.
 - [x] Prevent browser autofill from filling quote/contact bot-trap fields and return field-specific validation errors; 20 tests pass and completed browser quote returns success. Removed temporary test entry; original visitor failure could not be reproduced.
@@ -121,28 +127,3 @@
 - [x] Merge new archived admin changes without reverting existing data, website or security protections.
 - [x] Verify 272 regression tests, build, Results navigation and admin sign-in without sending emails or paid searches.
 - [ ] November 8 signed-in live discovery verification: requires preview sign-in and optional Brave configuration; no emails or paid searches performed.
-
-# Sequence overlap after deletion
-- [x] Keep sent history when a sequence is deleted or a person is removed, archive deleted sequences instead of erasing them, and block re-adding anyone emailed in the last 90 days.
-- [x] Verify 276 tests, build, and the migration plus delete behaviour on a local Postgres 16 replay of all migrations; no emails sent.
-- [ ] Apply migration 0021 in Lovable Cloud and verify Delete sequence signed in; until applied, Delete shows an error and deletes nothing. Sequences deleted before this fix already lost their history.
-
-# Automatic bounced contact removal
-- [x] Remove hard-bounced and confirmed-invalid addresses from every account's Raw Data automatically (on bounce and on every save), with a one-time cleanup of earlier bounces; opt-outs, domain-only suppressions and outreach history are untouched.
-- [x] Verify on a local Postgres 16 replay: sender bounce removes the row from all accounts with no tab open, stale tab saves are stripped and refreshed, mixed-case/mailto addresses match, 5,000-contact saves take ~30–60 ms; no emails sent.
-- [ ] Apply migration 0022 in Lovable Cloud (after 0021) and confirm a bounced contact disappears from Raw Data while signed in.
-
-# Bigger scrapes that keep running in the background
-- [x] Raise every scrape limit to one shared 2,000 cap (Apollo was 500 and 200 per keyword, saved results 500, Google/Apify 1,000) and add 2,000 to the size picker.
-- [x] Keep the Scraper running when switching admin pages; reveal scans and Apify/own-Maps polling pause while the tab is hidden, asleep or offline and continue after, instead of giving up or cancelling Apify runs.
-- [x] Verify 284 tests, typecheck, build and the signed-out admin page in Chromium with simulated tab switching; no paid searches or emails.
-- [ ] Signed-in check of a 1,000+ scrape across page and tab switches; closing the tab entirely still needs the background timer for reveal scans.
-
-# Homepage redesign with installed design skills
-- [x] Install 23 vetted design and marketing skills (Anthropic, impeccable, hallmark, marketingskills, Addy Osmani) into .claude/skills with licences; no hooks.
-- [x] Redesign the homepage as "the honest quote" inside its existing HTML document: real client screenshots as proof, itemised services, sticky estimate beside the calculator, all script IDs and the navigation bridge preserved; add the missing phone menu button.
-- [x] Fix the contact form never submitting (iframe sandbox lacked allow-forms).
-- [x] Verify calculator math, bundles, slider, quote and contact validation and intercepted submission, dialog, phone menu, no sideways scroll; independent review "fix" then "ship" on the six material findings. No real emails or quotes sent.
-- [ ] Signed-in check of the published homepage on Lovable, including a real quote and contact submission.
-- [x] Redesign the results page in the same system (static revenue total, statement of highlights, case ledgers on the blue band, full-width wide screenshots, no numbered labels); verified desktop and phone with all images and no sideways scroll.
-- [ ] Confirm the "1,508×" hero-ad claim on the results page; its own text says 1,508% ROAS.

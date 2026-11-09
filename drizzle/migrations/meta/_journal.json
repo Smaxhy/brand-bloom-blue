@@ -152,15 +152,15 @@
     {
       "idx": 21,
       "version": "7",
-      "when": 1794212327010,
-      "tag": "0021_keep_outreach_history_on_delete",
+      "when": 1794214076496,
+      "tag": "0021_preserve_sequence_send_history",
       "breakpoints": true
     },
     {
       "idx": 22,
       "version": "7",
-      "when": 1794213600000,
-      "tag": "0022_auto_delete_bounced_raw_contacts",
+      "when": 1794214108791,
+      "tag": "0022_remove_bounced_raw_contacts",
       "breakpoints": true
     }
   ]

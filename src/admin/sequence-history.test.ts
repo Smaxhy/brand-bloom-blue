@@ -21,6 +21,7 @@ vi.mock("@/integrations/supabase/client", () => ({
         "like",
         "gte",
         "limit",
+        "range",
         "order",
         "delete",
         "update",
@@ -78,6 +79,14 @@ describe("deleting a sequence keeps its history", () => {
 });
 
 describe("people who can't be added to another sequence", () => {
+  it("includes sent addresses beyond the first history page", async () => {
+    mocks.rows.messages = (ops) => has(ops, "range", 0, 499)
+      ? Array.from({ length: 500 }, (_, i) => ({ leads: { email: `person${i}@biz.com` } }))
+      : [{ leads: { email: "later-page@biz.com" } }];
+    const blocked = await liveEnrolledEmails();
+    expect(blocked.size).toBe(501);
+    expect(blocked.has("later-page@biz.com")).toBe(true);
+  });
   it("includes running, possibly-sent and recently emailed people (also from deleted sequences)", async () => {
     mocks.rows.enrollments = (ops) =>
       has(ops, "in", "status", ["queued", "active", "paused"])
@@ -96,10 +105,11 @@ describe("people who can't be added to another sequence", () => {
       "running@biz.com",
     ]);
 
-    const msgs = mocks.calls.find((c) => c.table === "messages")!;
+    const msgs = mocks.calls.find((c) => c.table === "messages");
+    if (!msgs) throw new Error("Missing message history query");
     expect(has(msgs.ops, "eq", "direction", "out")).toBe(true);
     expect(has(msgs.ops, "in", "status", ["sent", "bounced"])).toBe(true);
-    const since = msgs.ops.find(([op]) => op === "gte")![1][1] as string;
+    const since = msgs.ops.find(([op]) => op === "gte")?.[1][1] as string;
     const days = (Date.now() - Date.parse(since)) / 86_400_000;
     expect(Math.round(days)).toBe(RECONTACT_COOLDOWN_DAYS);
   });

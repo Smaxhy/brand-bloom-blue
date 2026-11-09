@@ -4,6 +4,13 @@
   ],
   "capabilities": [
     {
+      "capability": "outreach-scraper-nov9-update",
+      "source": "inspirova-outreach-and-scraper-update.zip",
+      "outcome": "Inspected incremental archive: retained sent history on sequence deletion, automatic bounced Raw Data removal, shared scrape limit and background-page recovery. Existing Cloud records, auth, providers, endpoints, secrets and website remain in place.",
+      "status": "code_verified",
+      "next_action": "286 regression tests and transactional Cloud history/bounce checks pass; preview build/public/admin entry verified and existing bounced Raw Data cleaned. Daily mailbox cap remains 1,000; shared scrape result ceiling is 2,000 with Apollo per-keyword bound preserved. Signed-in live scraper recovery needs an authorized preview session; own-account mint found no matching account. Hidden-mounted Scraper tab persistence omitted until Stop/lifecycle can be verified. No emails, paid searches, scheduler activation or publication performed."
+    },
+    {
       "capability": "admin-nov8-update",
       "source": "inspirova-admin-update-2026-11-08.zip",
       "outcome": "Merged genuinely new November 8 changes: JSON-LD/escaped email extraction, same-site contact and sitemap discovery with page/deadline bounds, exact-token AI recovery, extraction cache version 4, secure optional Brave settings/status and serialized Serper\u2192Brave\u2192paid-only SerpApi fallback. Preserved Inboxes, Pipeline deletions/full quote details, cleanup, Stop, frozen send snapshots, company leases, request limits, encrypted credentials, managed Cloud schema/accounts/data and public website. 272 tests pass; preview build OK; Results link opens and admin sign-in renders without runtime errors.",

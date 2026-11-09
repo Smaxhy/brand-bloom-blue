@@ -918,6 +918,10 @@ export type Database = {
         }
         Returns: string
       }
+      delete_sequence_keep_history: {
+        Args: { _sequence_id: string }
+        Returns: number
+      }
       drain_outreach_scheduler: { Args: never; Returns: boolean }
       has_role: {
         Args: {
@@ -927,6 +931,7 @@ export type Database = {
         Returns: boolean
       }
       is_team_member: { Args: { _uid: string }; Returns: boolean }
+      without_bounced_raw_contacts: { Args: { _data: Json }; Returns: Json }
     }
     Enums: {
       app_role: "admin" | "user" | "ceo"

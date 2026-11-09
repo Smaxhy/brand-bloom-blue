@@ -1488,6 +1488,7 @@ export async function discoverLeads(
           error?: string;
           notes?: string[];
         } = { done: false, status: "pending" };
+        const jobId = st.jobId;
         const selfBudget = pollBudgetMs(10 * 60_000, wanted);
         const polled = await pollWhilePresent({
           initial: result,
@@ -1495,7 +1496,7 @@ export async function discoverLeads(
           budgetMs: selfBudget,
           onTick: (ms) => opts.onProgress?.("selfhost", Math.round(ms / 1000), 0),
           check: async () => {
-            const q = new URLSearchParams({ job: st.jobId!, city: filters.location, industry: kw, ...onlyNewParams });
+            const q = new URLSearchParams({ job: jobId, city: filters.location, industry: kw, ...onlyNewParams });
             const r = await authFetch(`/api/discover/gmaps/status?${q}`);
             return (await r.json()) as typeof result;
           },
@@ -1567,10 +1568,12 @@ export async function discoverLeads(
           done: false,
           status: "RUNNING",
         };
+        const runId = st.runId;
+        const datasetId = st.datasetId;
         const apifyStatus = async () => {
           const q = new URLSearchParams({
-            run: st.runId!,
-            dataset: st.datasetId!,
+            run: runId,
+            dataset: datasetId,
             city: filters.location,
             industry: kw,
             ...onlyNewParams,

@@ -137,8 +137,8 @@ export function RawData({
         start: (people) => startScan(people, { useClaude: false, usePaid: false, revealPhone: true, findLinkedin: false }, `Raw Data · ${people.length} businesses`, control.canContinue),
         step: (id) => stepScan(id, control.canContinue), status: (id) => scanStatus(id, true),
         canContinue: control.canContinue,
-        // The server step itself takes ~20 s; no need for a long pause between steps.
-        wait: () => new Promise((resolve) => setTimeout(resolve, 400)),
+        // Short breather between steps so large reveals never overload the backend.
+        wait: () => new Promise((resolve) => setTimeout(resolve, 2000)),
         onJob: setRevealJob, onRows: apply,
         onProgress: (done, total) => setRevealProgress({ done, total }),
       });
