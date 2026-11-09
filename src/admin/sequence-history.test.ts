@@ -79,6 +79,14 @@ describe("deleting a sequence keeps its history", () => {
 });
 
 describe("people who can't be added to another sequence", () => {
+  it("includes sent addresses beyond the first history page", async () => {
+    mocks.rows.messages = (ops) => has(ops, "range", 0, 499)
+      ? Array.from({ length: 500 }, (_, i) => ({ leads: { email: `person${i}@biz.com` } }))
+      : [{ leads: { email: "later-page@biz.com" } }];
+    const blocked = await liveEnrolledEmails();
+    expect(blocked.size).toBe(501);
+    expect(blocked.has("later-page@biz.com")).toBe(true);
+  });
   it("includes running, possibly-sent and recently emailed people (also from deleted sequences)", async () => {
     mocks.rows.enrollments = (ops) =>
       has(ops, "in", "status", ["queued", "active", "paused"])
