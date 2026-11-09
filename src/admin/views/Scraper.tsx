@@ -63,6 +63,8 @@ import { Panel, Field, inputCls, Btn } from "../ui";
 import { Button } from "@/components/ui/button";
 import { SavedSearchesPanel, SaveSearchModal } from "./SavedSearches";
 import { RecentScans } from "./RecentScans";
+import { MAX_SCRAPE_RESULTS } from "@/lib/scrape-limits";
+import { pageAway, waitUntilBack, wasAwaySince } from "../page-presence";
 import { addToRaw } from "../raw-merge";
 import { leadFilterReason, TEAM_SIZE_BANDS, REVENUE_BANDS } from "@/lib/lead-filters";
 
@@ -563,7 +565,17 @@ export function Scraper({
   useEffect(() => {
     void refreshScans();
     const t = setInterval(() => void refreshScans(), 30_000);
-    return () => clearInterval(t);
+    // Back on the tab: pick up any scan that is still running straight away.
+    const onBack = () => {
+      if (!pageAway()) void refreshScans();
+    };
+    document.addEventListener("visibilitychange", onBack);
+    window.addEventListener("online", onBack);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onBack);
+      window.removeEventListener("online", onBack);
+    };
   }, []);
   // id -> which source revealed the email ("Apollo" | "Hunter" | "Google" | "demo")
   const [emailSource, setEmailSource] = useState<Record<string, string>>(saved?.emailSource ?? {});
@@ -994,6 +1006,12 @@ export function Scraper({
             inFlight.current.delete(job.id);
             continue;
           }
+          if (pageAway()) {
+            await waitUntilBack(1000);
+            if (stopRequested.current) break;
+            if (pageAway()) continue;
+          }
+          const attemptAt = Date.now();
           try {
             const r = await stepScan(job.id, async () => !stopRequested.current);
             failures.delete(job.id);
@@ -1015,6 +1033,15 @@ export function Scraper({
             if (driven.current.has(job.id)) driven.current.set(job.id, { ...job, ...(r.job ?? {}) });
           } catch {
             if (stopRequested.current) break;
+            // Tab in the background, laptop asleep, phone switched apps or offline:
+            // the scan's progress is saved on the server, so that's never a reason
+            // to give up on it — wait until the page is back (re-checking every
+            // minute) and carry on where it left off.
+            if (wasAwaySince(attemptAt)) {
+              failures.delete(job.id);
+              await waitUntilBack(1000);
+              continue;
+            }
             const n = (failures.get(job.id) ?? 0) + 1;
             failures.set(job.id, n);
             if (n >= 4) {
@@ -1546,8 +1573,8 @@ export function Scraper({
               onChange={(e) => setFilters({ ...filters, perPage: Number(e.target.value) })}
             >
               {(sources.apify
-                ? [50, 100, 200, 300, 500, 1000, 2000]
-                : [25, 50, 100, 200, 500, 1000]
+                ? [50, 100, 200, 300, 500, 1000, MAX_SCRAPE_RESULTS]
+                : [25, 50, 100, 200, 500, 1000, MAX_SCRAPE_RESULTS]
               ).map((n) => (
                 <option key={n} value={n}>
                   {n}

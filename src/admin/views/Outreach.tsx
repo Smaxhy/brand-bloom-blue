@@ -1035,9 +1035,9 @@ function Sequences({
         title={deleting ? `Delete "${deleting.name}"?` : "Delete sequence?"}
         description={`${
           counts[deleting?.id ?? ""]?.total
-            ? `${counts[deleting?.id ?? ""]?.total} people are in it — they will get no further emails, and their send history for this sequence is removed. `
+            ? `${counts[deleting?.id ?? ""]?.total} people are in it — they will get no further emails. `
             : ""
-        }Suppressions (opt-outs, bounces) are kept. This cannot be undone.`}
+        }Their send history is kept, so anyone already emailed can't be added to another sequence for 90 days. Suppressions (opt-outs, bounces) are kept. This cannot be undone.`}
         confirmLabel="Delete sequence"
         destructive
         onOpenChange={(o) => !o && setDeleting(null)}
@@ -1368,7 +1368,8 @@ function AddPeople({
       {seq && (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            People already in a running or paused sequence are excluded.
+            People already in a running or paused sequence, or emailed in the last 90 days
+            (including by a deleted sequence), are excluded.
           </p>
           {loadingLive && <p role="status" className="text-sm text-muted-foreground">Checking existing enrollments…</p>}
           {liveError && <p role="alert" className="text-sm text-destructive">{liveError}</p>}

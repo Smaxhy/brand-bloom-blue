@@ -45,6 +45,7 @@ import { Db } from "./db";
 import { resolveIntegrationEnv } from "./integration-settings.server";
 import { runTick, keepAlive, verifySchedulerToken } from "./tick";
 import { requestIpHash, securityJson } from "./request-security";
+import { MAX_SCRAPE_RESULTS } from "./scrape-limits";
 
 type Env = Record<string, string | undefined>;
 
@@ -300,8 +301,8 @@ async function apolloSearch(request: Request, env: Env): Promise<Response> {
     return json({ error: "invalid json" }, 400);
   }
 
-  // Total contacts the user wants (cap 500 to keep credit use + Worker time sane).
-  const wanted = Math.min(Math.max(filters.perPage ?? 25, 1), 500);
+  // Total contacts the user wants (shared scrape cap; 100 per Apollo page).
+  const wanted = Math.min(Math.max(filters.perPage ?? 25, 1), MAX_SCRAPE_RESULTS);
   const titles = (filters.titles ?? "")
     .split(",")
     .map((t) => t.trim())
@@ -1421,7 +1422,7 @@ async function apifyStartRoute(request: Request, env: Env): Promise<Response> {
   const r = await apifyStart(env, {
     queries: queries.length ? queries : ["business"],
     location,
-    max: Math.max(20, Math.min(f.perPage || 100, 1000)),
+    max: Math.max(20, Math.min(f.perPage || 100, MAX_SCRAPE_RESULTS)),
   });
   if ("error" in r) return json({ ok: false, error: r.error }, 502);
   return json({ ok: true, runId: r.run.id, datasetId: r.run.defaultDatasetId });
@@ -1445,7 +1446,7 @@ async function gmapsStartRoute(request: Request, env: Env): Promise<Response> {
   const r = await gmapsSelfStart(env, {
     queries: queries.length ? queries : ["business"],
     location,
-    max: Math.max(20, Math.min(f.perPage || 100, 2000)),
+    max: Math.max(20, Math.min(f.perPage || 100, MAX_SCRAPE_RESULTS)),
     lat: f.lat,
     lng: f.lng,
     radiusKm: f.radiusKm || undefined,
@@ -1559,7 +1560,7 @@ export interface DiscoverResult {
 
 /** Provider waterfall shared by the UI route and scheduled saved searches. */
 export async function discoverCore(f: DiscoverFilters, env: Env): Promise<DiscoverResult> {
-  const wanted = Math.min(Math.max(f.perPage ?? 25, 1), 1000);
+  const wanted = Math.min(Math.max(f.perPage ?? 25, 1), MAX_SCRAPE_RESULTS);
   const keywords = (f.industry ?? "")
     .split(",")
     .map((k) => k.trim())

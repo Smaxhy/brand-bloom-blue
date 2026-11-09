@@ -82,6 +82,10 @@ export function AdminApp() {
   const [role, setRole] = useState<TeamRole | null>(null);
   const [accountName, setAccountName] = useState("");
   const [view, setView] = useState<ViewId>("dashboard");
+  const [scraperOpened, setScraperOpened] = useState(false);
+  useEffect(() => {
+    if (view === "scraper") setScraperOpened(true);
+  }, [view]);
   const [data, setData] = useState<AdminData | null>(null);
   const [loadError, setLoadError] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -114,6 +118,8 @@ export function AdminApp() {
       setAccountName("");
       setData(null);
       setLoadError("");
+      // A signed-out session (or the next account) never inherits a background scraper.
+      setScraperOpened(false);
       unsubData?.();
       unsubData = null;
     }
@@ -469,7 +475,14 @@ export function AdminApp() {
           {view === "pipeline" && <Pipeline data={data} update={update} />}
           {view === "tasks" && <Tasks data={data} update={update} />}
           {view === "leads" && <Leads data={data} update={update} />}
-          {view === "scraper" && <Scraper data={data} update={update} go={setView} />}
+          {/* Once opened, the scraper stays mounted (just hidden) so a running
+              scrape or email reveal keeps going — and its results land — while
+              you work on another page. */}
+          {(view === "scraper" || scraperOpened) && (
+            <div hidden={view !== "scraper"}>
+              <Scraper data={data} update={update} go={setView} />
+            </div>
+          )}
           {view === "raw" && <RawData data={data} update={update} go={setView} />}
           {view === "clients" && <Clients data={data} update={update} />}
           {view === "statistics" && <Statistics data={data} update={update} />}

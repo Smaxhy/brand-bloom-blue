@@ -34,9 +34,13 @@ export async function companyAlreadyContacted(
     if (running) return { reason: running.lead_id === lead.id
       ? "this address is already in another sequence"
       : "someone else at this company is already in a sequence" };
+    // History kept from a removed person has no enrollment any more (NULL); a
+    // plain "neq" would silently skip those rows, so they are matched explicitly.
     const sent = await db.one<{ lead_id: string; sent_at: string }>("messages",
       `lead_id=${inList}&direction=eq.out&status=in.(sent,bounced)&sent_at=gte.${enc(since)}${
-        opts.excludeEnrollmentId ? `&enrollment_id=neq.${enc(opts.excludeEnrollmentId)}` : ""
+        opts.excludeEnrollmentId
+          ? `&or=(enrollment_id.is.null,enrollment_id.neq.${enc(opts.excludeEnrollmentId)})`
+          : ""
       }&select=lead_id,sent_at&order=sent_at.desc`);
     if (sent) return { reason: `${sent.lead_id === lead.id ? "this address" : "someone at this company"} was already emailed on ${new Date(sent.sent_at).toISOString().slice(0, 10)}` };
   }

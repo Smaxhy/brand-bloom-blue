@@ -2,6 +2,8 @@ import { scanJobAction } from "@/lib/scan-jobs.functions";
 import { runScanRequest } from "./scan-request";
 import { businessKey } from "@/lib/business-key";
 import { cleanDuplicateEmails } from "./email-cleanup";
+import { MAX_SCRAPE_RESULTS } from "@/lib/scrape-limits";
+import { pollBudgetMs, pollWhilePresent } from "./page-presence";
 import { cleanDuplicateDeals, type WebsiteRequest } from "./pipeline-merge";
 import type { LeadAi } from "@/lib/lead-filters";
 /** Inspirova Admin — per-account Lovable Cloud data layer. */
@@ -352,7 +354,7 @@ function compactForRemote(data: AdminData): AdminData {
     scraper: data.scraper
       ? {
           ...data.scraper,
-          results: data.scraper.results.slice(0, 500),
+          results: data.scraper.results.slice(0, MAX_SCRAPE_RESULTS),
           updatedAt: Date.now(),
         }
       : undefined,
@@ -1458,8 +1460,9 @@ export async function discoverLeads(
     }
   }
 
-  // Self-hosted Google Maps scraper (your own server). Start,
-  // then poll up to 10 minutes; everything it finds merges in like Google Maps.
+  // Self-hosted Google Maps scraper (your own server). Start, then poll (10 min,
+  // longer for big requests; time the tab spends in the background doesn't
+  // count); everything it finds merges in like Google Maps.
   let selfNote = "";
   if (sources.selfhost) {
     try {
@@ -1485,15 +1488,21 @@ export async function discoverLeads(
           error?: string;
           notes?: string[];
         } = { done: false, status: "pending" };
-        const t0 = Date.now();
-        while (Date.now() - t0 < 10 * 60_000) {
-          await new Promise((r) => setTimeout(r, 6000));
-          opts.onProgress?.("selfhost", Math.round((Date.now() - t0) / 1000), 0);
-          const q = new URLSearchParams({ job: st.jobId, city: filters.location, industry: kw, ...onlyNewParams });
-          const r = await authFetch(`/api/discover/gmaps/status?${q}`);
-          result = (await r.json()) as typeof result;
-          if (result.done) break;
-        }
+        const jobId = st.jobId;
+        const selfBudget = pollBudgetMs(10 * 60_000, wanted);
+        const polled = await pollWhilePresent({
+          initial: result,
+          everyMs: 6000,
+          budgetMs: selfBudget,
+          onTick: (ms) => opts.onProgress?.("selfhost", Math.round(ms / 1000), 0),
+          check: async () => {
+            const q = new URLSearchParams({ job: jobId, city: filters.location, industry: kw, ...onlyNewParams });
+            const r = await authFetch(`/api/discover/gmaps/status?${q}`);
+            return (await r.json()) as typeof result;
+          },
+        });
+        if (polled.error) throw new Error(polled.error);
+        result = polled.result;
         let n = 0;
         let withEmail = 0;
         for (const b of result.businesses ?? []) {
@@ -1520,7 +1529,7 @@ export async function discoverLeads(
           ? `Own Maps scraper: ${result.error}`
           : result.done
             ? `Own Maps scraper: ${n} new (${withEmail} with email)${result.notes?.length ? `, ${result.notes.join(", ")}` : ""}`
-            : `Own Maps scraper: still running after 10 min — ${n} so far`;
+            : `Own Maps scraper: still running after ${Math.round(selfBudget / 60_000)} min — ${n} so far`;
       }
     } catch (e) {
       selfNote = `Own Maps scraper: ${(e as Error).message}`;
@@ -1555,26 +1564,33 @@ export async function discoverLeads(
       if (!st.ok || !st.runId || !st.datasetId) {
         apifyNote = `Apify: ${st.error || "could not start"}`;
       } else {
-        const t0 = Date.now();
-        const MAX_MS = 8 * 60_000;
         let result: { done: boolean; status: string; businesses?: DiscoveredBusiness[]; notes?: string[] } = {
           done: false,
           status: "RUNNING",
         };
-        while (Date.now() - t0 < MAX_MS) {
-          opts.onProgress?.("apify", Math.round((Date.now() - t0) / 1000), 0);
-          await new Promise((r) => setTimeout(r, 6000));
+        const runId = st.runId;
+        const datasetId = st.datasetId;
+        const apifyStatus = async () => {
           const q = new URLSearchParams({
-            run: st.runId,
-            dataset: st.datasetId,
+            run: runId,
+            dataset: datasetId,
             city: filters.location,
             industry: kw,
             ...onlyNewParams,
           });
           const r = await authFetch(`/api/discover/apify/status?${q}`);
-          result = (await r.json()) as typeof result;
-          if (result.done) break;
-        }
+          return (await r.json()) as typeof result;
+        };
+        // The run itself stops at the number asked for, so waiting longer never
+        // costs more; time the tab spends in the background doesn't count.
+        const polled = await pollWhilePresent({
+          initial: result,
+          everyMs: 6000,
+          budgetMs: pollBudgetMs(8 * 60_000, apifyNeed),
+          onTick: (ms) => opts.onProgress?.("apify", Math.round(ms / 1000), 0),
+          check: apifyStatus,
+        });
+        result = polled.result;
         if (!result.done) {
           // Stop the meter, then collect whatever it scraped so far.
           await authFetch(`/api/discover/apify/abort?run=${encodeURIComponent(st.runId)}`, {
@@ -1582,15 +1598,7 @@ export async function discoverLeads(
           }).catch(() => {});
           for (let i = 0; i < 6 && !result.done; i++) {
             await new Promise((r) => setTimeout(r, 5000));
-            const q = new URLSearchParams({
-              run: st.runId,
-              dataset: st.datasetId,
-              city: filters.location,
-              industry: kw,
-              ...onlyNewParams,
-            });
-            const r = await authFetch(`/api/discover/apify/status?${q}`);
-            result = (await r.json()) as typeof result;
+            result = await apifyStatus().catch(() => result);
           }
         }
         for (const b of result.businesses ?? []) {

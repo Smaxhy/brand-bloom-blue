@@ -1,4 +1,10 @@
 # Public website refresh
+# November 9 outreach and scraper update
+- [x] Install history-preserving sequence deletion, automatic bounced Raw Data cleanup, shared 2,000-result scrape ceiling and background/offline recovery; retain Stop, provider safeguards, website, security and 1,000 daily mailbox cap.
+- [x] Verify 286 regression tests, transactional database history/bounce tests, cleaned saved Raw Data, preview build and public/admin entry rendering without emails or paid searches.
+- [ ] Signed-in live scraper/recovery verification requires an available authorized preview session; own-account mint found no matching account. Keeping Scraper mounted across admin tabs was omitted pending Stop/lifecycle verification.
+
+# Public website refresh
 - [x] Make website quotes deletable from Pipeline with account-specific dismissals; confirmed deletion survives reopening and refresh, original requests retained, temporary verification data removed.
 - [x] Add admin Inboxes with live GoHighLevel email conversations, sent bodies, reply status, search, older pages and one-minute refresh; verified real sent email and phone layout, 27 tests pass, no emails sent. New incoming reply arrival not exercised.
 - [x] Prevent browser autofill from filling quote/contact bot-trap fields and return field-specific validation errors; 20 tests pass and completed browser quote returns success. Removed temporary test entry; original visitor failure could not be reproduced.

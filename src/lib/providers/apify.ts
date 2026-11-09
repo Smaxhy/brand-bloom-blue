@@ -11,6 +11,7 @@
  */
 
 import type { PlaceBusiness } from "./places";
+import { MAX_SCRAPE_RESULTS } from "../scrape-limits";
 
 type Env = Record<string, string | undefined>;
 const secret = (e: Env, k: string) => e[k] || process.env?.[k];
@@ -43,7 +44,7 @@ export async function apifyStart(
   // split it — before this fix 10 keywords × 500 asked Apify for 5,000 places
   // (≈ $20, a whole month of the Starter plan) in one click.
   const queries = opts.queries.slice(0, 6);
-  const max = Math.max(20, Math.min(opts.max, 1000));
+  const max = Math.max(20, Math.min(opts.max, MAX_SCRAPE_RESULTS));
   const perSearch = Math.max(10, Math.ceil(max / queries.length));
   const input = {
     searchStringsArray: queries,
@@ -138,10 +139,11 @@ export async function apifyItems(
   datasetId: string,
   fallbackCity: string,
   fallbackIndustry: string,
-  limit = 1000,
+  limit = MAX_SCRAPE_RESULTS,
 ): Promise<PlaceBusiness[]> {
   const token = secret(env, "APIFY_TOKEN");
   if (!token) return [];
+  limit = Math.min(MAX_SCRAPE_RESULTS, Math.max(1, Math.floor(limit)));
   try {
     const res = await fetch(
       `${API}/datasets/${encodeURIComponent(datasetId)}/items?token=${encodeURIComponent(token)}&clean=true&limit=${limit}&fields=placeId,title,website,phone,phoneUnformatted,address,city,state,categoryName,totalScore,reviewsCount,permanentlyClosed,temporarilyClosed,location,url`,
