@@ -144,3 +144,5 @@
 - [x] Fix the contact form never submitting (iframe sandbox lacked allow-forms).
 - [x] Verify calculator math, bundles, slider, quote and contact validation and intercepted submission, dialog, phone menu, no sideways scroll; independent review "fix" then "ship" on the six material findings. No real emails or quotes sent.
 - [ ] Signed-in check of the published homepage on Lovable, including a real quote and contact submission.
+- [x] Redesign the results page in the same system (static revenue total, statement of highlights, case ledgers on the blue band, full-width wide screenshots, no numbered labels); verified desktop and phone with all images and no sideways scroll.
+- [ ] Confirm the "1,508×" hero-ad claim on the results page; its own text says 1,508% ROAS.

@@ -1,8 +1,10 @@
 # Inspirova public site design
 
-The public homepage (`src/inspirova.html`) uses one visual system, "the honest quote":
-the page reads like a clean, itemised estimate from a trade business. Keep new public
-sections inside it. The admin app has its own look and is not covered here.
+The public homepage (`src/inspirova.html`) and the results page (`src/routes/results.tsx`,
+styles scoped under `.results-site` with `rs-` classes in `src/styles.css`) use one visual
+system, "the honest quote": each page reads like a clean, itemised estimate from a trade
+business. Keep new public sections inside it. The admin app has its own look and is not
+covered here.
 
 ## Tokens (`:root` in `src/inspirova.html`)
 
@@ -48,3 +50,4 @@ Light only, chosen for the use scene: owners checking the site in daylight betwe
 - `#contact` is a dialog toggled with the `hidden` attribute; `#timeline .step` is read by the step script; `#menuBtn` drives the phone menu.
 - Case screenshots arrive through `__CASE_DTC__`, `__CASE_LEADS__`, `__CASE_SHOPIFY__` and `__CLIENT_MSG__`, replaced in `src/routes/index.tsx`.
 - The homepage iframe needs `allow-forms` in its sandbox, or the browser blocks the contact form's submit event.
+- The results page shows its revenue total as static text (no count-up from $0), so link previews and slow loads show the real figure.
