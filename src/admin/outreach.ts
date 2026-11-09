@@ -330,9 +330,24 @@ export async function saveSequence(
 export async function setSequenceStatus(id: string, status: Sequence["status"]): Promise<void> {
   must(await (await tbl("sequences")).update({ status }).eq("id", id).select("id"));
 }
-/** Delete a sequence with its steps, enrollments and their message log (DB cascades). */
+/**
+ * "Delete" a sequence: hide it and stop everyone in it, but keep its people and
+ * sent-email log, so the 90-day re-contact check still stops them being emailed
+ * again by another sequence. Never falls back to a hard delete.
+ */
 export async function deleteSequence(id: string): Promise<void> {
-  must(await (await tbl("sequences")).delete().eq("id", id).select("id"));
+  const { supabase } = await import("@/integrations/supabase/client");
+  const { error } = await (supabase as any).rpc("delete_sequence_keep_history", {
+    _sequence_id: id,
+  });
+  if (!error) return;
+  if (
+    /delete_sequence_keep_history|PGRST202|42883/.test(`${error.code ?? ""} ${error.message ?? ""}`)
+  )
+    throw new Error(
+      "The database update for keeping sequence history hasn't been applied yet — nothing was deleted.",
+    );
+  throw new Error(error.message || "Could not delete the sequence");
 }
 
 /* ---------------------------------------------------------- enrollments */
@@ -347,12 +362,56 @@ export async function listEnrollments(
   if (opts.status) q = q.eq("status", opts.status);
   return must(await q);
 }
-/** Existing running enrollment emails, read through the authenticated RLS client. */
+/** Same window as COMPANY_COOLDOWN_DAYS in src/lib/company-contact.ts (the server's rule). */
+export const RECONTACT_COOLDOWN_DAYS = 90;
+
+/**
+ * Addresses that can't be added to a sequence right now, read through the
+ * authenticated RLS client: anyone in a running/paused sequence, held as
+ * "possibly sent", or emailed in the last 90 days — including by a sequence
+ * that has since been deleted or a person removed from one. The server
+ * enforces the same rule (plus the one-per-company check) on enroll.
+ */
 export async function liveEnrolledEmails(): Promise<Set<string>> {
-  const rows = must<{ leads: { email: string | null } | null }[]>(
-    await (await tbl("enrollments")).select("leads(email)").in("status", ["queued", "active", "paused"]).limit(10000),
+  const since = new Date(Date.now() - RECONTACT_COOLDOWN_DAYS * 86_400_000).toISOString();
+  type Row = { leads: { email: string | null } | null };
+  const read = async (query: () => Promise<any>) => {
+    const rows: Row[] = [];
+    for (let page = 0; page < 100; page++) {
+      const batch = must<Row[]>(await (await query()).order("id").range(page * 500, page * 500 + 499));
+      rows.push(...batch);
+      if (batch.length < 500) return rows;
+    }
+    throw new Error("Too much outreach history to safely check. No people were added.");
+  };
+  const [running, held, emailed] = await Promise.all([
+    read(async () =>
+      (await tbl("enrollments"))
+        .select("leads(email)")
+        .in("status", ["queued", "active", "paused"])
+        .limit(500),
+    ),
+    read(async () =>
+      (await tbl("enrollments"))
+        .select("leads(email)")
+        .eq("status", "failed")
+        .like("last_error", "Possibly sent%")
+        .limit(500),
+    ),
+    read(async () =>
+      (await tbl("messages"))
+        .select("leads(email)")
+        .eq("direction", "out")
+        .in("status", ["sent", "bounced"])
+        .gte("sent_at", since)
+        .limit(500),
+    ),
+  ]);
+  return new Set(
+    [...running, ...held, ...emailed]
+      .map((row) => (row.leads?.email || "").toLowerCase())
+      .filter(Boolean),
   );
-  return new Set(rows.map((row) => (row.leads?.email || "").toLowerCase()).filter(Boolean));
 }
 /** A/B results per sequence: how many enrolments per subject variant, and how many replied. */
 export async function abStats(

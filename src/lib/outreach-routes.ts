@@ -590,11 +590,15 @@ async function enroll(request: Request, e: Env, user: ApiUser): Promise<Response
   if (!body.sequenceId || !Array.isArray(body.leads) || !body.leads.length)
     return json({ ok: false, error: "sequenceId and leads[] are required" }, 400);
   const db = new Db(e);
-  const seq = await db.one<{ id: string; mailbox_ids: string[]; send_anytime?: boolean }>(
-    "sequences",
-    `id=eq.${enc(body.sequenceId)}&select=id,mailbox_ids,send_anytime`,
-  );
-  if (!seq) return json({ ok: false, error: "sequence not found" }, 404);
+  const seq = await db.one<{
+    id: string;
+    mailbox_ids: string[];
+    send_anytime?: boolean;
+    status?: string;
+  }>("sequences", `id=eq.${enc(body.sequenceId)}&select=id,mailbox_ids,send_anytime,status`);
+  // A deleted sequence is kept (archived) only as history; nobody new goes in.
+  if (!seq || seq.status === "archived")
+    return json({ ok: false, error: "sequence not found" }, 404);
 
   const result = { enrolled: 0, updated: 0, skipped: [] as { email: string; reason: string }[] };
   const start = body.startAt ? new Date(body.startAt) : new Date();
