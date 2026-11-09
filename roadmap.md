@@ -131,3 +131,9 @@
 - [x] Remove hard-bounced and confirmed-invalid addresses from every account's Raw Data automatically (on bounce and on every save), with a one-time cleanup of earlier bounces; opt-outs, domain-only suppressions and outreach history are untouched.
 - [x] Verify on a local Postgres 16 replay: sender bounce removes the row from all accounts with no tab open, stale tab saves are stripped and refreshed, mixed-case/mailto addresses match, 5,000-contact saves take ~30–60 ms; no emails sent.
 - [ ] Apply migration 0022 in Lovable Cloud (after 0021) and confirm a bounced contact disappears from Raw Data while signed in.
+
+# Bigger scrapes that keep running in the background
+- [x] Raise every scrape limit to one shared 2,000 cap (Apollo was 500 and 200 per keyword, saved results 500, Google/Apify 1,000) and add 2,000 to the size picker.
+- [x] Keep the Scraper running when switching admin pages; reveal scans and Apify/own-Maps polling pause while the tab is hidden, asleep or offline and continue after, instead of giving up or cancelling Apify runs.
+- [x] Verify 284 tests, typecheck, build and the signed-out admin page in Chromium with simulated tab switching; no paid searches or emails.
+- [ ] Signed-in check of a 1,000+ scrape across page and tab switches; closing the tab entirely still needs the background timer for reveal scans.
