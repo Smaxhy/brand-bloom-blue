@@ -128,3 +128,4 @@
 - [x] Verify 272 regression tests, build, Results navigation and admin sign-in without sending emails or paid searches.
 - [ ] November 8 signed-in live discovery verification: requires preview sign-in and optional Brave configuration; no emails or paid searches performed.
 - [x] Relax admin sign-in attempt limit (user locked out after 2 tries)
+- [ ] Raw Data: show which contacts are already in a sequence (+ date added), block adding to another
