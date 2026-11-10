@@ -129,3 +129,4 @@
 - [ ] November 8 signed-in live discovery verification: requires preview sign-in and optional Brave configuration; no emails or paid searches performed.
 - [x] Relax admin sign-in attempt limit (user locked out after 2 tries)
 - [x] Raw Data: show which contacts are already in a sequence (+ date added), block adding to another
+- [x] Add Raw Data Never contacted filter and optional first-contact enrollment checkbox; refresh complete history before adding and stop marking enrollment as a send. Twelve tests pass, build OK, signed-in filter and checked dialog verified without enrolling people or sending emails.

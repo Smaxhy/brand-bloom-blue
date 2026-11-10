@@ -22,6 +22,7 @@ import { mergeRawReveal, needsRawEnrichment, rawScanPerson, runRawReveal } from 
 import { type Sequence, listSequences, enrollLeads } from "../outreach";
 import { supabase } from "@/integrations/supabase/client";
 import { Panel, StatCard, Modal, Field, inputCls, Btn } from "../ui";
+import { isFirstContact, type ContactHistory } from "../first-contact";
 
 function maskEmail(email: string): string {
   if (!email.includes("@")) return "***";
@@ -44,13 +45,17 @@ export function RawData({
 }) {
   const [importOpen, setImportOpen] = useState(false);
   const [paste, setPaste] = useState("");
-  const [filter, setFilter] = useState<"all" | "raw" | "accepted" | "rejected" | "sent">("all");
+  const [filter, setFilter] = useState<"all" | "raw" | "accepted" | "rejected" | "sent" | "untouched">("all");
   const [q, setQ] = useState("");
   // Outreach: add selected rows to a sequence
   const [seqOpen, setSeqOpen] = useState(false);
   const [sequences, setSequences] = useState<Sequence[]>([]);
   const [seqId, setSeqId] = useState("");
   const [enrolling, setEnrolling] = useState(false);
+  const [firstOnly, setFirstOnly] = useState(false);
+  const [history, setHistory] = useState<ContactHistory>({ enrolled: new Set(), sent: new Set() });
+  const [historyReady, setHistoryReady] = useState(false);
+  const [historyError, setHistoryError] = useState("");
   const [enrollResult, setEnrollResult] = useState<{
     enrolled: number;
     skipped: { email: string; reason: string }[];
@@ -68,18 +73,42 @@ export function RawData({
   // Which emails are already in a running sequence (queued/active/paused), with when they were added.
   const [inSeq, setInSeq] = useState<Record<string, { sequence: string; at: string }>>({});
   const loadInSeq = async () => {
-    const { data: rows, error } = await supabase
-      .from("enrollments")
-      .select("created_at, status, leads!inner(email), sequences(name)")
-      .in("status", ["queued", "active", "paused"])
-      .limit(5000);
-    if (error) return;
+    setHistoryReady(false);
+    setHistoryError("");
+    try {
+    const read = async (table: "enrollments" | "messages") => {
+      const collected: any[] = [];
+      for (let page = 0; page < 25; page++) {
+        const query = table === "enrollments"
+          ? supabase.from("enrollments").select("created_at, status, leads!inner(email), sequences(name)")
+          : supabase.from("messages").select("leads!inner(email)").eq("direction", "out").in("status", ["sent", "bounced"]);
+        const { data: batch, error } = await query.order("id").range(page * 1000, page * 1000 + 999);
+        if (error) throw error;
+        collected.push(...(batch ?? []));
+        if ((batch ?? []).length < 1000) return collected;
+      }
+      throw new Error("Too much history to safely check. No contacts were added.");
+    };
+    const [rows, messages] = await Promise.all([read("enrollments"), read("messages")]);
     const m: Record<string, { sequence: string; at: string }> = {};
-    for (const r of (rows ?? []) as any[]) {
+    const next: ContactHistory = { enrolled: new Set(), sent: new Set() };
+    for (const r of rows) {
       const e = String(r.leads?.email || "").trim().toLowerCase();
-      if (e) m[e] = { sequence: r.sequences?.name || "a sequence", at: r.created_at };
+      if (e) next.enrolled.add(e);
+      if (e && ["queued", "active", "paused"].includes(r.status)) m[e] = { sequence: r.sequences?.name || "a sequence", at: r.created_at };
+    }
+    for (const r of messages) {
+      const e = String(r.leads?.email || "").trim().toLowerCase();
+      if (e) next.sent.add(e);
     }
     setInSeq(m);
+    setHistory(next);
+    setHistoryReady(true);
+    return { history: next, inSeq: m };
+    } catch (error) {
+      setHistoryError((error as Error).message || "Could not check outreach history.");
+      return null;
+    }
   };
   useEffect(() => {
     void loadInSeq();
@@ -87,13 +116,17 @@ export function RawData({
   const seqOf = (email?: string) => (email ? inSeq[email.trim().toLowerCase()] : undefined);
 
   async function addSelectedToSequence() {
-    const all = data.raw.filter((r) => selectedIds.has(r.id) && r.email);
-    const picked = all.filter((r) => !seqOf(r.email));
-    if (all.length && !picked.length) return toast.error("All selected contacts are already in a sequence.");
-    if (picked.length < all.length) toast.info(`${all.length - picked.length} already in a sequence — skipped.`);
+    if (enrolling) return;
     if (!seqId) return toast.error("Pick a sequence.");
-    if (!picked.length) return toast.error("Select rows that have an email address.");
     setEnrolling(true);
+    try {
+    const fresh = await loadInSeq();
+    if (!fresh) return toast.error("Could not check email and sequence history. Please retry.");
+    const all = data.raw.filter((r) => selectedIds.has(r.id) && r.email);
+    const picked = all.filter((r) => !fresh.inSeq[r.email?.trim().toLowerCase() || ""] && (!firstOnly || isFirstContact(r, fresh.history)));
+    if (all.length && !picked.length) return toast.error("No eligible contacts: selected people have already been emailed or added to a sequence.");
+    if (picked.length < all.length) toast.info(`${all.length - picked.length} previously contacted or enrolled — skipped.`);
+    if (!picked.length) return toast.error("Select rows that have an email address.");
     const res = await enrollLeads(
       seqId,
       picked.map((r) => ({
@@ -115,20 +148,24 @@ export function RawData({
         rawId: r.id,
       })),
     );
-    setEnrolling(false);
     if (!res.ok) return toast.error(res.error || "Could not add to sequence");
     setEnrollResult({ enrolled: res.enrolled, skipped: res.skipped });
     if (res.enrolled) {
       update((p) => ({
         ...p,
         raw: p.raw.map((r) =>
-          selectedIds.has(r.id) && r.email
-            ? { ...r, status: "accepted" as const, lastEmailedAt: r.lastEmailedAt ?? Date.now() }
+          picked.some((pickedRow) => pickedRow.id === r.id) && !res.skipped.some((skip) => skip.email.trim().toLowerCase() === r.email?.trim().toLowerCase())
+            ? { ...r, status: "accepted" as const }
             : r,
         ),
       }));
       void loadInSeq();
       toast.success(`${res.enrolled} lead${res.enrolled === 1 ? "" : "s"} added to the sequence`);
+    }
+    } catch (error) {
+      toast.error((error as Error).message || "Could not add to sequence.");
+    } finally {
+      setEnrolling(false);
     }
   }
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -312,6 +349,7 @@ export function RawData({
 
   const rows = data.raw
     .filter((r) => {
+      if (filter === "untouched") return historyReady && isFirstContact(r, history);
       if (filter === "sent") return !!r.lastEmailedAt;
       if (filter === "all") return r.status !== "accepted";
       return r.status === filter;
@@ -333,6 +371,7 @@ export function RawData({
     accepted: data.raw.filter((r) => r.status === "accepted").length,
     rejected: data.raw.filter((r) => r.status === "rejected").length,
     sent: sentCount,
+    untouched: historyReady ? data.raw.filter((r) => isFirstContact(r, history)).length : 0,
   };
 
   return (
@@ -392,10 +431,12 @@ export function RawData({
       )}
 
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-1 rounded-xl border border-border bg-card p-1">
-          {(["all", "raw", "accepted", "rejected", "sent"] as const).map((f) => (
-            <button
+        <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1">
+          {(["all", "raw", "accepted", "rejected", "sent", "untouched"] as const).map((f) => (
+            <Btn
               key={f}
+              variant={filter === f ? "primary" : "ghost"}
+              disabled={f === "untouched" && !historyReady}
               onClick={() => {
                 setFilter(f);
                 clearSelection();
@@ -406,8 +447,8 @@ export function RawData({
                   : "text-muted-foreground hover:bg-secondary"
               }`}
             >
-              {f} ({counts[f]})
-            </button>
+              {f === "untouched" ? "Never contacted" : f} ({counts[f]})
+            </Btn>
           ))}
         </div>
 
@@ -427,6 +468,11 @@ export function RawData({
           <Upload className="h-4 w-4" /> Import scraped data
         </Btn>
       </div>
+
+      {historyError && <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+        <span>Could not check sequence history. {historyError}</span>
+        <Btn variant="ghost" onClick={() => void loadInSeq()}>Retry</Btn>
+      </div>}
 
       {rows.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
@@ -459,6 +505,7 @@ export function RawData({
               <button
                 onClick={() => {
                   setEnrollResult(null);
+                  setFirstOnly(filter === "untouched");
                   setSeqOpen(true);
                 }}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-violet)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
@@ -610,14 +657,17 @@ export function RawData({
                         <AlertTriangle className="h-2.5 w-2.5" /> dup
                       </span>
                     )}
-                    {seqOf(r.email) && (
+                    {seqOf(r.email) && (() => {
+                      const membership = seqOf(r.email);
+                      if (!membership) return null;
+                      return (
                       <span
-                        title={`In "${seqOf(r.email)!.sequence}" since ${new Date(seqOf(r.email)!.at).toLocaleString()}`}
+                        title={`In "${membership.sequence}" since ${new Date(membership.at).toLocaleString()}`}
                         className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-1.5 py-0.5 text-[.6rem] font-semibold uppercase text-primary"
                       >
-                        <Send className="h-2.5 w-2.5" /> in sequence · {new Date(seqOf(r.email)!.at).toLocaleDateString()}
+                        <Send className="h-2.5 w-2.5" /> in sequence · {new Date(membership.at).toLocaleDateString()}
                       </span>
-                    )}
+                    ); })()}
                     {r.lastEmailedAt && (
                       <span
                         title={`Emailed ${new Date(r.lastEmailedAt).toLocaleString()}`}
@@ -760,6 +810,10 @@ export function RawData({
         title="Add selected leads to a sequence"
       >
         <div className="space-y-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={firstOnly} onChange={(event) => setFirstOnly(event.target.checked)} disabled={enrolling} />
+            Only people never emailed or added to any sequence
+          </label>
           <p className="text-sm text-muted-foreground">
             {data.raw.filter((r) => selectedIds.has(r.id) && r.email).length} selected rows have an
             email. Guessed addresses are checked for a working mail server first; anything on the
@@ -801,7 +855,7 @@ export function RawData({
             </Btn>
             <Btn
               onClick={() => void addSelectedToSequence()}
-              disabled={enrolling || !sequences.length}
+              disabled={enrolling || !sequences.length || !historyReady}
             >
               {enrolling ? "Adding…" : "Add to sequence"}
             </Btn>
