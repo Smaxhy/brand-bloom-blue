@@ -40,6 +40,7 @@ export interface OutreachSettings {
   us_notice: string;
   footer_style?: "sentence" | "block" | null;
   plain_text?: boolean | null;
+  spread_across_day?: boolean | null;
   optout_line_us?: string | null;
   optout_line_eu?: string | null;
   /** Owner-written instructions used by every AI prompt (emails, pitch lines, reply drafts). */

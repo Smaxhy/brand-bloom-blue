@@ -140,6 +140,7 @@ export interface OutreachSettings {
   footer_style?: "sentence" | "block" | null;
   /** Send text-only (no HTML part). Strongly recommended for cold outreach. */
   plain_text?: boolean | null;
+  spread_across_day?: boolean | null;
   optout_line_us?: string | null;
   optout_line_eu?: string | null;
   /** Owner-written instructions for every AI prompt (what we sell, tone). */
