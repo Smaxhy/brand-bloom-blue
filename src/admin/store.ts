@@ -521,31 +521,64 @@ function makeErrorCode(kind: string): string {
   return `${kind}-${rand}-${tail}`;
 }
 
-function classifyLoginError(raw: string): { kind: string; message: string } {
-  const msg = raw || "";
-  if (/failed to fetch|networkerror|load failed|fetch/i.test(msg)) {
+export function classifyLoginError(
+  raw: string,
+  meta?: { status?: number; code?: string; name?: string },
+): { kind: string; message: string } {
+  const msg = (raw || "").trim();
+  const status = meta?.status;
+  const hay = `${msg} ${meta?.code ?? ""} ${meta?.name ?? ""}`.trim();
+  // An error the client couldn't read: an empty object ({}), "[object Object]",
+  // a blank string, or an AuthRetryableFetchError with status 0 — all mean the
+  // login server gave no usable answer, not that the password was wrong.
+  const opaque =
+    !msg || msg === "{}" || /^\[object object\]$/i.test(msg) || /^(null|undefined)$/i.test(msg);
+
+  // The app isn't wired to its backend at all (missing env / not connected).
+  if (/missing supabase|environment variable|connect supabase|supabase url|publishable key/i.test(hay)) {
+    return {
+      kind: "CFG",
+      message:
+        "The admin app isn't connected to its backend (its configuration is missing). This has to be fixed in the project's Cloud / Supabase settings, not on the login screen.",
+    };
+  }
+  if (/failed to fetch|networkerror|load failed|\bfetch\b/i.test(hay) || status === 0) {
     return {
       kind: "NET",
       message:
-        "Can't reach the login server. Check your internet (or disable any ad-blocker/VPN for this site) and try again.",
+        "Can't reach the login server. Check your internet, turn off any VPN or ad-blocker for this site, and try again.",
     };
   }
-  if (/rate|too many|429/i.test(msg)) {
+  if (/invalid login|invalid.*credential|wrong|bad.*credential/i.test(hay) || status === 400) {
+    return { kind: "AUTH", message: "Wrong username or password." };
+  }
+  if (/email not confirmed|not confirmed|confirm your email/i.test(hay)) {
+    return { kind: "CONF", message: "This account's email hasn't been confirmed yet." };
+  }
+  if (/not.*authoris|not.*author|forbidden|role/i.test(hay) || status === 403) {
+    return { kind: "ROLE", message: "This account isn't authorised to use the admin panel." };
+  }
+  if (/rate|too many|429/i.test(hay) || status === 429) {
     return {
       kind: "RATE",
       message: "Too many sign-in attempts. Please wait ~30 seconds and try again.",
     };
   }
-  if (/invalid login|invalid.*credential|wrong/i.test(msg)) {
-    return { kind: "AUTH", message: "Wrong username or password." };
-  }
-  if (/not.*authoris|not.*author|forbidden|role/i.test(msg)) {
-    return { kind: "ROLE", message: "This account isn't authorised to use the admin panel." };
-  }
-  if (/timeout|timed out/i.test(msg)) {
+  if (/timeout|timed out/i.test(hay) || status === 504) {
     return {
       kind: "TIME",
       message: "The login server took too long to respond. Please try again.",
+    };
+  }
+  // A real server-side failure (5xx) or an unreadable/empty answer: almost always
+  // a brief backend hiccup or a paused backend — retrying usually works.
+  if ((status && status >= 500) || opaque) {
+    const where = status ? ` (HTTP ${status})` : "";
+    return {
+      kind: status && status >= 500 ? "SRV" : "CONN",
+      message:
+        `Couldn't get a clear answer from the login server${where}. This is almost always a brief backend hiccup — wait ~30 seconds and try again. ` +
+        "If it keeps happening: try a private window, turn off any VPN/ad-blocker for this site, and check the backend isn't paused.",
     };
   }
   return { kind: "ERR", message: msg || "Sign in failed. Please try again." };
@@ -556,10 +589,10 @@ function classifyLoginError(raw: string): { kind: string; message: string } {
  * Returns null on success, otherwise a structured error with a diagnostic code.
  */
 export async function login(identifier: string, password: string): Promise<LoginError | null> {
-  const fail = (raw: string): LoginError => {
-    const { kind, message } = classifyLoginError(raw);
+  const fail = (raw: string, meta?: { status?: number; code?: string; name?: string }): LoginError => {
+    const { kind, message } = classifyLoginError(raw, meta);
     const code = makeErrorCode(kind);
-    console.warn(`[login] failure ${code}:`, raw);
+    console.warn(`[login] failure ${code}:`, raw, meta ?? "");
     return { message, code };
   };
 
@@ -587,7 +620,8 @@ export async function login(identifier: string, password: string): Promise<Login
     }
     const { data, error } = result;
     if (error || !data.user) {
-      return fail(error?.message ?? "Sign in failed.");
+      const e = error as { message?: string; status?: number; code?: string; name?: string } | null;
+      return fail(e?.message ?? "Sign in failed.", { status: e?.status, code: e?.code, name: e?.name });
     }
 
     try {
