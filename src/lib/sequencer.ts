@@ -1401,3 +1401,6 @@ async function syncMailbox(
   if (behind) out.partial = true;
   return out;
 }
+
+/** Permanent account-wide sending limit (all mailboxes combined, rolling 24 hours). */
+export const GLOBAL_DAILY_SEND_LIMIT = 40;
