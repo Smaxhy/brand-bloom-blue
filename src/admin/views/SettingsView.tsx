@@ -775,6 +775,20 @@ function SenderIdentityPanel() {
               <option value="block">Classic grey footer with Unsubscribe link</option>
             </select>
           </Field>
+          <Field label="Sending rhythm">
+            <select
+              className={inputCls}
+              value={s.spread_across_day ? "spread" : "burst"}
+              onChange={(e) => setS({ ...s, spread_across_day: e.target.value === "spread" })}
+            >
+              <option value="spread">Spread across the day (recommended for cold — gentle, human-looking)</option>
+              <option value="burst">Send as fast as the pace allows, then stop</option>
+            </select>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Spread = each mailbox's daily cap divided evenly over its sending hours. Example: a 40/day cap over 24 h ≈ one
+              email every ~36 min. Set the rate with the mailbox's <b>daily cap</b> and <b>sending hours</b>.
+            </p>
+          </Field>
         </div>
         {(s.footer_style || "sentence") !== "block" ? (
           <div className="grid gap-3 sm:grid-cols-2">

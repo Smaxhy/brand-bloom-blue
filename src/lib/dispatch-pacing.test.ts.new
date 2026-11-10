@@ -1,0 +1,64 @@
+import { describe, expect, it } from "vitest";
+import { dispatchBudgetMs, dripGapSeconds, effectiveGapSeconds, fitsDispatchBudget, gapElapsed, gapWaitMs, pickGapSeconds, sendEtaMinutes } from "./dispatch-pacing";
+
+describe("bounded email dispatch", () => {
+  it("keeps request-driven runs inside the 30-second disconnect grace period", () => {
+    expect(dispatchBudgetMs("manual")).toBe(25_000);
+    expect(dispatchBudgetMs("tick")).toBe(25_000);
+  });
+  it("uses a fifty-second cron budget when the interval is unknown", () => {
+    expect(dispatchBudgetMs("cron")).toBe(50_000);
+    expect(dispatchBudgetMs("cron", 60_000)).toBe(50_000);
+  });
+  it("fills a slower cron interval instead of sending one email per tick", () => {
+    expect(dispatchBudgetMs("cron", 600_000)).toBe(540_000);
+    expect(dispatchBudgetMs("cron", 3 * 60_000)).toBe(170_000);
+    expect(dispatchBudgetMs("cron", 6 * 3600_000)).toBe(540_000);
+  });
+  it("leaves a long sending gap for the next run instead of sleeping beyond the budget", () => {
+    expect(fitsDispatchBudget(0, 50_000, 45_000, 10_000)).toBe(false);
+    expect(fitsDispatchBudget(0, 50_000, 30_000, 10_000)).toBe(true);
+  });
+  it("respects the configured gap since the previous email", () => {
+    expect(gapElapsed(new Date(0).toISOString(), 60, 59_000)).toBe(false);
+    expect(gapElapsed(new Date(0).toISOString(), 60, 60_000)).toBe(true);
+    expect(gapWaitMs(new Date(0).toISOString(), 60, 45_000)).toBe(15_000);
+    expect(gapWaitMs(null, 60, 45_000)).toBe(0);
+    expect(gapWaitMs(0, 60, 45_000)).toBe(15_000);
+  });
+  it("picks gaps inside the configured range", () => {
+    expect(pickGapSeconds(45, 180, () => 0)).toBe(45);
+    expect(pickGapSeconds(45, 180, () => 0.9999)).toBe(180);
+    expect(pickGapSeconds(180, 45, () => 0)).toBe(45);
+  });
+  it("estimates how long a queue takes, including days blocked by the cap", () => {
+    expect(sendEtaMinutes({ waiting: 0, gapMinSec: 60, gapMaxSec: 120, dailyCap: 100, sentToday: 0 })).toEqual({ minutes: 0, days: 0 });
+    expect(sendEtaMinutes({ waiting: 30, gapMinSec: 60, gapMaxSec: 120, dailyCap: 100, sentToday: 0 })).toEqual({ minutes: 45, days: 0 });
+    expect(sendEtaMinutes({ waiting: 250, gapMinSec: 60, gapMaxSec: 120, dailyCap: 100, sentToday: 50 })).toEqual({ minutes: 75, days: 2 });
+  });
+});
+
+describe("spreading the day (drip)", () => {
+  it("spaces the whole daily cap across the sending window", () => {
+    expect(dripGapSeconds(9, 17, 40)).toBe(720); // 8h / 40 = one every 12 min (~5/hour)
+    expect(dripGapSeconds(8, 18, 40)).toBe(900); // 10h / 40 = every 15 min
+    expect(dripGapSeconds(9, 17, 20)).toBe(1440); // fewer per day = slower drip
+  });
+  it("falls back to a 10-hour spread when the window is unset or backwards", () => {
+    expect(dripGapSeconds(0, 0, 40)).toBe(900); // 10h / 40
+    expect(dripGapSeconds(20, 6, 40)).toBe(900);
+  });
+  it("never sends faster than the drip rate, but keeps a quicker sequence pace when the cap allows it", () => {
+    // Fast 45s sequence pace, but 40/day over 8h forces ~12-min spacing.
+    const slow = effectiveGapSeconds({ seqMin: 45, seqMax: 45, windowStartHour: 9, windowEndHour: 17, dailyCap: 40 }, () => 0);
+    expect(slow).toBeGreaterThanOrEqual(612); // within -15% jitter of 720
+    expect(slow).toBeLessThanOrEqual(828);
+    // A deliberately slow sequence pace is left alone (drip isn't the bottleneck).
+    expect(effectiveGapSeconds({ seqMin: 1000, seqMax: 1000, windowStartHour: 9, windowEndHour: 17, dailyCap: 40 }, () => 0)).toBe(1000);
+  });
+  it("makes the status ETA reflect the slower drip pace", () => {
+    // Without a window the fast sequence pace wins; with one, the drip spreads it across the day.
+    expect(sendEtaMinutes({ waiting: 40, gapMinSec: 45, gapMaxSec: 45, dailyCap: 40, sentToday: 0 }).minutes).toBe(30);
+    expect(sendEtaMinutes({ waiting: 40, gapMinSec: 45, gapMaxSec: 45, dailyCap: 40, sentToday: 0, windowStartHour: 9, windowEndHour: 17 }).minutes).toBe(480);
+  });
+});
