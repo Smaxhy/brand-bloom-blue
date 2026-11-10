@@ -505,6 +505,7 @@ export type Database = {
           optout_line_us: string
           plain_text: boolean
           postal_address: string
+          spread_across_day: boolean
           updated_at: string
           us_notice: string
           website: string
@@ -521,6 +522,7 @@ export type Database = {
           optout_line_us?: string
           plain_text?: boolean
           postal_address?: string
+          spread_across_day?: boolean
           updated_at?: string
           us_notice?: string
           website?: string
@@ -537,6 +539,7 @@ export type Database = {
           optout_line_us?: string
           plain_text?: boolean
           postal_address?: string
+          spread_across_day?: boolean
           updated_at?: string
           us_notice?: string
           website?: string

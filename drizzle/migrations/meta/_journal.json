@@ -169,6 +169,13 @@
       "when": 1794347324087,
       "tag": "0023_cap_mailbox_40",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794349723092,
+      "tag": "0024_spread_across_day",
+      "breakpoints": true
     }
   ]
 }
