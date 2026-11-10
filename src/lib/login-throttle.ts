@@ -10,8 +10,8 @@
 
 const KEY = "inspirova.loginThrottle.v1";
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const MAX_FAILS = 5;
-const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes lock after MAX_FAILS
+const MAX_FAILS = 10;
+const COOLDOWN_MS = 60 * 1000; // 1 minute pause after MAX_FAILS
 
 interface State {
   fails: { at: number }[];
