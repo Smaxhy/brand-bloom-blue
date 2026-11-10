@@ -127,3 +127,4 @@
 - [x] Merge new archived admin changes without reverting existing data, website or security protections.
 - [x] Verify 272 regression tests, build, Results navigation and admin sign-in without sending emails or paid searches.
 - [ ] November 8 signed-in live discovery verification: requires preview sign-in and optional Brave configuration; no emails or paid searches performed.
+- [ ] Relax admin sign-in attempt limit (user locked out after 2 tries)
