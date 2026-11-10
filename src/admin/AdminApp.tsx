@@ -323,7 +323,7 @@ export function AdminApp() {
     if (!canPump) return;
     let busy = false;
     const beat = () => {
-      if (busy) return;
+      if (busy || document.visibilityState !== "visible") return;
       busy = true;
       void browserTick()
         .catch(() => undefined)

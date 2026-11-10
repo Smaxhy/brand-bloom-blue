@@ -1098,7 +1098,7 @@ function SendingStatusPanel({ go }: { go?: (v: "settings" | "raw") => void }) {
   }, [checkStatus]);
   useEffect(() => {
     void load();
-    const t = setInterval(() => void load(), 60_000);
+    const t = setInterval(() => { if (document.visibilityState === "visible") void load(); }, 60_000);
     return () => clearInterval(t);
   }, [load]);
 
