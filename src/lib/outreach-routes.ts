@@ -218,7 +218,7 @@ async function ghlConnect(request: Request, e: Env): Promise<Response> {
     display_name: (b.fromName || "").trim() || v.name,
     provider: "ghl",
     status: "active",
-    daily_cap: 1000,
+    daily_cap: 40,
     last_error: null,
   };
   const mb = existing

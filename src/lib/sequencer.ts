@@ -429,7 +429,19 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
           `mailbox_id=eq.${mb.id}&direction=eq.out&status=in.(sent,bounced)&sent_at=gte.${enc(startOfLocalDayIso(mb.timezone))}&select=id`,
         )
       ).length;
-      let remaining = Math.max(0, mb.daily_cap - sentToday);
+      // Hard account-wide limit: never more than GLOBAL_DAILY_SEND_LIMIT emails in any 24 hours, all mailboxes combined.
+      const sentLast24h = (
+        await db.select<{ id: string }>(
+          "messages",
+          `direction=eq.out&status=in.(sent,bounced)&sent_at=gte.${enc(new Date(Date.now() - 86_400_000).toISOString())}&select=id`,
+        )
+      ).length;
+      const globalLeft = Math.max(0, GLOBAL_DAILY_SEND_LIMIT - sentLast24h);
+      if (!globalLeft) {
+        entry.skipped = `account limit reached (${sentLast24h}/${GLOBAL_DAILY_SEND_LIMIT} in the last 24 hours)`;
+        return;
+      }
+      let remaining = Math.min(globalLeft, Math.max(0, Math.min(mb.daily_cap, GLOBAL_DAILY_SEND_LIMIT) - sentToday));
       entry.remaining_today = remaining;
       if (!remaining) {
         entry.skipped = `daily cap reached (${sentToday}/${mb.daily_cap}) — continues after midnight ${mb.timezone}`;
@@ -1389,3 +1401,6 @@ async function syncMailbox(
   if (behind) out.partial = true;
   return out;
 }
+
+/** Permanent account-wide sending limit (all mailboxes combined, rolling 24 hours). */
+export const GLOBAL_DAILY_SEND_LIMIT = 40;

@@ -483,7 +483,7 @@ function MailboxesPanel() {
                   className={inputCls}
                   value={m.daily_cap}
                   onChange={(e) =>
-                    void patch(m.id, { daily_cap: Math.max(1, Number(e.target.value)) })
+                    void patch(m.id, { daily_cap: Math.min(40, Math.max(1, Number(e.target.value))) })
                   }
                 />
               </Field>
