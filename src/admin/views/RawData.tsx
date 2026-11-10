@@ -20,6 +20,7 @@ import { type AdminData, type RawBusiness, type ScanJobLite, type EnrichResult, 
 import { createRevealScanControl } from "../reveal-scan-control";
 import { mergeRawReveal, needsRawEnrichment, rawScanPerson, runRawReveal } from "../raw-reveal";
 import { type Sequence, listSequences, enrollLeads } from "../outreach";
+import { supabase } from "@/integrations/supabase/client";
 import { Panel, StatCard, Modal, Field, inputCls, Btn } from "../ui";
 
 function maskEmail(email: string): string {
@@ -64,8 +65,32 @@ export function RawData({
       .catch((e) => toast.error((e as Error).message));
   }, [seqOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Which emails are already in a running sequence (queued/active/paused), with when they were added.
+  const [inSeq, setInSeq] = useState<Record<string, { sequence: string; at: string }>>({});
+  const loadInSeq = async () => {
+    const { data: rows, error } = await supabase
+      .from("enrollments")
+      .select("created_at, status, leads!inner(email), sequences(name)")
+      .in("status", ["queued", "active", "paused"])
+      .limit(5000);
+    if (error) return;
+    const m: Record<string, { sequence: string; at: string }> = {};
+    for (const r of (rows ?? []) as any[]) {
+      const e = String(r.leads?.email || "").trim().toLowerCase();
+      if (e) m[e] = { sequence: r.sequences?.name || "a sequence", at: r.created_at };
+    }
+    setInSeq(m);
+  };
+  useEffect(() => {
+    void loadInSeq();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const seqOf = (email?: string) => (email ? inSeq[email.trim().toLowerCase()] : undefined);
+
   async function addSelectedToSequence() {
-    const picked = data.raw.filter((r) => selectedIds.has(r.id) && r.email);
+    const all = data.raw.filter((r) => selectedIds.has(r.id) && r.email);
+    const picked = all.filter((r) => !seqOf(r.email));
+    if (all.length && !picked.length) return toast.error("All selected contacts are already in a sequence.");
+    if (picked.length < all.length) toast.info(`${all.length - picked.length} already in a sequence — skipped.`);
     if (!seqId) return toast.error("Pick a sequence.");
     if (!picked.length) return toast.error("Select rows that have an email address.");
     setEnrolling(true);
@@ -102,6 +127,7 @@ export function RawData({
             : r,
         ),
       }));
+      void loadInSeq();
       toast.success(`${res.enrolled} lead${res.enrolled === 1 ? "" : "s"} added to the sequence`);
     }
   }
@@ -582,6 +608,14 @@ export function RawData({
                         }}
                       >
                         <AlertTriangle className="h-2.5 w-2.5" /> dup
+                      </span>
+                    )}
+                    {seqOf(r.email) && (
+                      <span
+                        title={`In "${seqOf(r.email)!.sequence}" since ${new Date(seqOf(r.email)!.at).toLocaleString()}`}
+                        className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-1.5 py-0.5 text-[.6rem] font-semibold uppercase text-primary"
+                      >
+                        <Send className="h-2.5 w-2.5" /> in sequence · {new Date(seqOf(r.email)!.at).toLocaleDateString()}
                       </span>
                     )}
                     {r.lastEmailedAt && (
