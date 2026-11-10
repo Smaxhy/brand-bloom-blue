@@ -79,10 +79,9 @@ export function RawData({
     const read = async (table: "enrollments" | "messages") => {
       const collected: any[] = [];
       for (let page = 0; page < 25; page++) {
-        let query = supabase.from(table).select(table === "enrollments"
-          ? "created_at, status, leads!inner(email), sequences(name)"
-          : "leads!inner(email)");
-        if (table === "messages") query = query.eq("direction", "out").in("status", ["sent", "bounced"]);
+        const query = table === "enrollments"
+          ? supabase.from("enrollments").select("created_at, status, leads!inner(email), sequences(name)")
+          : supabase.from("messages").select("leads!inner(email)").eq("direction", "out").in("status", ["sent", "bounced"]);
         const { data: batch, error } = await query.order("id").range(page * 1000, page * 1000 + 999);
         if (error) throw error;
         collected.push(...(batch ?? []));
@@ -436,7 +435,7 @@ export function RawData({
           {(["all", "raw", "accepted", "rejected", "sent", "untouched"] as const).map((f) => (
             <Btn
               key={f}
-              variant={filter === f ? "solid" : "ghost"}
+              variant={filter === f ? "primary" : "ghost"}
               disabled={f === "untouched" && !historyReady}
               onClick={() => {
                 setFilter(f);
