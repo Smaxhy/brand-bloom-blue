@@ -63,7 +63,8 @@ export async function sendingStatus(db: Pick<Db, "select">): Promise<SendingStat
 
   // Only a background scheduler (cron, database timer, outside pinger) stamps
   // this heartbeat; a manual sync or an open admin tab is not proof.
-  const settings = await db.select<{ last_cron_at: string | null; last_tick_source?: string | null }>("outreach_settings", "id=eq.singleton&select=*");
+  const settings = await db.select<{ last_cron_at: string | null; last_tick_source?: string | null; spread_across_day?: boolean | null }>("outreach_settings", "id=eq.singleton&select=*");
+  const spreadDay = !!settings[0]?.spread_across_day;
   const lastSeen = settings[0]?.last_cron_at;
   const source = settings[0]?.last_tick_source ?? null;
   const ageMin = lastSeen ? (now.getTime() - Date.parse(lastSeen)) / 60000 : Infinity;
@@ -141,7 +142,7 @@ export async function sendingStatus(db: Pick<Db, "select">): Promise<SendingStat
     const gapMin = eligible.length ? Math.min(...eligible.map((q) => q.gap_min_sec ?? 45)) : 45;
     const gapMax = eligible.length ? Math.max(...eligible.map((q) => q.gap_max_sec ?? 180)) : 180;
     const eta = waiting.length
-      ? sendEtaMinutes({ waiting: dueNow || waiting.length, gapMinSec: gapMin, gapMaxSec: gapMax, dailyCap: mb.daily_cap, sentToday })
+      ? sendEtaMinutes({ waiting: dueNow || waiting.length, gapMinSec: gapMin, gapMaxSec: gapMax, dailyCap: mb.daily_cap, sentToday, ...(spreadDay ? { windowStartHour: mb.window_start, windowEndHour: mb.window_end } : {}) })
       : null;
     const etaText = !eta
       ? null

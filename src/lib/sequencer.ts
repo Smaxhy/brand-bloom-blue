@@ -41,6 +41,8 @@ import {
   fitsDispatchBudget,
   gapWaitMs,
   pickGapSeconds,
+  dripGapSeconds,
+  effectiveGapSeconds,
   type DispatchSource,
 } from "./dispatch-pacing";
 import { acquireLease, renewLease, releaseLease, type Lease } from "./lease";
@@ -138,6 +140,7 @@ export interface OutreachSettings {
   footer_style?: "sentence" | "block" | null;
   /** Send text-only (no HTML part). Strongly recommended for cold outreach. */
   plain_text?: boolean | null;
+  spread_across_day?: boolean | null;
   optout_line_us?: string | null;
   optout_line_eu?: string | null;
   /** Owner-written instructions for every AI prompt (what we sell, tone). */
@@ -564,7 +567,11 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
           outcome = await sendOne(mb, en, seq, entry, {
             // Each person's own sequence minimum; the random part of the gap
             // (picked after the previous send) is carried by notBefore.
-            gapSec: force ? (nextGapSec ?? 0) : seq.gap_min_sec,
+            gapSec: force
+              ? (nextGapSec ?? 0)
+              : settings.spread_across_day
+                ? Math.max(seq.gap_min_sec, dripGapSeconds(mb.window_start, mb.window_end, mb.daily_cap))
+                : seq.gap_min_sec,
             lastSentAt,
             lease,
             notBefore: force ? 0 : notBefore,
@@ -588,7 +595,9 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
           lastSentAt = Date.now();
           nextGapSec = force
             ? pickGapSeconds(opts.forceGapSec?.[0] ?? 3, opts.forceGapSec?.[1] ?? 8)
-            : pickGapSeconds(seq.gap_min_sec, seq.gap_max_sec);
+            : settings.spread_across_day
+              ? effectiveGapSeconds({ seqMin: seq.gap_min_sec, seqMax: seq.gap_max_sec, windowStartHour: mb.window_start, windowEndHour: mb.window_end, dailyCap: mb.daily_cap })
+              : pickGapSeconds(seq.gap_min_sec, seq.gap_max_sec);
           notBefore = lastSentAt + nextGapSec * 1000;
           // Remember the chosen gap for the next run too, so the random
           // rhythm (min–max) holds across runs instead of collapsing to "min".
