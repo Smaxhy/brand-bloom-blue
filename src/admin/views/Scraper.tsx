@@ -564,7 +564,7 @@ export function Scraper({
       .catch(() => {});
   useEffect(() => {
     void refreshScans();
-    const t = setInterval(() => void refreshScans(), 30_000);
+    const t = setInterval(() => { if (document.visibilityState === "visible") void refreshScans(); }, 30_000);
     // Back on the tab: pick up any scan that is still running straight away.
     const onBack = () => {
       if (!pageAway()) void refreshScans();

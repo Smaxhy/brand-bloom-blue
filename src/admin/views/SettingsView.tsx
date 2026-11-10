@@ -196,7 +196,7 @@ function BackgroundTimerPanel() {
   const load = useCallback(() => schedulerStatus().then(setSt).catch(() => setSt({ ok: false, error: "Could not read the timer state." })), []);
   useEffect(() => {
     void load();
-    const t = setInterval(() => void load(), 60_000);
+    const t = setInterval(() => { if (document.visibilityState === "visible") void load(); }, 60_000);
     return () => clearInterval(t);
   }, [load]);
   const ageMin = st?.last_tick_at ? (Date.now() - Date.parse(st.last_tick_at)) / 60000 : Infinity;
