@@ -129,3 +129,4 @@
 - [ ] November 8 signed-in live discovery verification: requires preview sign-in and optional Brave configuration; no emails or paid searches performed.
 - [x] Relax admin sign-in attempt limit (user locked out after 2 tries)
 - [x] Raw Data: show which contacts are already in a sequence (+ date added), block adding to another
+- [ ] Add and verify a Raw Data first-contact option excluding all previous enrollment and sent-email history.
