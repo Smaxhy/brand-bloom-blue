@@ -554,7 +554,8 @@ function LoginScreen({ mfaPending = false }: { mfaPending?: boolean }) {
     const err = await doLogin(email, pass);
     setBusy(false);
     if (err) {
-      recordLoginFailure();
+      // Only wrong passwords count; outages and network errors never lock you out.
+      if (err.code?.startsWith("AUTH")) recordLoginFailure();
       setError(err);
     } else {
       recordLoginSuccess();
