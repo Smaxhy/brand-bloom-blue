@@ -875,4 +875,22 @@ describe("dispatcher sends whole queues", () => {
     await runDispatch({}, { source: "manual", force: { enrollmentIds: [picked] }, forceGapSec: [0, 0] });
     expect(sentTo()).toEqual(["owner@biz.com"]);
   });
+
+  it("stops manual sending at the permanent 40-email combined limit", async () => {
+    seed({ people: 2 });
+    tables.messages = Array.from({ length: 40 }, (_, i) => ({ id: `sent-${i}`, mailbox_id: "another-mailbox", direction: "out", status: i === 0 ? "bounced" : "sent", sent_at: past(60) }));
+    await runDispatch({}, { source: "manual", force: { sequenceId: "seq-1" }, forceGapSec: [0, 0] });
+    expect(sendVia).not.toHaveBeenCalled();
+    expect(tables.messages).toHaveLength(40);
+  });
+
+  it("waits for the automatic slot before claiming or verifying a person", async () => {
+    seed({ people: 2 });
+    pacing.enabled = true;
+    const report = await runDispatch({}, { source: "tick" });
+    expect(report.mailboxes[0].sent).toBe(1);
+    expect(tables.enrollments[1].current_step).toBe(0);
+    expect(tables.enrollments[1].next_send_at).toBe(past(29));
+    expect(report.mailboxes[0].next_send_in_sec).toBeGreaterThan(60);
+  });
 });

@@ -79,7 +79,16 @@ export async function stepScanJob(db: Db, env: Env, id: string, owner: string,
     while (cursor < job.total && Date.now() - started < budget && read < maxSites) {
       const chunk = job.people.slice(cursor, cursor + Math.min(chunkSize, maxSites - read));
       const result = await worker(chunk, job.options);
-      for (const row of result.results) results[row.id] = row;
+      const accepted: EnrichRow[] = [];
+      for (const row of result.results) {
+        const candidate = { ...results, [row.id]: row };
+        if (Object.keys(candidate).length > MAX_RESULT_ROWS || new TextEncoder().encode(JSON.stringify(candidate)).byteLength > MAX_RESULT_BYTES) {
+          capped = true;
+          break;
+        }
+        results[row.id] = row;
+        accepted.push(row);
+      }
       for (const warning of result.warnings) warnings.add(warning);
       cursor += chunk.length;
       read += chunk.length;
@@ -87,7 +96,7 @@ export async function stepScanJob(db: Db, env: Env, id: string, owner: string,
       // that throw and kill the whole scan (losing everything it found), stop
       // cleanly here: keep what's been read and tell them to narrow or batch it.
       const rowCount = Object.keys(results).length;
-      if (rowCount > MAX_RESULT_ROWS || JSON.stringify(results).length > MAX_RESULT_BYTES) {
+      if (capped || rowCount >= MAX_RESULT_ROWS) {
         capped = true;
         warnings.add(
           "This scan reached its size limit, so it stopped here with what it had found. To get more, narrow the search (smaller area or fewer keywords) or run it in smaller batches.",
@@ -100,7 +109,7 @@ export async function stepScanJob(db: Db, env: Env, id: string, owner: string,
       });
       if (!saved.length) return { job: await getScanJob(db, id, owner), produced, claimed: true };
       if (job.options?._stalls) job.options = { ...job.options, _stalls: 0 };
-      produced.push(...result.results);
+      produced.push(...accepted);
       if (capped) break;
     }
     const done = capped || cursor >= job.total;

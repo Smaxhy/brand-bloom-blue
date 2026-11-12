@@ -1,6 +1,7 @@
 import { scanJobAction } from "@/lib/scan-jobs.functions";
 import { runScanRequest } from "./scan-request";
 import { businessKey } from "@/lib/business-key";
+import { igHandle } from "@/lib/instagram";
 import { cleanDuplicateEmails } from "./email-cleanup";
 import { MAX_SCRAPE_RESULTS } from "@/lib/scrape-limits";
 import { pollBudgetMs, pollWhilePresent } from "./page-presence";
@@ -1181,8 +1182,7 @@ export function igDmText(p: { company?: string; name?: string; city?: string; in
 
 /** "joesroofing" from a stored Instagram URL (or ""). */
 export function igHandleOf(url?: string | null): string {
-  const m = /instagram\.com\/([A-Za-z0-9_.]{1,30})/i.exec(url || "");
-  return m ? m[1].toLowerCase().replace(/\.+$/, "") : "";
+  return igHandle(url || "");
 }
 
 /** How many Instagram DMs were logged today (local day) — cold DMs are best kept to a few dozen a day. */
