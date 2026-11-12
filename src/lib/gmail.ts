@@ -111,6 +111,29 @@ export async function gmailSend(
   return { id: j.id, threadId: j.threadId };
 }
 
+/**
+ * A failed Gmail READ as "gmail <what> <status>: <reason code>" — Google's short
+ * machine reason (insufficientPermissions, accessNotConfigured, …) so the app
+ * can say what to do, never the provider's full error text.
+ */
+async function gmailReadError(what: string, res: Response): Promise<Error> {
+  let reason = "";
+  try {
+    const j = JSON.parse((await res.text()).slice(0, 6000)) as {
+      error?: { status?: string; errors?: { reason?: string }[]; details?: { reason?: string }[] };
+    };
+    reason =
+      j.error?.errors?.find((e) => e.reason)?.reason ||
+      j.error?.details?.find((d) => d.reason)?.reason ||
+      j.error?.status ||
+      "";
+  } catch {
+    /* no readable body: the status alone */
+  }
+  const code = String(reason).replace(/[^\w.-]/g, "").slice(0, 60);
+  return new Error(`gmail ${what} ${res.status}${code ? `: ${code}` : ""}`);
+}
+
 export interface GmailHeaderMsg {
   id: string;
   threadId: string;
@@ -135,7 +158,7 @@ export async function gmailListRecent(
   u.searchParams.set("q", q);
   u.searchParams.set("maxResults", String(max));
   const res = await fetch(u.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
-  if (!res.ok) throw new Error(`gmail list ${res.status}`);
+  if (!res.ok) throw await gmailReadError("list", res);
   const j = (await res.json()) as { messages?: { id: string }[] };
   return (j.messages ?? []).map((m) => m.id);
 }
@@ -201,7 +224,7 @@ export async function gmailListAll(
       headers: { Authorization: `Bearer ${accessToken}` },
       signal: AbortSignal.timeout(15000),
     });
-    if (!res.ok) throw new Error(`gmail list ${res.status}`);
+    if (!res.ok) throw await gmailReadError("list", res);
     const j = (await res.json()) as { messages?: { id: string; threadId: string }[]; nextPageToken?: string };
     items.push(...(j.messages ?? []));
     if (!j.nextPageToken) return { items, more: false };
@@ -220,7 +243,7 @@ export async function gmailThreadHeaders(accessToken: string, threadId: string):
     signal: AbortSignal.timeout(15000),
   });
   if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`gmail thread ${res.status}`);
+  if (!res.ok) throw await gmailReadError("thread", res);
   const j = (await res.json()) as { messages?: RawGmailMessage[] };
   return (j.messages ?? []).map(toHeaderMsg);
 }

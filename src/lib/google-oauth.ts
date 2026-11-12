@@ -26,6 +26,24 @@ export const GMAIL_SCOPES = [
   "openid",
 ].join(" ");
 
+/**
+ * What Google actually granted. Its consent screen lets people untick boxes, so
+ * a mailbox can come back "connected" without the right to send or to read —
+ * and then fails later with a 403 nobody understands. `known` is false when
+ * Google didn't say (older responses): then nothing is assumed.
+ */
+export function grantedGmailAccess(scope: string | null | undefined): { known: boolean; send: boolean; read: boolean } {
+  const granted = (scope || "").split(/\s+/).filter(Boolean);
+  if (!granted.length) return { known: false, send: true, read: true };
+  const has = (name: string) => granted.includes(`https://www.googleapis.com/auth/${name}`);
+  const all = granted.includes("https://mail.google.com/");
+  return {
+    known: true,
+    send: all || has("gmail.send") || has("gmail.compose") || has("gmail.modify"),
+    read: all || has("gmail.readonly") || has("gmail.modify"),
+  };
+}
+
 async function hmac(key: string, data: string): Promise<string> {
   const k = await crypto.subtle.importKey(
     "raw",
@@ -121,8 +139,11 @@ export async function userEmail(accessToken: string): Promise<string> {
   return j.email || "";
 }
 
-/** Get a valid access token for a mailbox, refreshing and persisting when needed. */
-export async function accessTokenFor(e: Env, db: Db, mailboxId: string): Promise<string> {
+/**
+ * Get a valid access token for a mailbox, refreshing and persisting when needed.
+ * `fresh` skips the stored one (Google just refused it) and asks for a new token.
+ */
+export async function accessTokenFor(e: Env, db: Db, mailboxId: string, fresh = false): Promise<string> {
   const tok = await db.one<{
     refresh_token: string;
     access_token: string | null;
@@ -133,6 +154,7 @@ export async function accessTokenFor(e: Env, db: Db, mailboxId: string): Promise
   );
   if (!tok) throw new Error("mailbox not connected");
   if (
+    !fresh &&
     tok.access_token &&
     tok.expires_at &&
     new Date(tok.expires_at).getTime() - Date.now() > 60_000
@@ -153,7 +175,7 @@ export async function accessTokenFor(e: Env, db: Db, mailboxId: string): Promise
   if (!res.ok || !j.access_token) {
     await db.update("mailboxes", `id=eq.${enc(mailboxId)}`, {
       status: "error",
-      last_error: `Token refresh failed: ${j.error_description || j.error || res.status}. Reconnect this mailbox.`,
+      last_error: "Cannot send: Google access for this mailbox expired or was withdrawn. Reconnect it in Settings → Sending mailboxes.",
     });
     throw new Error(`token refresh failed: ${j.error || res.status}`);
   }

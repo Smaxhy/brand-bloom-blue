@@ -1,6 +1,6 @@
 # Public website refresh
 # November 11 v2 admin update
-- [ ] Merge Instagram discovery/manual messaging, scan-size recovery and safe sender improvements without reverting existing protections, history, first-contact filters or the permanent daily cap.
+- [x] Merge Instagram discovery/manual messaging, scan-size recovery and safe sender improvements without reverting existing protections, history, first-contact filters or the permanent daily cap.
 - [ ] Run regressions and inspect public/admin pages without sending emails or spending search credits.
 
 # November 9 outreach and scraper update

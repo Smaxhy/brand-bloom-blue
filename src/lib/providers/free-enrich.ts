@@ -1,4 +1,5 @@
 import { fetchPublicSite } from '../public-site-fetch';
+import { pickSiteInstagram, type IgPick } from "../instagram";
 /**
  * Free enrichment — everything we can learn about a business without paying
  * anyone, from its own website:
@@ -22,7 +23,9 @@ export interface FreeEnrichResult {
   text: string; // plain text of the pages we read (for Claude)
   emails: { email: string; source: "site" | "guess"; page: string; mx: boolean | null }[];
   phones: string[];
-  socials: { linkedin: string; facebook: string; instagram: string };
+  socials: { linkedin: string; facebook: string; instagram: string; tiktok: string; youtube: string };
+  /** The business's own Instagram, with how sure we are and why (null = none on the site). */
+  ig: IgPick | null;
   names: { name: string; title: string; source: string }[];
   mx: boolean | null; // null = unknown (lookup failed)
   pages: string[];
@@ -547,7 +550,8 @@ export async function freeEnrich(input: {
     text: "",
     emails: [],
     phones: [],
-    socials: { linkedin: "", facebook: "", instagram: "" },
+    socials: { linkedin: "", facebook: "", instagram: "", tiktok: "", youtube: "" },
+    ig: null,
     names: [],
     mx: null,
     pages: [],
@@ -568,7 +572,7 @@ export async function freeEnrich(input: {
   if (!domain) return { ...empty, error: "no website" };
 
   const base = `https://${domain}`;
-  const maxPages = Math.max(1, Math.min(input.maxPages ?? (input.tiered ? 19 : PAGES.length), 19));
+  const maxPages = Math.max(1, Math.min(input.maxPages ?? (input.tiered ? 12 : PAGES.length), 12));
   const crawlDeadline = Date.now() + 23_000;
   let remainingPages = maxPages - 1;
 
@@ -624,7 +628,9 @@ export async function freeEnrich(input: {
 
   const emailMap = new Map<string, { page: string }>();
   const phones = new Set<string>();
-  const socials = { linkedin: "", facebook: "", instagram: "" };
+  const socials = { linkedin: "", facebook: "", instagram: "", tiktok: "", youtube: "" };
+  // Pages with web-designer credits removed — what the Instagram finder reads.
+  const ownPages: { path: string; html: string }[] = [];
   const names: { name: string; title: string; source: string }[] = [];
   const texts: string[] = [];
 
@@ -632,6 +638,7 @@ export async function freeEnrich(input: {
     // Explicit designer-credit links are not business contact details. Keep
     // other published off-domain addresses: businesses may use a separate domain.
     const html = pg.html.replace(/<a\b[^>]*>[\s\S]*?<\/a>/gi, (anchor) => /\b(?:site designer|website (?:design|designed|built|developed)(?: by)?|web design by|designed by|developed by)\b/i.test(htmlToText(anchor)) ? " " : anchor);
+    ownPages.push({ path: pg.path || "/", html });
     // mailto: and tel: links are the most reliable signals
     for (const m of html.matchAll(/mailto:([^"'?\s<>]+)/gi)) {
       // Malformed percent encoding in one link must not discard the whole site.
@@ -657,8 +664,10 @@ export async function freeEnrich(input: {
       /https?:\/\/(?:www\.)?facebook\.com\/(?!sharer|share|plugins|tr\b)[A-Za-z0-9_.%-]+/i,
     );
     if (fb && !socials.facebook) socials.facebook = fb[0];
-    const ig = html.match(/https?:\/\/(?:www\.)?instagram\.com\/(?!p\/|share)[A-Za-z0-9_.%-]+/i);
-    if (ig && !socials.instagram) socials.instagram = ig[0];
+    const tk = html.match(/https?:\/\/(?:www\.)?tiktok\.com\/@[A-Za-z0-9_.]+/i);
+    if (tk && !socials.tiktok) socials.tiktok = tk[0];
+    const yt = html.match(/https?:\/\/(?:www\.)?youtube\.com\/(?:@[A-Za-z0-9_.-]+|c\/[A-Za-z0-9_.-]+|channel\/[A-Za-z0-9_-]+|user\/[A-Za-z0-9_.-]+)/i);
+    if (yt && !socials.youtube) socials.youtube = yt[0];
     // structured data people + business email
     names.push(...extractJsonLdPeople(html));
     for (const email of extractJsonLdEmails(html))
@@ -738,7 +747,13 @@ export async function freeEnrich(input: {
     )
     .slice(0, 3);
 
-  signals.socialCount = [socials.linkedin, socials.facebook, socials.instagram].filter(
+  // Instagram is the priority: the business's OWN profile among everything the
+  // site links to (ranked — not simply the first link, which is often a
+  // supplier's, an embedded post or the web designer's).
+  const ig = pickSiteInstagram(ownPages, { name: input.companyName, domain: finalDomain, city: input.city });
+  if (ig) socials.instagram = ig.url;
+
+  signals.socialCount = [socials.linkedin, socials.facebook, socials.instagram, socials.tiktok, socials.youtube].filter(
     Boolean,
   ).length;
 
@@ -750,6 +765,7 @@ export async function freeEnrich(input: {
     emails: [...ranked, ...guesses],
     phones: phoneList,
     socials,
+    ig,
     names: people,
     mx,
     pages: pages.map((p) => p.path || "/"),

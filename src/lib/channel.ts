@@ -138,25 +138,32 @@ export async function sendVia(
     };
   }
 
-  const token = await beforeSend(() => accessTokenFor(env, db, mb.id));
+  let token = await beforeSend(() => accessTokenFor(env, db, mb.id));
   const rfc = newMessageId(mb.email.split("@")[1] || "localhost");
+  const mail = {
+    deadline: m.deadline,
+    from: { name: mb.display_name, email: mb.email },
+    to: m.to,
+    subject: m.subject,
+    text: m.text,
+    html: m.html,
+    threadId: m.threadId,
+    inReplyTo: m.inReplyTo,
+    unsubscribeUrl: m.unsubscribeUrl,
+    unsubscribeMailto: mb.email,
+  };
   if (m.deadline && Date.now() + 2000 >= m.deadline) throw new NotSentError("Sending time slot ended before delivery");
-  const sent = await gmailSend(
-    token,
-    {
-      deadline: m.deadline,
-      from: { name: mb.display_name, email: mb.email },
-      to: m.to,
-      subject: m.subject,
-      text: m.text,
-      html: m.html,
-      threadId: m.threadId,
-      inReplyTo: m.inReplyTo,
-      unsubscribeUrl: m.unsubscribeUrl,
-      unsubscribeMailto: mb.email,
-    },
-    rfc,
-  );
+  let sent: Awaited<ReturnType<typeof gmailSend>>;
+  try {
+    sent = await gmailSend(token, mail, rfc);
+  } catch (err) {
+    // Google refused the stored sign-in token (401): nothing was sent. Ask for
+    // a fresh one and try once more before the mailbox is called broken.
+    if (!/^gmail send 401\b/.test((err as Error | null)?.message || "")) throw err;
+    token = await beforeSend(() => accessTokenFor(env, db, mb.id, true));
+    if (m.deadline && Date.now() + 2000 >= m.deadline) throw new NotSentError("Sending time slot ended before delivery");
+    sent = await gmailSend(token, mail, rfc);
+  }
   return { id: sent.id, threadId: sent.threadId, rfcMessageId: rfc };
 }
 

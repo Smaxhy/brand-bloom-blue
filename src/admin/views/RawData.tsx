@@ -15,14 +15,16 @@ import {
   Send,
   Loader2,
   SquareStop,
+  Instagram,
 } from "lucide-react";
-import { type AdminData, type RawBusiness, type ScanJobLite, type EnrichResult, uid, startScan, stepScan, scanStatus, cancelScan } from "../store";
+import { type AdminData, type RawBusiness, type ScanJobLite, type EnrichResult, uid, startScan, stepScan, scanStatus, cancelScan, igDmsToday, igHandleOf, logIgDm } from "../store";
+import { IgChip } from "../IgChip";
+import { openInstagramDm } from "../ig-dm";
 import { createRevealScanControl } from "../reveal-scan-control";
 import { mergeRawReveal, needsRawEnrichment, rawScanPerson, runRawReveal } from "../raw-reveal";
 import { type Sequence, listSequences, enrollLeads } from "../outreach";
-import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
 import { Panel, StatCard, Modal, Field, inputCls, Btn } from "../ui";
-import { isFirstContact, type ContactHistory } from "../first-contact";
 
 function maskEmail(email: string): string {
   if (!email.includes("@")) return "***";
@@ -177,10 +179,22 @@ export function RawData({
   const revealControl = useRef<ReturnType<typeof createRevealScanControl> | null>(null);
   const [revealMessage, setRevealMessage] = useState("");
 
-  async function revealRows(ids: Set<string>) {
+  // Instagram: only rows that have one (the DM working list), and "copied" feedback.
+  const [igOnly, setIgOnly] = useState(false);
+  const [dmCopiedId, setDmCopiedId] = useState<string | null>(null);
+  function dmInstagram(r: RawBusiness) {
+    const handle = openInstagramDm({ instagram: r.instagram, company: r.business, name: r.contactName, city: r.city, industry: r.industry });
+    if (!handle) return;
+    setDmCopiedId(r.id);
+    window.setTimeout(() => setDmCopiedId((cur) => (cur === r.id ? null : cur)), 4000);
+    update((prev) => logIgDm(prev, handle));
+  }
+
+  /** `instagramToo`: also read rows that have everything else but no Instagram yet. */
+  async function revealRows(ids: Set<string>, instagramToo = false) {
     if (revealControl.current) return;
     setRevealedIds((prev) => new Set([...prev, ...ids]));
-    const targets = data.raw.filter((row) => ids.has(row.id) && needsRawEnrichment(row));
+    const targets = data.raw.filter((row) => ids.has(row.id) && (needsRawEnrichment(row) || (instagramToo && !row.instagram)));
     if (!targets.length) return;
     const control = createRevealScanControl();
     revealControl.current = control;
@@ -197,11 +211,12 @@ export function RawData({
     };
     try {
       const warnings = await runRawReveal(targets.map(rawScanPerson), {
-        start: (people) => startScan(people, { useClaude: false, usePaid: false, revealPhone: true, findLinkedin: false }, `Raw Data · ${people.length} businesses`, control.canContinue),
+        // "Reveal emails" reads listings and websites only; "Find Instagram" also searches (search credits).
+        start: (people) => startScan(people, { useClaude: false, usePaid: false, revealPhone: true, findLinkedin: false, findInstagram: instagramToo }, `Raw Data · ${people.length} businesses`, control.canContinue),
         step: (id) => stepScan(id, control.canContinue), status: (id) => scanStatus(id, true),
         canContinue: control.canContinue,
-        // Short breather between steps so large reveals never overload the backend.
-        wait: () => new Promise((resolve) => setTimeout(resolve, 2000)),
+        // The server step itself takes ~20 s; no need for a long pause between steps.
+        wait: () => new Promise((resolve) => setTimeout(resolve, 400)),
         onJob: setRevealJob, onRows: apply,
         onProgress: (done, total) => setRevealProgress({ done, total }),
       });
@@ -354,6 +369,7 @@ export function RawData({
       if (filter === "all") return r.status !== "accepted";
       return r.status === filter;
     })
+    .filter((r) => !igOnly || !!r.instagram)
     .filter(
       (r) =>
         !q || (r.business + r.email + r.city + r.industry).toLowerCase().includes(q.toLowerCase()),
@@ -452,6 +468,10 @@ export function RawData({
           ))}
         </div>
 
+        <Button variant={igOnly ? "default" : "outline"} aria-pressed={igOnly} onClick={() => { setIgOnly((v) => !v); clearSelection(); }}>
+          <Instagram className="h-4 w-4" /> Instagram only · {data.raw.filter((r) => r.instagram).length}
+        </Button>
+        <span className="text-xs text-muted-foreground">{igDmsToday(data.igDms)} DM chats opened today</span>
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
@@ -518,6 +538,9 @@ export function RawData({
                 disabled={revealBusy}
               >
                 {revealBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />} Reveal emails
+              </Btn>
+              <Btn variant="soft" disabled={revealBusy} onClick={() => void revealRows(new Set(selectedIds), true)} title="Includes optional Instagram searches using search credits">
+                <Instagram className="h-4 w-4" /> Find Instagram
               </Btn>
               <button
                 onClick={hideSelected}
@@ -615,6 +638,19 @@ export function RawData({
                     <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
                       {r.contactName}
                       {r.contactTitle ? ` · ${r.contactTitle}` : ""}
+                    </span>
+                  )}
+                  {r.instagram && (
+                    <span className="mt-1 block font-normal">
+                      <IgChip
+                        instagram={r.instagram}
+                        followers={r.instagramFollowers}
+                        sure={r.instagramSure}
+                        messagedAt={data.igDms?.[igHandleOf(r.instagram)]}
+                        copied={dmCopiedId === r.id}
+                        onDm={() => dmInstagram(r)}
+                        onClearMessaged={() => update((prev) => logIgDm(prev, igHandleOf(r.instagram), false))}
+                      />
                     </span>
                   )}
                 </td>

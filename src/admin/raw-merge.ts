@@ -34,6 +34,10 @@ export function addToRaw(raw: RawBusiness[], incoming: RawBusiness[]): { raw: Ra
         contactName: old.contactName || r.contactName,
         contactTitle: old.contactTitle || r.contactTitle,
         linkedin: old.linkedin || r.linkedin,
+        // The Instagram arrives with what we know about it (certainty, followers).
+        ...(!old.instagram && r.instagram
+          ? { instagram: r.instagram, instagramSure: r.instagramSure, instagramFollowers: r.instagramFollowers }
+          : {}),
         rating: old.rating ?? r.rating,
         reviews: old.reviews ?? r.reviews,
         score: old.score ?? r.score,

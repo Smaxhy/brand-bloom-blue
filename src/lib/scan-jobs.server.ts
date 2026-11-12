@@ -4,16 +4,27 @@ import type { EnrichInput, EnrichRow } from "./api-proxies";
 type Env = Record<string, string | undefined>;
 export interface ScanJob {
   id: string; created_by: string; label: string; status: "queued" | "running" | "done" | "failed" | "cancelled";
-  options: { useClaude?: boolean; usePaid?: boolean; revealPhone?: boolean; findLinkedin?: boolean; allowGuesses?: boolean; _stalls?: number };
+  options: { useClaude?: boolean; usePaid?: boolean; revealPhone?: boolean; findLinkedin?: boolean; findInstagram?: boolean; allowGuesses?: boolean; _stalls?: number };
   people: (EnrichInput & { id: string })[]; results: Record<string, EnrichRow>;
   cursor: number; total: number; warnings: string[]; last_error: string | null;
   lease_token: string | null; lease_until: string | null; created_at: string; updated_at: string; finished_at: string | null;
 }
 const lite = "id,label,status,cursor,total,warnings,last_error,created_at,updated_at,finished_at";
 /** A runner holds a scan for this long; it renews after every saved chunk. A closed tab lets go within this time. */
-export const SCAN_LEASE_MS = 600_000;
+export const SCAN_LEASE_MS = 90_000;
 /** Websites read side by side in one chunk. */
 export const SCAN_CHUNK = 6;
+export const MAX_RESULT_ROWS = 4000;
+export const MAX_RESULT_BYTES = 3_500_000;
+
+/**
+ * A scan's results live in one database row. Past these sizes it stops cleanly
+ * (keeping what it found) instead of throwing and failing the whole scan — which
+ * is what used to happen on big scrapes. Kept comfortably under the row's hard
+ * ceiling so the final save always lands.
+ */
+export const MAX_RESULT_ROWS = 4000;
+export const MAX_RESULT_BYTES = 3_500_000;
 
 export async function getScanJob(db: Db, id: string, owner: string, full = false) {
   return db.one<ScanJob>("scan_jobs", `id=eq.${enc(id)}&created_by=eq.${enc(owner)}&select=${full ? "*" : lite}`);
@@ -61,6 +72,7 @@ export async function stepScanJob(db: Db, env: Env, id: string, owner: string,
     cursor += skipped;
     warnings.add(`Skipped ${skipped} website${skipped === 1 ? "" : "s"} that kept stopping the reader.`);
   }
+  let capped = false;
   try {
     const worker = enrich ?? (async (people, options) => {
       const { enrichPeople } = await import("./api-proxies");
@@ -71,9 +83,18 @@ export async function stepScanJob(db: Db, env: Env, id: string, owner: string,
       const result = await worker(chunk, job.options);
       for (const row of result.results) results[row.id] = row;
       for (const warning of result.warnings) warnings.add(warning);
-      if (JSON.stringify(results).length > 4000000) throw new Error("Scan result storage limit reached");
       cursor += chunk.length;
       read += chunk.length;
+      // A very large scan would outgrow the row it's saved in. Instead of letting
+      // that throw and kill the whole scan (losing everything it found), stop
+      // cleanly here: keep what's been read and tell them to narrow or batch it.
+      const rowCount = Object.keys(results).length;
+      if (rowCount > MAX_RESULT_ROWS || JSON.stringify(results).length > MAX_RESULT_BYTES) {
+        capped = true;
+        warnings.add(
+          "This scan reached its size limit, so it stopped here with what it had found. To get more, narrow the search (smaller area or fewer keywords) or run it in smaller batches.",
+        );
+      }
       const saved = await db.update("scan_jobs", owned, {
         results, cursor, warnings: [...warnings].slice(0, 20), updated_at: new Date().toISOString(),
         lease_until: new Date(Date.now() + SCAN_LEASE_MS).toISOString(),
@@ -82,11 +103,13 @@ export async function stepScanJob(db: Db, env: Env, id: string, owner: string,
       if (!saved.length) return { job: await getScanJob(db, id, owner), produced, claimed: true };
       if (job.options?._stalls) job.options = { ...job.options, _stalls: 0 };
       produced.push(...result.results);
+      if (capped) break;
     }
+    const done = capped || cursor >= job.total;
     await db.update("scan_jobs", owned, {
-      status: cursor >= job.total ? "done" : "running", lease_token: null, lease_until: null, cursor,
-      ...(opts.skip ? { warnings: [...warnings].slice(0, 20) } : {}),
-      finished_at: cursor >= job.total ? new Date().toISOString() : null, updated_at: new Date().toISOString(),
+      status: done ? "done" : "running", lease_token: null, lease_until: null, cursor,
+      ...(opts.skip || capped ? { warnings: [...warnings].slice(0, 20) } : {}),
+      finished_at: done ? new Date().toISOString() : null, updated_at: new Date().toISOString(),
     });
   } catch (error) {
     console.error("Scan step failed", error);

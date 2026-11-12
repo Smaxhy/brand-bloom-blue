@@ -12,6 +12,7 @@ import { Db, enc } from "./db";
 import { classifyReply } from "./reply-ai";
 import { isAutoReplyText, wantsToStop } from "./gmail";
 import { ghlCredsFor } from "./channel";
+import { CANT_SEND } from "./send-errors";
 import { applyHardBounce } from "./bounce";
 import { applyReply, enrollmentForThread } from "./reply-actions";
 import {
@@ -220,7 +221,7 @@ export async function syncGhlMailbox(
   if (out.partial) return out;
   await db.update("mailboxes", `id=eq.${mb.id}`, {
     last_sync_at: new Date().toISOString(),
-    last_error: null,
   });
+  await db.update("mailboxes", `id=eq.${mb.id}&last_error=not.like.${enc(`${CANT_SEND}*`)}`, { last_error: null }).catch(() => {});
   return out;
 }

@@ -17,6 +17,7 @@
  */
 
 import type { PlaceBusiness } from "./places";
+import { listingSocials } from "../instagram";
 import { publicSiteUrl, publicHost } from "../public-site-fetch";
 
 type Env = Record<string, string | undefined>;
@@ -261,6 +262,7 @@ export function parseGmapsCsv(
       id,
       company: title,
       website,
+      ...listingSocials(rawWeb),
       phone: (iPhone >= 0 ? r[iPhone] : "").trim(),
       address: (iAddr >= 0 ? r[iAddr] : "").trim(),
       city,

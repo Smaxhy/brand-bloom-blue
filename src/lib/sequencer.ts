@@ -8,6 +8,8 @@
  * Each run, for every active mailbox IN PARALLEL:
  *   1. Inbox sync (at most every 5 min; a sync failure never blocks sending).
  *   2. Daily cap left today, sending hours ("Send any time" sequences ignore them).
+ *      The cap is SPREAD over the sending day (40 a day = one about every 36 min),
+ *      catching up — never bursting — after a late start. Only "Send now" is faster.
  *   3. Take the mailbox's send lease, so two runners never send from it at once.
  *   4. Due people, oldest first. Each one: atomic claim → suppression / duplicate /
  *      bounce checks → wait out the sequence gap INSIDE the run when it fits →
@@ -38,12 +40,14 @@ import { classifyReply } from "./reply-ai";
 import { preSendCheck, classifyBounce, applyHardBounce, applySoftBounce, isInvalidRecipientError } from "./bounce";
 import {
   dispatchBudgetMs,
+  effectiveGapSeconds,
   fitsDispatchBudget,
+  gapLabel,
   gapWaitMs,
   pickGapSeconds,
-  dripGapSeconds,
-  effectiveGapSeconds,
+  spreadGapSeconds,
   type DispatchSource,
+  type SpreadDay,
 } from "./dispatch-pacing";
 import { acquireLease, renewLease, releaseLease, type Lease } from "./lease";
 import {
@@ -53,10 +57,14 @@ import {
   isRateLimited,
   isRecipientRefusal,
   certainlyNotSent,
+  mailboxProblem,
+  cantSend,
+  CANT_SEND,
+  CANT_READ,
 } from "./send-errors";
 import { applyReply, enrollmentForThread } from "./reply-actions";
-import { cleanDomain, isCompanyDomain } from "./business-key";
 import { companyAlreadyContacted } from "./company-contact";
+import { isCompanyDomain } from "./business-key";
 
 type Env = Record<string, string | undefined>;
 
@@ -171,6 +179,75 @@ export function localParts(tz: string, d = new Date()): { hour: number; day: num
   }
 }
 
+/** Seconds since local midnight (and the weekday) in a time zone. */
+export function localClock(tz: string, d = new Date()): { secOfDay: number; day: number } {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric",
+      hour12: false,
+      weekday: "short",
+    }).formatToParts(d);
+    const num = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0) || 0;
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    return {
+      secOfDay: (num("hour") % 24) * 3600 + num("minute") * 60 + num("second"),
+      day: days.indexOf(parts.find((p) => p.type === "weekday")?.value ?? ""),
+    };
+  } catch {
+    return { secOfDay: d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds(), day: d.getUTCDay() };
+  }
+}
+
+/**
+ * The stretch of today a mailbox's daily cap is spread over, and how much of
+ * it is left. "Send any time" sequences run around the clock, so their day is
+ * the whole day (until local midnight, when the cap starts again); otherwise
+ * it is the mailbox's sending hours.
+ */
+export function spreadDay(
+  mb: Pick<Mailbox, "timezone" | "window_start" | "window_end">,
+  anytime: boolean,
+  now = new Date(),
+): SpreadDay {
+  const { secOfDay } = localClock(mb.timezone, now);
+  const start = Math.max(0, Math.min(23, Number(mb.window_start) || 0)) * 3600;
+  const end = Math.max(1, Math.min(24, Number(mb.window_end) || 24)) * 3600;
+  if (anytime || end <= start || secOfDay < start || secOfDay >= end)
+    return { windowSec: 86_400, leftSec: Math.max(0, 86_400 - secOfDay) };
+  return { windowSec: end - start, leftSec: end - secOfDay };
+}
+
+/**
+ * A sequence whose mailboxes were ALL disconnected (deleted) sends from any
+ * mailbox that can — that's what "Disconnect" promises ("queued emails move to
+ * the next free mailbox"). A paused or broken mailbox is NOT replaced: pausing
+ * a mailbox must never make its sequence start sending from another address.
+ */
+export function sendsFromAnyMailbox(seq: Pick<Sequence, "mailbox_ids">, existingIds: ReadonlySet<string>): boolean {
+  const ids = seq.mailbox_ids || [];
+  return ids.length > 0 && !ids.some((id) => existingIds.has(id));
+}
+
+/** Does this sequence send from this mailbox? */
+export function usesMailbox(seq: Pick<Sequence, "mailbox_ids">, mailboxId: string, existingIds: ReadonlySet<string>): boolean {
+  return (seq.mailbox_ids || []).includes(mailboxId) || sendsFromAnyMailbox(seq, existingIds);
+}
+
+/**
+ * The mailboxes a sequence's NEW people are shared between: its own mailboxes
+ * that can send right now (every sendable one if its own were all disconnected).
+ * Empty = leave people unassigned; whichever mailbox works first takes them.
+ */
+export async function roundRobinMailboxes(db: Pick<Db, "select">, seq: Pick<Sequence, "mailbox_ids">): Promise<string[]> {
+  const boxes = await db.select<{ id: string; status: string; last_error: string | null }>("mailboxes", "select=id,status,last_error");
+  const sendable = boxes.filter((m) => !cantSend(m)).map((m) => m.id);
+  if (sendsFromAnyMailbox(seq, new Set(boxes.map((m) => m.id)))) return sendable;
+  return (seq.mailbox_ids || []).filter((id) => sendable.includes(id));
+}
+
 /** Start of the mailbox's local day, as an ISO instant (approximate via offset probing). */
 export function startOfLocalDayIso(tz: string): string {
   const now = new Date();
@@ -278,12 +355,24 @@ const INBOX_FRESH_MS = 10 * 60_000;
 const SENDING_MARK = "sending step ";
 const VALID_ID = /^[0-9a-f-]{36}$/i;
 
-/** First emails sitting on a mailbox that can't send (paused, error, removed from the sequence) go back to the shared pool. */
-async function reassignStranded(db: Db, sequences: Sequence[], activeIds: Set<string>): Promise<number> {
+/**
+ * First emails sitting on a mailbox that can't send (paused, broken connection,
+ * removed from the sequence) go back to the shared pool, where the sequence's
+ * working mailboxes pick them up.
+ */
+async function reassignStranded(
+  db: Db,
+  sequences: Sequence[],
+  allMailboxes: Mailbox[],
+  /** Also for sequences that aren't Active (a "Send now" on a paused/draft sequence). */
+  onlySequenceId?: string,
+): Promise<number> {
+  const existing = new Set(allMailboxes.map((m) => m.id));
+  const sendable = allMailboxes.filter((m) => !cantSend(m) && VALID_ID.test(m.id)).map((m) => m.id);
   let moved = 0;
   for (const s of sequences) {
-    if (s.status !== "active") continue;
-    const live = (s.mailbox_ids || []).filter((id) => activeIds.has(id) && VALID_ID.test(id));
+    if (onlySequenceId ? s.id !== onlySequenceId : s.status !== "active") continue;
+    const live = sendsFromAnyMailbox(s, existing) ? sendable : (s.mailbox_ids || []).filter((id) => sendable.includes(id));
     if (!live.length) continue;
     const rows = await db.update<{ id: string }>(
       "enrollments",
@@ -293,6 +382,17 @@ async function reassignStranded(db: Db, sequences: Sequence[], activeIds: Set<st
     moved += rows.length;
   }
   return moved;
+}
+
+const NO_SEQUENCE_HERE =
+  'no active sequence sends from this mailbox — open the sequence and tick this mailbox under "Send from"';
+
+/** "next email in ~35 min — spreading 40 a day, about one every 36 min". */
+function nextEmailNote(waitMs: number, dailyCap: number, spreadSec: number, seqGapSec: number): string {
+  const when = `next email in ~${gapLabel(Math.ceil(waitMs / 1000))}`;
+  return spreadSec > seqGapSec
+    ? `${when} — spreading ${dailyCap} a day, about one every ${gapLabel(spreadSec)}`
+    : `${when} (sequence gap)`;
 }
 
 export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise<DispatchReport> {
@@ -316,6 +416,7 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
     db.one<OutreachSettings>("outreach_settings", "id=eq.singleton&select=*"),
   ]);
   const mailboxes = allMailboxes.filter((m) => m.status === "active");
+  const existingIds = new Set(allMailboxes.map((m) => m.id));
   const settings: OutreachSettings = settingsRow ?? {
     company_name: "Inspirova Marketing",
     postal_address: "",
@@ -342,9 +443,11 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
     return p;
   };
 
-  if (!force && !opts.syncOnly) {
+  // Before anyone is picked: people waiting on a mailbox that can't send move to
+  // the sequence's working mailboxes — also for a "Send now" on one sequence.
+  if (!opts.syncOnly && !force?.enrollmentIds?.length) {
     try {
-      report.reassigned = await reassignStranded(db, sequences, new Set(mailboxes.map((m) => m.id)));
+      report.reassigned = await reassignStranded(db, sequences, allMailboxes, force?.sequenceId);
     } catch (err) {
       report.errors.push(`reassign: ${(err as Error).message}`);
     }
@@ -380,26 +483,43 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
           } catch (err) {
             await releaseLease(db, syncLease); // try again on the next run
             const msg = (err as Error).message;
-            entry.sync_error = msg.slice(0, 200);
-            report.errors.push(`${mb.email} inbox sync: ${msg.slice(0, 200)}`);
+            const problem = mailboxProblem(msg, mb.provider);
+            entry.sync_error = (problem?.text ?? msg).slice(0, 300);
+            report.errors.push(
+              problem
+                ? `${mb.email}: can't read the inbox — ${problem.text} Follow-ups wait until it can be read; first emails still go out.`
+                : `${mb.email} inbox sync: ${msg.slice(0, 200)}`,
+            );
             if (isPermanentMailboxError(msg)) {
-              await markMailboxBroken(mb, msg);
+              await markMailboxBroken(mb, problem ? `${CANT_SEND}${problem.text}` : msg);
               entry.skipped = "connection lost — reconnect this mailbox in Settings";
               return;
             }
+            // Google refused the stored sign-in token: forget it, so the next run
+            // asks for a fresh one instead of failing until the old one expires.
+            if (/^gmail \w+ 401\b/.test(msg))
+              await db.update("mailbox_tokens", `mailbox_id=eq.${mb.id}`, { expires_at: null }).catch(() => {});
+            // Say so on the mailbox (Settings shows it) — unless it already says it can't send at all.
+            if (problem && !(mb.last_error || "").startsWith(CANT_SEND))
+              await db.update("mailboxes", `id=eq.${mb.id}`, { last_error: `${CANT_READ}${problem.text}`.slice(0, 500) }).catch(() => {});
           }
         }
       }
       if (opts.syncOnly) return;
 
-      const seqsHere = sequences.filter((s) => s.mailbox_ids.includes(mb.id));
+      const seqsHere = sequences.filter((s) => usesMailbox(s, mb.id, existingIds));
       const outsideHours = !force && !inWindow(mb);
       const allowedNow = (list: Sequence[]) => (outsideHours ? list.filter((s) => s.send_anytime) : list).map((s) => s.id);
       // People already assigned to this mailbox keep their mailbox (their thread
       // lives there) even if it was later removed from the sequence's list.
       const ownSeqIds = force ? [] : allowedNow(sequences);
+      if (force?.sequenceId && !seqsHere.some((s) => s.id === force.sequenceId)) {
+        // Not part of this send at all: report nothing about who is left.
+        entry.skipped = "this mailbox isn't used by that sequence";
+        return;
+      }
       if (!seqsHere.length && !ownSeqIds.length) {
-        entry.skipped = "no active sequence uses this mailbox";
+        entry.skipped = force ? NO_SEQUENCE_HERE.replace("active ", "") : NO_SEQUENCE_HERE;
         return;
       }
       const dueSeqIds = allowedNow(seqsHere);
@@ -432,19 +552,7 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
           `mailbox_id=eq.${mb.id}&direction=eq.out&status=in.(sent,bounced)&sent_at=gte.${enc(startOfLocalDayIso(mb.timezone))}&select=id`,
         )
       ).length;
-      // Hard account-wide limit: never more than GLOBAL_DAILY_SEND_LIMIT emails in any 24 hours, all mailboxes combined.
-      const sentLast24h = (
-        await db.select<{ id: string }>(
-          "messages",
-          `direction=eq.out&status=in.(sent,bounced)&sent_at=gte.${enc(new Date(Date.now() - 86_400_000).toISOString())}&select=id`,
-        )
-      ).length;
-      const globalLeft = Math.max(0, GLOBAL_DAILY_SEND_LIMIT - sentLast24h);
-      if (!globalLeft) {
-        entry.skipped = `account limit reached (${sentLast24h}/${GLOBAL_DAILY_SEND_LIMIT} in the last 24 hours)`;
-        return;
-      }
-      let remaining = Math.min(globalLeft, Math.max(0, Math.min(mb.daily_cap, GLOBAL_DAILY_SEND_LIMIT) - sentToday));
+      let remaining = Math.max(0, mb.daily_cap - sentToday);
       entry.remaining_today = remaining;
       if (!remaining) {
         entry.skipped = `daily cap reached (${sentToday}/${mb.daily_cap}) — continues after midnight ${mb.timezone}`;
@@ -471,11 +579,6 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
           ? await db.select<Enrollment>("enrollments", `status=in.(queued,active,paused,failed)&id=in.(${ids.join(",")})&${base}&order=next_send_at.asc&limit=${limit}`)
           : [];
       } else if (force?.sequenceId) {
-        if (!seqsHere.some((s) => s.id === force.sequenceId)) {
-          // Not part of this send at all: report nothing about who is left.
-          entry.skipped = "this mailbox isn't used by that sequence";
-          return;
-        }
         // Everyone who hasn't had an email yet, plus follow-ups that are due.
         // Future follow-ups are NOT pulled forward, and someone whose last try
         // failed waits for their retry time instead of being hammered each round.
@@ -507,7 +610,8 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
           .slice(0, limit);
       }
       if (!due.length) {
-        entry.skipped = force ? "nobody left to send to in this selection" : "nobody is due right now";
+        // (A mailbox no sequence sends from only looks after people it already emailed.)
+        entry.skipped = force ? "nobody left to send to in this selection" : seqsHere.length ? "nobody is due right now" : NO_SEQUENCE_HERE;
         entry.due_left = 0;
         return;
       }
@@ -518,7 +622,10 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
           await accessTokenFor(env, db, mb.id);
         } catch (err) {
           const msg = (err as Error).message;
-          if (isPermanentMailboxError(msg) || isMailboxAuthError(msg)) await markMailboxBroken(mb, msg, isPermanentMailboxError(msg));
+          if (isPermanentMailboxError(msg) || isMailboxAuthError(msg)) {
+            const problem = mailboxProblem(msg, mb.provider);
+            await markMailboxBroken(mb, problem ? `${CANT_SEND}${problem.text}` : msg, isPermanentMailboxError(msg));
+          }
           throw err;
         }
       }
@@ -533,6 +640,16 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
         lastSentAt = last?.sent_at ? Date.parse(last.sent_at) : null;
       }
       let nextGapSec: number | null = null;
+      // The day's cap is spread over the sending day: around the clock when a
+      // sequence here is "Send any time", else over the mailbox's hours. Worked
+      // out from what is left of today's cap and of the day, so a late start
+      // catches up without bursting (see spreadGapSeconds).
+      const anytime = (seqsHere.length ? seqsHere : sequences).some((s) => s.send_anytime);
+      const spreadNow = () =>
+        spreadGapSeconds({ dailyCap: mb.daily_cap, sentToday: mb.daily_cap - remaining, ...spreadDay(mb, anytime) });
+      // Least time since the last email, whatever was planned: the sequence's own
+      // minimum, and (if the planned moment was lost) most of the spread pace.
+      const minGap = (seq: Sequence) => Math.max(seq.gap_min_sec, Math.floor(spreadNow() * 0.85));
       // Earliest moment the next email may go (the gap picked after the last send, possibly in an earlier run).
       let notBefore = 0;
       if (!force) {
@@ -562,16 +679,22 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
         // A paused or draft sequence can send its first emails by hand, but its
         // follow-ups wait until it's active again (unless chosen one by one).
         if (en.current_step > 0 && seq.status !== "active" && !force?.enrollmentIds?.length) continue;
+        if (!force) {
+          // Not time yet for this mailbox's next email: stop here, BEFORE anyone
+          // is claimed or checked. The next run (a minute later) looks again.
+          const wait = Math.max(gapWaitMs(lastSentAt, minGap(seq)), notBefore - Date.now(), 0);
+          if (!fitsDispatchBudget(runStart, budget, wait + SEND_RESERVE_MS)) {
+            entry.next_send_in_sec = Math.ceil(wait / 1000);
+            entry.skipped = nextEmailNote(wait, mb.daily_cap, spreadNow(), seq.gap_min_sec);
+            break;
+          }
+        }
         let outcome: Awaited<ReturnType<typeof sendOne>>;
         try {
           outcome = await sendOne(mb, en, seq, entry, {
-            // Each person's own sequence minimum; the random part of the gap
-            // (picked after the previous send) is carried by notBefore.
-            gapSec: force
-              ? (nextGapSec ?? 0)
-              : settings.spread_across_day
-                ? Math.max(seq.gap_min_sec, dripGapSeconds(mb.window_start, mb.window_end, mb.daily_cap))
-                : seq.gap_min_sec,
+            // The planned moment (the gap picked after the previous send) is
+            // carried by notBefore; this is the floor under it.
+            gapSec: force ? (nextGapSec ?? 0) : minGap(seq),
             lastSentAt,
             lease,
             notBefore: force ? 0 : notBefore,
@@ -593,12 +716,17 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
           entry.sent++;
           remaining--;
           lastSentAt = Date.now();
+          // The sequence's own random gap, but never faster than the pace that
+          // spreads what is left of today's cap over what is left of the day.
           nextGapSec = force
             ? pickGapSeconds(opts.forceGapSec?.[0] ?? 3, opts.forceGapSec?.[1] ?? 8)
-            : settings.spread_across_day
-              ? effectiveGapSeconds({ seqMin: seq.gap_min_sec, seqMax: seq.gap_max_sec, windowStartHour: mb.window_start, windowEndHour: mb.window_end, dailyCap: mb.daily_cap })
-              : pickGapSeconds(seq.gap_min_sec, seq.gap_max_sec);
+            : effectiveGapSeconds({ seqMin: seq.gap_min_sec, seqMax: seq.gap_max_sec, spreadSec: spreadNow() });
           notBefore = lastSentAt + nextGapSec * 1000;
+          // It sends again: an earlier "cannot send" note is over.
+          if ((mb.last_error || "").startsWith(CANT_SEND)) {
+            mb.last_error = null;
+            await db.update("mailboxes", `id=eq.${mb.id}`, { last_error: null }).catch(() => {});
+          }
           // Remember the chosen gap for the next run too, so the random
           // rhythm (min–max) holds across runs instead of collapsing to "min".
           if (!force)
@@ -610,9 +738,10 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
           // mailbox for a while instead of trying the next person straight away.
           remaining--;
           lastSentAt = Date.now();
+          // (at least 10 minutes, and never sooner than the day's spread allows)
           if (!force)
             await db
-              .upsert("rate_limits", { key: `pace:${mb.id}`, window_start: new Date(Date.now() + 10 * 60_000).toISOString(), count: 0 }, "key")
+              .upsert("rate_limits", { key: `pace:${mb.id}`, window_start: new Date(Date.now() + Math.max(10 * 60_000, spreadNow() * 1000)).toISOString(), count: 0 }, "key")
               .catch(() => {});
           break;
         } else if (outcome === "stop") break;
@@ -632,9 +761,11 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
       }
     } catch (err) {
       const msg = (err as Error).message;
-      report.errors.push(`${mb.email}: ${msg}`);
+      const problem = mailboxProblem(msg, mb.provider);
+      if (problem) entry.skipped = problem.text;
+      report.errors.push(`${mb.email}: ${problem?.text ?? msg}`);
       await db
-        .update("mailboxes", `id=eq.${mb.id}`, { last_error: msg.slice(0, 500) })
+        .update("mailboxes", `id=eq.${mb.id}`, { last_error: (problem ? `${CANT_SEND}${problem.text}` : msg).slice(0, 500) })
         .catch(() => {});
     } finally {
       await releaseLease(db, lease);
@@ -697,6 +828,9 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
     // 20–21 min ahead, with random milliseconds so two runners never pick the same value.
     const parkedAt = new Date(Date.now() + 20 * 60_000 + Math.floor(Math.random() * 60_000)).toISOString();
     const claimedStatus = en.status;
+    // Someone nobody had been given to yet goes back to the shared pool when
+    // nothing is sent, so the sequence's other mailboxes can take them.
+    const originalMailboxId = en.mailbox_id;
     const claimed = await db.update<{ id: string }>(
       "enrollments",
       `id=eq.${en.id}&current_step=eq.${en.current_step}&next_send_at=${en.next_send_at ? `eq.${enc(en.next_send_at)}` : "is.null"}&status=eq.${enc(claimedStatus)}&select=id`,
@@ -713,7 +847,7 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
     /** Put the person back exactly as due as before (nothing was sent). */
     const unpark = (extra: Record<string, unknown> = {}) =>
       db
-        .update("enrollments", ours, { next_send_at: en.next_send_at || new Date().toISOString(), ...extra })
+        .update("enrollments", ours, { next_send_at: en.next_send_at || new Date().toISOString(), mailbox_id: originalMailboxId, ...extra })
         .catch(() => {});
 
     let steps: Step[] = [];
@@ -1049,10 +1183,17 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
         return "stop";
       }
       if (isMailboxAuthError(msg)) {
-        // The connection itself: the person keeps their place, the mailbox stops.
+        // The connection itself: the person keeps their place (and goes back to
+        // the pool if they were nobody's yet), the mailbox stops and says why.
+        // It tries again every 15 minutes, so it recovers by itself once the
+        // connection is fixed; meanwhile new people go to the sequence's other
+        // mailboxes (see reassignStranded).
         await unpark({ last_error: originalNote });
-        await markMailboxBroken(mb, msg, isPermanentMailboxError(msg));
-        report.errors.push(`${mb.email}: ${msg.slice(0, 200)}`);
+        const problem = mailboxProblem(msg, mb.provider);
+        await markMailboxBroken(mb, problem ? `${CANT_SEND}${problem.text}` : msg, isPermanentMailboxError(msg));
+        await backOff(15);
+        entry.skipped = problem?.text ?? "the email provider refused this mailbox's connection";
+        report.errors.push(`${mb.email}: ${problem?.text ?? msg.slice(0, 200)}`);
         return "stop";
       }
       if (isRecipientRefusal(msg)) {
@@ -1403,13 +1544,9 @@ async function syncMailbox(
   if (out.partial) return out;
   // Everything up to windowEnd is read. Still catching up after a long gap? Then
   // follow-ups keep waiting this run, but the progress is kept.
-  await db.update("mailboxes", `id=eq.${mb.id}`, {
-    last_sync_at: new Date(windowEnd).toISOString(),
-    last_error: null,
-  });
+  await db.update("mailboxes", `id=eq.${mb.id}`, { last_sync_at: new Date(windowEnd).toISOString() });
+  // The inbox reads fine again; a note that the mailbox can't SEND stays until it does.
+  await db.update("mailboxes", `id=eq.${mb.id}&last_error=not.like.${enc(`${CANT_SEND}*`)}`, { last_error: null }).catch(() => {});
   if (behind) out.partial = true;
   return out;
 }
-
-/** Permanent account-wide sending limit (all mailboxes combined, rolling 24 hours). */
-export const GLOBAL_DAILY_SEND_LIMIT = 40;
