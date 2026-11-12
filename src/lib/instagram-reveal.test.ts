@@ -56,7 +56,7 @@ async function reveal(people: Person[], options: Record<string, unknown> = {}) {
   const response = await handleApiRequest(new Request("https://example.com/api/enrich", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ people, useClaude: false, ...options }),
+    body: JSON.stringify({ people, useClaude: false, findInstagram: true, ...options }),
   }), { SERPER_API_KEY: "k".repeat(40) });
   if (!response) throw new Error("Missing enrichment response");
   return (await response.json()) as { results: Record<string, unknown>[]; warnings: string[] };

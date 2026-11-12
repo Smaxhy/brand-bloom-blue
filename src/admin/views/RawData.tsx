@@ -25,6 +25,8 @@ import { mergeRawReveal, needsRawEnrichment, rawScanPerson, runRawReveal } from 
 import { type Sequence, listSequences, enrollLeads } from "../outreach";
 import { Button } from "@/components/ui/button";
 import { Panel, StatCard, Modal, Field, inputCls, Btn } from "../ui";
+import { supabase } from "@/integrations/supabase/client";
+import { isFirstContact, type ContactHistory } from "../first-contact";
 
 function maskEmail(email: string): string {
   if (!email.includes("@")) return "***";

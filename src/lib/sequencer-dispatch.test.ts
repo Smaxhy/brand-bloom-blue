@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const pacing = vi.hoisted(() => ({ enabled: false }));
+vi.mock("./dispatch-pacing", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./dispatch-pacing")>();
+  return { ...actual, spreadGapSeconds: (p: Parameters<typeof actual.spreadGapSeconds>[0]) => pacing.enabled ? actual.spreadGapSeconds(p) : 0 };
+});
+
 /* ------------------------------------------------------------------------ *
  * A small in-memory PostgREST: enough of the query language the dispatcher *
  * uses (eq/neq/lt/lte/gt/gte/in/not.in/is.null, or=(), select, order,      *
@@ -166,6 +172,7 @@ const past = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
 const future = (min: number) => new Date(Date.now() + min * 60_000).toISOString();
 
 function seed(opts: { people: number; gap?: [number, number]; extra?: Row[] } = { people: 3 }) {
+  pacing.enabled = false;
   for (const k of Object.keys(tables)) delete tables[k];
   failures.length = 0;
   tables.mailboxes = [{ id: MB1, email: "sender@example.com", display_name: "Sender", status: "active", daily_cap: 100, timezone: "UTC", window_start: 0, window_end: 24, send_days: [0, 1, 2, 3, 4, 5, 6], signature: "", last_sync_at: null, provider: "ghl", created_at: past(999) }];
