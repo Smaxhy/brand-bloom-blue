@@ -1,4 +1,8 @@
 # Public website refresh
+# November 11 v2 admin update
+- [ ] Merge Instagram discovery/manual messaging, scan-size recovery and safe sender improvements without reverting existing protections, history, first-contact filters or the permanent daily cap.
+- [ ] Run regressions and inspect public/admin pages without sending emails or spending search credits.
+
 # November 9 outreach and scraper update
 - [x] Install history-preserving sequence deletion, automatic bounced Raw Data cleanup, shared 2,000-result scrape ceiling and background/offline recovery; retain Stop, provider safeguards, website, security and 1,000 daily mailbox cap.
 - [x] Verify 286 regression tests, transactional database history/bounce tests, cleaned saved Raw Data, preview build and public/admin entry rendering without emails or paid searches.
