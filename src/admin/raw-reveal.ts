@@ -3,7 +3,9 @@ import type { EnrichResult, RawBusiness, ScanPerson, ScanJobLite, ScanJobFull } 
 export function rawScanPerson(row: RawBusiness): ScanPerson {
   return { id: row.id, name: row.contactName || "", domain: row.website || "",
     organizationName: row.business, phone: row.phone, linkedin: row.linkedin,
-    city: row.city, industry: row.industry, rating: row.rating, reviews: row.reviews };
+    city: row.city, industry: row.industry, rating: row.rating, reviews: row.reviews,
+    // Already on file: not searched for again.
+    instagram: row.instagram || undefined };
 }
 
 export function needsRawEnrichment(row: RawBusiness) {
@@ -21,6 +23,9 @@ export function mergeRawReveal(row: RawBusiness, result: EnrichResult): RawBusin
     contactName: row.contactName || result.name || "",
     contactTitle: row.contactTitle || result.title || "",
     linkedin: row.linkedin || result.linkedin || "",
+    ...(!row.instagram && result.instagram
+      ? { instagram: result.instagram, instagramSure: result.instagramSure !== false, instagramFollowers: result.instagramFollowers ?? undefined }
+      : {}),
     score: result.score ?? row.score,
     scoreWhy: result.scoreReasons ?? row.scoreWhy,
     ai: result.ai ?? row.ai,

@@ -32,6 +32,76 @@ export function isPermanentMailboxError(message: string): boolean {
   return /invalid_grant|mailbox not connected|GHL mailbox is not connected/i.test(message || "");
 }
 
+/** How a mailbox-level problem is stored on the mailbox while it can't send (see `cantSend`). */
+export const CANT_SEND = "Cannot send: ";
+/** The inbox can't be read (replies/opt-outs): follow-ups wait, first emails still go out. */
+export const CANT_READ = "Cannot read the inbox: ";
+
+/** The mailbox is switched off, or its connection is refused right now: nobody new should be given to it. */
+export function cantSend(mb: { status?: string | null; last_error?: string | null }): boolean {
+  return mb.status !== "active" || (mb.last_error || "").startsWith(CANT_SEND);
+}
+
+const WHERE = "Settings → Sending mailboxes";
+
+/**
+ * A mailbox-level problem in plain words, with what to do about it — never the
+ * provider's own error text. `null` = not a known mailbox problem (or just a
+ * "slow down", which sorts itself out).
+ */
+export function mailboxProblem(message: string, provider?: string | null): { text: string; reconnect: boolean } | null {
+  const m = message || "";
+  if (isRateLimited(m)) return null;
+  if (/GHL mailbox is not connected|GHL returned no location token/i.test(m))
+    return { text: `GoHighLevel isn't connected for this mailbox. Enter its API key and location again in ${WHERE}.`, reconnect: true };
+  if (/mailbox not connected/i.test(m))
+    return { text: `This mailbox isn't connected any more. Connect it again in ${WHERE}.`, reconnect: true };
+  if (/invalid_grant|token refresh failed/i.test(m))
+    return { text: `Google access for this mailbox expired or was withdrawn. Reconnect it in ${WHERE}.`, reconnect: true };
+  const gmail = /^gmail (send|list|thread|message|get) (40[13])\b/i.exec(m);
+  if (gmail) {
+    const reading = gmail[1].toLowerCase() !== "send";
+    if (gmail[2] === "401")
+      return { text: `Google no longer accepts this mailbox's sign-in (error 401). Reconnect it in ${WHERE}.`, reconnect: true };
+    if (/accessNotConfigured|SERVICE_DISABLED|has not been used in project|it is disabled/i.test(m))
+      return {
+        text: "The Gmail API is switched off in your Google Cloud project (error 403). Turn it on there (APIs & Services → Library → Gmail API → Enable), wait a minute, then try again.",
+        reconnect: false,
+      };
+    if (/insufficient|ACCESS_TOKEN_SCOPE|scope/i.test(m))
+      return {
+        text: `Google didn't give permission to ${reading ? "read" : "send from"} this mailbox (error 403). Reconnect it in ${WHERE} and tick every box on Google's permission screen.`,
+        reconnect: true,
+      };
+    return {
+      text: `Google refused to ${reading ? "let this mailbox's inbox be read" : "send from this mailbox"} (error 403). Usually a permission box wasn't ticked when it was connected, or the Google account was suspended or restricted: reconnect it in ${WHERE} and tick every box.`,
+      reconnect: true,
+    };
+  }
+  const ghl = /^GHL (send|upsert|location token|conversations|messages) (40[13])\b/i.exec(m);
+  if (ghl || (provider === "ghl" && /UNAUTHENTICATED|invalid[_ ]credentials/i.test(m)))
+    return {
+      text: `GoHighLevel refused the connection (error ${ghl?.[2] ?? "401"}): the API key or location is no longer valid. Enter them again in ${WHERE}.`,
+      reconnect: true,
+    };
+  if (/UNAUTHENTICATED|invalid[_ ]credentials/i.test(m))
+    return { text: `The sign-in for this mailbox was refused. Reconnect it in ${WHERE}.`, reconnect: true };
+  return null;
+}
+
+/**
+ * What to show for a mailbox's stored error: text this app wrote itself is
+ * shown as is, a known provider problem is put in plain words, and anything
+ * else (possibly raw provider text from an older version) stays generic.
+ */
+export function shownMailboxError(lastError: string | null | undefined, provider?: string | null): string | null {
+  const e = (lastError || "").trim();
+  if (!e) return null;
+  if (e.startsWith(CANT_SEND) || e.startsWith(CANT_READ)) return e;
+  const known = mailboxProblem(e, provider) ?? (/^Token refresh failed/i.test(e) ? mailboxProblem("token refresh failed", provider) : null);
+  return known?.text ?? "This mailbox reported a problem. Check its connection in Settings → Sending mailboxes.";
+}
+
 /**
  * The provider clearly did NOT send: refused before the send call (token,
  * contact, connection settings) or answered the send call with a 4xx.

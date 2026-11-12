@@ -11,6 +11,7 @@ import {
   Unlock,
   Sparkles,
   Linkedin,
+  Instagram,
   Globe,
   Phone,
   Mail,
@@ -49,6 +50,9 @@ import {
   listScans,
   cancelScan,
   rowsFromScan,
+  igDmsToday,
+  igHandleOf,
+  logIgDm,
   type ScanJobLite,
   type ScanJobFull,
   type ScanPerson,
@@ -65,6 +69,8 @@ import { SavedSearchesPanel, SaveSearchModal } from "./SavedSearches";
 import { RecentScans } from "./RecentScans";
 import { MAX_SCRAPE_RESULTS } from "@/lib/scrape-limits";
 import { pageAway, waitUntilBack, wasAwaySince } from "../page-presence";
+import { IgChip } from "../IgChip";
+import { openInstagramDm } from "../ig-dm";
 import { addToRaw } from "../raw-merge";
 import { leadFilterReason, TEAM_SIZE_BANDS, REVENUE_BANDS } from "@/lib/lead-filters";
 
@@ -615,6 +621,25 @@ export function Scraper({
   // Paid reveal sources (Apollo / Hunter / SerpApi) are opt-in per run.
   const [usePaid, setUsePaid] = useState(false);
   const [findLinkedin, setFindLinkedin] = useState(false);
+  // Instagram is read off the listing and the website for free; when that finds
+  // nothing, a search looks for the profile (one or two search credits). On by
+  // default — Instagram is the priority — and a click turns the search part off.
+  const [findInstagram, setFindInstagram] = useState(false);
+  // "DM copied" feedback for the Instagram manual-outreach button.
+  const [dmCopiedId, setDmCopiedId] = useState<string | null>(null);
+  // Only businesses with an Instagram (the DM working list).
+  const [igOnly, setIgOnly] = useState(false);
+  const dmInstagram = useCallback(
+    (p: ScrapedPerson) => {
+      const handle = openInstagramDm(p);
+      if (!handle) return;
+      setDmCopiedId(p.id);
+      window.setTimeout(() => setDmCopiedId((cur) => (cur === p.id ? null : cur)), 4000);
+      // Remembered across scans and in Raw Data, so nobody is messaged twice.
+      update((prev) => logIgDm(prev, handle));
+    },
+    [update],
+  );
   // Pattern guesses (info@…) are off: they look real but often bounce or reach nobody.
   const [allowGuesses, setAllowGuesses] = useState(false);
   const [scores, setScores] = useState<
@@ -796,6 +821,9 @@ export function Scraper({
       contactTitle: p.title,
       seniority: p.seniority,
       linkedin: p.linkedin,
+      instagram: p.instagram || undefined,
+      instagramSure: p.instagram ? p.instagramSure !== false : undefined,
+      instagramFollowers: p.instagramFollowers ?? undefined,
       source:
         (discoverSources[p.id] ?? []).map((s) => s[0].toUpperCase() + s.slice(1)).join("+") ||
         "Apollo",
@@ -874,6 +902,14 @@ export function Scraper({
     name: string;
     title: string;
     linkedin: string;
+    instagram: string;
+    instagramSure?: boolean;
+    instagramVia?: string;
+    instagramFollowers?: number | null;
+    instagramWhy?: string;
+    facebook: string;
+    tiktok: string;
+    youtube: string;
     guessed: boolean;
     score?: number;
     scoreReasons?: string[];
@@ -908,6 +944,7 @@ export function Scraper({
             (p.name || u.name) === p.name &&
             (p.title || u.title) === p.title &&
             (p.linkedin || u.linkedin) === p.linkedin &&
+            (p.instagram || u.instagram) === (p.instagram || "") &&
             (u.email ? false : p.emailLocked) === p.emailLocked
           )
             return p;
@@ -920,6 +957,14 @@ export function Scraper({
             name: p.name || u.name,
             title: p.title || u.title,
             linkedin: p.linkedin || u.linkedin,
+            instagram: p.instagram || u.instagram,
+            // What we know about it comes with whichever source supplied it.
+            ...(!p.instagram && u.instagram
+              ? { instagramSure: u.instagramSure, instagramVia: u.instagramVia, instagramFollowers: u.instagramFollowers, instagramWhy: u.instagramWhy }
+              : {}),
+            facebook: p.facebook || u.facebook,
+            tiktok: p.tiktok || u.tiktok,
+            youtube: p.youtube || u.youtube,
           };
         }),
       );
@@ -964,6 +1009,14 @@ export function Scraper({
           name: r.name || "",
           title: r.title || "",
           linkedin: r.linkedin || "",
+          instagram: r.instagram || "",
+          instagramSure: r.instagramSure,
+          instagramVia: r.instagramVia,
+          instagramFollowers: r.instagramFollowers,
+          instagramWhy: r.instagramWhy,
+          facebook: r.facebook || "",
+          tiktok: r.tiktok || "",
+          youtube: r.youtube || "",
           guessed: !!r.guessed,
           score: r.score,
           scoreReasons: r.scoreReasons,
@@ -1131,7 +1184,7 @@ export function Scraper({
   async function revealEmails(targets: ScrapedPerson[], everything = false) {
     // Read anyone missing an email OR a website (the free website pass finds both).
     const busy = new Set([...inFlight.current.values()].flatMap((ids) => [...ids]));
-    const list = (everything ? targets.filter((p) => p.website || !p.email) : targets.filter((p) => p.emailLocked || !p.email || !p.website))
+    const list = (everything ? targets.filter((p) => p.website || !p.email) : targets.filter((p) => p.emailLocked || !p.email || !p.website || (findInstagram && !p.instagram)))
       .filter((p) => !busy.has(p.id));
     if (!list.length) {
       if (targets.some((p) => busy.has(p.id)))
@@ -1153,8 +1206,11 @@ export function Scraper({
       phone: p.phone,
       city: p.city,
       industry: p.industry,
+      // Already known from the listing: not searched for again.
+      instagram: p.instagram || undefined,
+      bioLink: p.bioLink || undefined,
     }));
-    const options = { useClaude: sources.claude, usePaid, revealPhone, findLinkedin, allowGuesses };
+    const options = { useClaude: sources.claude, usePaid, revealPhone, findLinkedin, findInstagram, allowGuesses };
       for (let offset = 0; offset < people.length; offset += 2000) {
         if (stopRequested.current) break;
         const slice = people.slice(offset, offset + 2000);
@@ -1326,7 +1382,9 @@ export function Scraper({
       },
       filterSpec,
     );
-  const visibleResults = showHidden ? results : results.filter((p) => !hiddenReason(p));
+  const visibleResults = (showHidden ? results : results.filter((p) => !hiddenReason(p))).filter((p) => !igOnly || !!p.instagram);
+  const igCount = results.filter((p) => p.instagram).length;
+  const dmsToday = igDmsToday(data.igDms);
   const hiddenCount = results.length - results.filter((p) => !hiddenReason(p)).length;
   const ordered = sortByScore
     ? [...visibleResults].sort((a, b) => scoreOf(b) - scoreOf(a))
@@ -1358,6 +1416,9 @@ export function Scraper({
       contactTitle: p.title,
       seniority: p.seniority,
       linkedin: p.linkedin,
+      instagram: p.instagram || undefined,
+      instagramSure: p.instagram ? p.instagramSure !== false : undefined,
+      instagramFollowers: p.instagramFollowers ?? undefined,
       source:
         (discoverSources[p.id] ?? []).map((s) => s[0].toUpperCase() + s.slice(1)).join("+") ||
         "Apollo",
@@ -1401,6 +1462,9 @@ export function Scraper({
       "LinkedIn URL",
       "City",
       "Industry",
+      "Instagram",
+      "Instagram followers",
+      "Instagram checked",
     ];
     const lines = rows.map((p) => {
       const [first, ...rest] = p.name.trim().split(/\s+/);
@@ -1417,6 +1481,10 @@ export function Scraper({
         p.linkedin || "",
         p.city || "",
         p.industry || "",
+        // The profile link (not "@handle": a cell starting with @ is read as a formula).
+        p.instagram || "",
+        p.instagram && p.instagramFollowers != null ? String(p.instagramFollowers) : "",
+        p.instagram ? (p.instagramSure === false ? "name match only - check" : "yes") : "",
       ];
       return cells.map((c) => `"${(c || "").replace(/"/g, '""')}"`).join(",");
     });
@@ -1738,6 +1806,15 @@ export function Scraper({
           ))}
           <Button variant="ghost" aria-pressed={findLinkedin} onClick={() => setFindLinkedin((value) => !value)} className={pill(findLinkedin)} title="Optional owner lookup; uses one search credit per uncached business">
             Owner LinkedIn (search credits)
+          </Button>
+          <Button
+            variant="ghost"
+            aria-pressed={findInstagram}
+            onClick={() => setFindInstagram((value) => !value)}
+            className={pill(findInstagram)}
+            title="Instagram is always read from the listing and the website (free). On: when that finds nothing, search for the profile too — 1–2 search credits per business, checked against the name, town, website and phone. Off: free sources only."
+          >
+            Instagram search (search credits)
           </Button>
           <span className="mx-1 h-4 w-px bg-border" />
           <button
@@ -2076,7 +2153,7 @@ export function Scraper({
                   <div className="font-display text-base font-bold">
                     {results.length} businesses
                     <span className="ml-2 text-sm font-normal text-muted-foreground">
-                      {withEmail} with email{avgScore !== null ? ` · avg score ${avgScore}` : ""}
+                      {withEmail} with email · {igCount} with Instagram{avgScore !== null ? ` · avg score ${avgScore}` : ""}
                       {hiddenCount > 0 && (
                         <>
                           {" · "}
@@ -2114,6 +2191,10 @@ export function Scraper({
                   )}
                 </div>
                 <div className="ml-auto flex flex-wrap items-center gap-1.5">
+                  <Button variant={igOnly ? "default" : "outline"} aria-pressed={igOnly} onClick={() => setIgOnly((v) => !v)}>
+                    <Instagram className="h-4 w-4" /> Instagram only · {igCount}
+                  </Button>
+                  <span className="text-xs text-muted-foreground">{dmsToday} DM chats opened today</span>
                   {scoredCount > 0 && (
                     <>
                       <Btn
@@ -2304,9 +2385,19 @@ export function Scraper({
                             </td>
                             <td className="px-3 py-2.5">
                               <div
-                                className={`flex items-center gap-1 whitespace-nowrap ${p.name ? "font-medium" : "italic text-muted-foreground"}`}
+                                className={`flex flex-wrap items-center gap-1 ${p.name ? "font-medium" : "italic text-muted-foreground"}`}
                               >
                                 {p.name || "No name yet"}
+                                <IgChip
+                                  instagram={p.instagram}
+                                  followers={p.instagramFollowers}
+                                  sure={p.instagramSure}
+                                  why={p.instagramWhy}
+                                  messagedAt={data.igDms?.[igHandleOf(p.instagram)]}
+                                  copied={dmCopiedId === p.id}
+                                  onDm={() => dmInstagram(p)}
+                                  onClearMessaged={() => update((prev) => logIgDm(prev, igHandleOf(p.instagram), false))}
+                                />
                                 {p.linkedin && (
                                   <a
                                     href={p.linkedin}

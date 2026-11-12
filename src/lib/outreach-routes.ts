@@ -6,10 +6,11 @@
 import type { LeadAi } from "@/lib/lead-filters";
 import { Db, enc, pgQuote } from "./db";
 import { hasCronSecret, type ApiUser } from "./api-auth";
-import { makeState, readState, consentUrl, exchangeCode, userEmail } from "./google-oauth";
+import { makeState, readState, consentUrl, exchangeCode, userEmail, grantedGmailAccess } from "./google-oauth";
+import { CANT_READ } from "./send-errors";
 import { sendVia } from "./channel";
 import { ghlVerify } from "./ghl";
-import { runDispatch, type Lead, type Mailbox, type OutreachSettings } from "./sequencer";
+import { runDispatch, roundRobinMailboxes, type Lead, type Mailbox, type OutreachSettings } from "./sequencer";
 import { renderStep } from "./templates";
 import { hasMx } from "./providers/free-enrich";
 import { verifyEmail, addSuppression, looksLikeEmail } from "./bounce";
@@ -274,13 +275,24 @@ async function oauthCallback(request: Request, e: Env): Promise<Response> {
       );
     const email = (await userEmail(tok.access_token)).toLowerCase();
     if (!email) return back("mailbox=error&reason=no_email");
+    // Google's permission screen has a box per permission. Without "send" the
+    // mailbox would look connected and then fail on every email: say so now.
+    const access = grantedGmailAccess(tok.scope);
+    if (!access.send)
+      return back(
+        `mailbox=error&reason=${encodeURIComponent("Google didn't give permission to send email from this mailbox. Connect it again and tick every box on Google's permission screen")}`,
+      );
+    // Without "read" it can send first emails, but replies and opt-outs can't be seen (follow-ups wait).
+    const readNote = access.read
+      ? null
+      : `${CANT_READ}Google didn't give permission to read this mailbox. Connect it again and tick every box on Google's permission screen — until then first emails go out but follow-ups wait.`;
     const db = new Db(e);
     const existing = await db.one<{ id: string }>("mailboxes", `email=eq.${enc(email)}&select=id`);
     const row = existing
       ? (
           await db.update<{ id: string }>("mailboxes", `id=eq.${existing.id}`, {
             status: "active",
-            last_error: null,
+            last_error: readNote,
           })
         )[0]
       : (
@@ -291,6 +303,7 @@ async function oauthCallback(request: Request, e: Env): Promise<Response> {
               .replace(/[._-]/g, " ")
               .replace(/\b\w/g, (c) => c.toUpperCase()),
             created_by: st.userId,
+            ...(readNote ? { last_error: readNote } : {}),
           })
         )[0];
     if (!tok.refresh_token) {
@@ -601,6 +614,7 @@ async function enroll(request: Request, e: Env, user: ApiUser): Promise<Response
     return json({ ok: false, error: "sequence not found" }, 404);
 
   const result = { enrolled: 0, updated: 0, skipped: [] as { email: string; reason: string }[] };
+  const shareBetween = await roundRobinMailboxes(db, seq);
   const start = body.startAt ? new Date(body.startAt) : new Date();
   let i = 0;
   const companiesInBatch = new Set<string>();
@@ -674,7 +688,7 @@ async function enroll(request: Request, e: Env, user: ApiUser): Promise<Response
     // Round-robin mailboxes. Everyone is due straight away, in this order: the
     // dispatcher sends them one by one at the sequence's own gap (and only in
     // the mailbox's hours unless the sequence is "Send any time").
-    const mailboxId = seq.mailbox_ids.length ? seq.mailbox_ids[i % seq.mailbox_ids.length] : null;
+    const mailboxId = shareBetween.length ? shareBetween[i % shareBetween.length] : null;
     const nextSendAt = new Date(start.getTime() + i * 1000);
     const existing = await db.one<{ id: string; status: string }>(
       "enrollments",

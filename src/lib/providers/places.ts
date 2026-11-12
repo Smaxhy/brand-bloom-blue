@@ -16,6 +16,8 @@
  * only for accepted leads.
  */
 
+import { listingSocials } from "../instagram";
+
 export interface PlaceBusiness {
   id: string;
   company: string;
@@ -28,6 +30,10 @@ export interface PlaceBusiness {
   reviews?: number;
   lat?: number;
   lng?: number;
+  /** The listing's "website" was really an Instagram profile. */
+  instagram?: string;
+  /** …or a link-in-bio page (Linktree and friends) that leads to their socials. */
+  bioLink?: string;
 }
 
 const FIELD_MASK = [
@@ -145,6 +151,7 @@ export async function placesTextSearch(
         id,
         company: p.displayName?.text || "",
         website: cleanDomain(p.websiteUri),
+        ...listingSocials(p.websiteUri),
         phone: p.nationalPhoneNumber || "",
         address: p.formattedAddress || "",
         city,

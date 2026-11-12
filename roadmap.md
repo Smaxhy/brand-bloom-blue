@@ -1,7 +1,8 @@
 # Public website refresh
 # November 11 v2 admin update
-- [ ] Merge Instagram discovery/manual messaging, scan-size recovery and safe sender improvements without reverting existing protections, history, first-contact filters or the permanent daily cap.
-- [ ] Run regressions and inspect public/admin pages without sending emails or spending search credits.
+- [x] Merge Instagram discovery/manual messaging, scan-size recovery and safe sender improvements without reverting existing protections, history, first-contact filters or the permanent daily cap.
+- [x] Verified 369 regression tests, clean preview build, public pages and desktop/phone admin entry; no emails or paid searches.
+- [ ] Signed-in November 11 controls and live providers: blocked because own-account session mint has no matching account; sign in to the preview to verify saved data.
 
 # November 9 outreach and scraper update
 - [x] Install history-preserving sequence deletion, automatic bounced Raw Data cleanup, shared 2,000-result scrape ceiling and background/offline recovery; retain Stop, provider safeguards, website, security and 1,000 daily mailbox cap.

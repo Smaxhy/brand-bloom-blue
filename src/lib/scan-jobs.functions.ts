@@ -5,9 +5,9 @@ import { z } from "zod";
 import { scanRequestLimit } from "./scan-request-policy";
 import { MAX_SCRAPE_RESULTS } from "./scrape-limits";
 
-const person = z.object({ id: z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/), name: z.string().max(200).default(""), domain: z.string().max(2048).default(""), organizationName: z.string().max(200).default(""), linkedin: z.string().max(2048).optional(), rating: z.number().min(0).max(5).optional(), reviews: z.number().min(0).optional(), phone: z.string().max(100).optional(), city: z.string().max(200).optional(), industry: z.string().max(200).optional() });
+const person = z.object({ id: z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/), name: z.string().max(200).default(""), domain: z.string().max(2048).default(""), organizationName: z.string().max(200).default(""), linkedin: z.string().max(2048).optional(), rating: z.number().min(0).max(5).optional(), reviews: z.number().min(0).optional(), phone: z.string().max(100).optional(), city: z.string().max(200).optional(), industry: z.string().max(200).optional(), instagram: z.string().max(2048).optional(), bioLink: z.string().max(2048).optional() });
 const input = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("start"), people: z.array(person).min(1).max(MAX_SCRAPE_RESULTS), label: z.string().max(120), options: z.object({ useClaude: z.boolean().optional(), usePaid: z.boolean().optional(), revealPhone: z.boolean().optional(), findLinkedin: z.boolean().optional(), allowGuesses: z.boolean().optional() }) }),
+  z.object({ action: z.literal("start"), people: z.array(person).min(1).max(MAX_SCRAPE_RESULTS), label: z.string().max(120), options: z.object({ useClaude: z.boolean().optional(), usePaid: z.boolean().optional(), revealPhone: z.boolean().optional(), findLinkedin: z.boolean().optional(), findInstagram: z.boolean().optional(), allowGuesses: z.boolean().optional() }) }),
   z.object({ action: z.enum(["step", "status", "cancel"]), id: z.string().uuid(), full: z.boolean().optional() }),
   z.object({ action: z.literal("list") }),
 ]);

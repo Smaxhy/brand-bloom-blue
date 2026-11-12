@@ -1,6 +1,7 @@
 import { scanJobAction } from "@/lib/scan-jobs.functions";
 import { runScanRequest } from "./scan-request";
 import { businessKey } from "@/lib/business-key";
+import { igHandle } from "@/lib/instagram";
 import { cleanDuplicateEmails } from "./email-cleanup";
 import { MAX_SCRAPE_RESULTS } from "@/lib/scrape-limits";
 import { pollBudgetMs, pollWhilePresent } from "./page-presence";
@@ -56,6 +57,10 @@ export interface RawBusiness {
   score?: number; // 0–100 lead score
   scoreWhy?: string[];
   ai?: LeadAi | null;
+  /** The business's Instagram profile (https://www.instagram.com/<handle>) and what we know about it. */
+  instagram?: string;
+  instagramSure?: boolean;
+  instagramFollowers?: number | null;
 }
 
 export interface Client {
@@ -201,6 +206,8 @@ export interface AdminData {
   denylist?: Record<string, DenylistEntry>;
   /** Persisted scraper results so a page refresh keeps them. */
   scraper?: ScraperState;
+  /** Instagram accounts already messaged by hand: handle → when. Keeps "messaged" marks and the daily count. */
+  igDms?: Record<string, number>;
 }
 
 /* ----------------------------------------------------------------------- */
@@ -645,7 +652,7 @@ export async function login(identifier: string, password: string): Promise<Login
     }
     return null;
   } catch (err: any) {
-    return fail(String(err?.message ?? err ?? ""));
+    return fail(String(err?.message ?? err ?? ""), { status: err?.status, code: err?.code, name: err?.name });
   }
 }
 
@@ -765,6 +772,20 @@ export interface ScrapedPerson {
   emailSource?: string;
   phone: string;
   linkedin: string;
+  /** Business social profiles — Instagram is the priority for manual DM outreach. */
+  instagram?: string;
+  /** false = only "likely" theirs (name match) — worth a look before messaging. */
+  instagramSure?: boolean;
+  /** Where it was found: "listing" | "site" | "bio" | "search". */
+  instagramVia?: string;
+  instagramFollowers?: number | null;
+  /** Why we think it is theirs, in plain words. */
+  instagramWhy?: string;
+  /** A link-in-bio page their listing gave as the website (read for their Instagram). */
+  bioLink?: string;
+  facebook?: string;
+  tiktok?: string;
+  youtube?: string;
   company: string;
   website: string;
   city: string;
@@ -960,6 +981,14 @@ export interface EnrichResult {
   name?: string; // decision-maker found on the website
   title?: string;
   linkedin?: string;
+  instagram?: string; // business Instagram profile (priority social for manual DM)
+  instagramSure?: boolean;
+  instagramVia?: string;
+  instagramFollowers?: number | null;
+  instagramWhy?: string;
+  facebook?: string;
+  tiktok?: string;
+  youtube?: string;
   mx?: boolean | null; // domain accepts mail?
   guessed?: boolean; // pattern guess, not a published address
   score?: number;
@@ -985,6 +1014,9 @@ export interface ScanPerson {
   phone?: string;
   city?: string;
   industry?: string;
+  /** Already known from the listing (their "website" was their Instagram / a link-in-bio page). */
+  instagram?: string;
+  bioLink?: string;
 }
 export interface ScanJobLite {
   id: string;
@@ -1001,7 +1033,7 @@ export interface ScanJobLite {
 export interface ScanJobFull extends ScanJobLite {
   people: ScanPerson[];
   results: Record<string, EnrichResult>;
-  options: { useClaude?: boolean; usePaid?: boolean; revealPhone?: boolean; findLinkedin?: boolean; allowGuesses?: boolean };
+  options: { useClaude?: boolean; usePaid?: boolean; revealPhone?: boolean; findLinkedin?: boolean; findInstagram?: boolean; allowGuesses?: boolean };
 }
 
 async function scanCall<T>(data: unknown, canContinue?: () => Promise<boolean>): Promise<T> {
@@ -1036,6 +1068,15 @@ export function rowsFromScan(job: ScanJobFull): ScrapedPerson[] {
       emailSource: r?.email ? (r.guessed ? "Guess" : r.source || "Website") : undefined,
       phone: p.phone || r?.phone || "",
       linkedin: p.linkedin || r?.linkedin || "",
+      instagram: r?.instagram || p.instagram || "",
+      instagramSure: r?.instagram ? r.instagramSure !== false : p.instagram ? true : undefined,
+      instagramVia: r?.instagramVia || (p.instagram ? "listing" : undefined),
+      instagramFollowers: r?.instagramFollowers ?? null,
+      instagramWhy: r?.instagramWhy,
+      bioLink: p.bioLink,
+      facebook: r?.facebook || "",
+      tiktok: r?.tiktok || "",
+      youtube: r?.youtube || "",
       company: p.organizationName,
       website: r?.website || p.domain,
       city: p.city || "",
@@ -1111,6 +1152,55 @@ export async function enrichContacts(
       sourceUrl: "",
     };
   });
+}
+
+/**
+ * Friendly openers to DM a business on Instagram — starting points to tweak,
+ * never an automated send. Plain, no links, no hype. Several wordings, rotated,
+ * because Instagram treats the same text pasted over and over as spam.
+ */
+const IG_DM_OPENERS: ((x: { hi: string; who: string; where: string; trade: string }) => string)[] = [
+  ({ hi, who, where, trade }) =>
+    `${hi} Came across ${who}${where} and really like what you're doing. I run a small marketing agency that helps ${trade} get more customers online — mind if I share a quick idea or two?`,
+  ({ hi, who, where, trade }) =>
+    `${hi} Been looking through ${who}'s page${where ? ` (${where.trim().replace(/^in /, "")})` : ""} — nice work. I help ${trade} bring in more enquiries from Instagram and Google. Open to one short idea for you?`,
+  ({ hi, who, where, trade }) =>
+    `${hi} Quick one — I spotted something on ${who}'s online presence${where} that's probably costing you a few customers a month. I work with ${trade} on exactly that. Want me to send it over?`,
+  ({ hi, who, where, trade }) =>
+    `${hi} Love what ${who} is putting out${where}. I work with ${trade} on getting found by more local customers — would it be OK if I sent you a couple of thoughts? No pitch deck, promise.`,
+];
+export const IG_DM_VARIANTS = IG_DM_OPENERS.length;
+
+export function igDmText(p: { company?: string; name?: string; city?: string; industry?: string }, variant = 0): string {
+  const first = (p.name || "").trim().split(/\s+/)[0];
+  const who = (p.company || "").trim() || "your business";
+  const where = p.city ? ` in ${p.city.split(",")[0].trim()}` : "";
+  const trade = (p.industry || "").trim() ? (p.industry || "").toLowerCase() : "local businesses";
+  const pick = IG_DM_OPENERS[((Math.floor(variant) % IG_DM_VARIANTS) + IG_DM_VARIANTS) % IG_DM_VARIANTS];
+  return pick({ hi: `Hey${first ? ` ${first}` : ""}!`, who, where, trade });
+}
+
+/** "joesroofing" from a stored Instagram URL (or ""). */
+export function igHandleOf(url?: string | null): string {
+  return igHandle(url || "");
+}
+
+/** How many Instagram DMs were logged today (local day) — cold DMs are best kept to a few dozen a day. */
+export function igDmsToday(log: Record<string, number> | undefined, now = Date.now()): number {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  return Object.values(log ?? {}).filter((t) => t >= start.getTime()).length;
+}
+
+/** Record (or clear) that an account was messaged. Keeps the newest 5,000. */
+export function logIgDm(data: AdminData, handle: string, sent = true, now = Date.now()): AdminData {
+  const h = handle.toLowerCase();
+  if (!h) return data;
+  const next = { ...(data.igDms ?? {}) };
+  if (sent) next[h] = now;
+  else delete next[h];
+  const kept = Object.entries(next).sort((a, b) => b[1] - a[1]).slice(0, 5000);
+  return { ...data, igDms: Object.fromEntries(kept) };
 }
 
 export function fmtEuro(n: number): string {
@@ -1243,6 +1333,9 @@ export interface DiscoveredBusiness {
   reviews?: number;
   /** Pre-found address (self-hosted Maps scraper reads sites itself). */
   email?: string;
+  /** The listing's "website" was really their Instagram / a link-in-bio page. */
+  instagram?: string;
+  bioLink?: string;
   source: "Google Maps" | "Google";
 }
 
@@ -1390,6 +1483,17 @@ export interface DiscoverOptions {
   onProgress?: (phase: string, done: number, total: number) => void;
 }
 
+/** A second source knows this business's Instagram (its listing links it): keep it on the row we already have. */
+function takeListingSocials(existing: ScrapedPerson, b: DiscoveredBusiness) {
+  if (!existing.instagram && b.instagram) {
+    existing.instagram = b.instagram;
+    existing.instagramSure = true;
+    existing.instagramVia = "listing";
+    existing.instagramWhy = "their listing gives this Instagram as their website";
+  }
+  if (!existing.bioLink && b.bioLink) existing.bioLink = b.bioLink;
+}
+
 function googleToPerson(b: DiscoveredBusiness, kw: string): ScrapedPerson {
   return {
     rating: b.rating,
@@ -1404,6 +1508,12 @@ function googleToPerson(b: DiscoveredBusiness, kw: string): ScrapedPerson {
     emailLocked: !b.email,
     phone: b.phone,
     linkedin: "",
+    // Their listing's "website" was their Instagram (or a link-in-bio page): known before any reveal.
+    instagram: b.instagram || "",
+    instagramSure: b.instagram ? true : undefined,
+    instagramVia: b.instagram ? "listing" : undefined,
+    instagramWhy: b.instagram ? "their listing gives this Instagram as their website" : undefined,
+    bioLink: b.bioLink || undefined,
     company: b.company,
     website: b.website,
     city: b.city || b.address || "",
@@ -1550,6 +1660,7 @@ export async function discoverLeads(
               existing.emailSource = "Website";
               existing.emailLocked = false;
             }
+            takeListingSocials(existing, b);
             sourcesById[existing.id] = [...(sourcesById[existing.id] ?? []), "selfhost"];
           } else {
             const person = googleToPerson(b, kw);
@@ -1641,6 +1752,7 @@ export async function discoverLeads(
           if (existing) {
             if (!existing.phone && b.phone) existing.phone = b.phone;
             if (!existing.website && b.website) existing.website = b.website;
+            takeListingSocials(existing, b);
             sourcesById[existing.id] = [...(sourcesById[existing.id] ?? []), "apify"];
           } else {
             const person = googleToPerson(b, kw);

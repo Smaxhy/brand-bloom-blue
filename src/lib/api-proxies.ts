@@ -46,6 +46,22 @@ import { resolveIntegrationEnv } from "./integration-settings.server";
 import { runTick, keepAlive, verifySchedulerToken } from "./tick";
 import { requestIpHash, securityJson } from "./request-security";
 import { MAX_SCRAPE_RESULTS } from "./scrape-limits";
+import { fetchPublicSite } from "./public-site-fetch";
+import {
+  bioLinkUrl,
+  igHandle,
+  igHandlesIn,
+  igSearchQueries,
+  igUrl,
+  listingSocials,
+  pickBioInstagram,
+  pickSearchInstagram,
+  type IgPick,
+  type SearchResult,
+} from "./instagram";
+
+/** The same ordinary browser identity the website reader uses. */
+const BIO_UA = "Mozilla/5.0 (compatible; Inspirova-Research/2.0; +https://inspirovamarketing.com)";
 
 type Env = Record<string, string | undefined>;
 
@@ -422,11 +438,20 @@ export interface EnrichInput {
   rating?: number;
   reviews?: number;
   phone?: string;
+  city?: string;
+  industry?: string;
+  /** Their listing gave an Instagram profile as the "website". */
+  instagram?: string;
+  /** Their listing gave a link-in-bio page (Linktree…) as the "website". */
+  bioLink?: string;
 }
 
 export type EnrichRow = {
   id: string; email: string; phone: string; website: string; source: string; sourceUrl: string;
   name: string; title: string; linkedin: string; mx: boolean | null; guessed: boolean;
+  instagram: string; facebook: string; tiktok: string; youtube: string;
+  /** Instagram: false = only "likely" theirs; where it was found; followers when a search showed them; why it's theirs. */
+  instagramSure: boolean; instagramVia: string; instagramFollowers: number | null; instagramWhy: string;
   score: number; scoreReasons: string[]; signals: SiteSignals | null;
   ai: { need: number; reasons: string[]; pitch: string; gap: string; siteQuality: string } | null;
 };
@@ -434,7 +459,7 @@ export type EnrichRow = {
 /** One website may take at most this long; a slow site can no longer stall a whole reveal. */
 const SITE_TIMEOUT_MS = 25_000;
 
-export async function enrichPeople(env: Env, people: EnrichInput[], opts: { usePaid?: boolean; useClaude?: boolean; revealPhone?: boolean; findLinkedin?: boolean; allowGuesses?: boolean } = {}): Promise<{ results: EnrichRow[]; warnings: string[] }> {
+export async function enrichPeople(env: Env, people: EnrichInput[], opts: { usePaid?: boolean; useClaude?: boolean; revealPhone?: boolean; findLinkedin?: boolean; /** Search for the Instagram when the listing and website don't give it (default on; uses search credits). */ findInstagram?: boolean; allowGuesses?: boolean } = {}): Promise<{ results: EnrichRow[]; warnings: string[] }> {
   if (!people.length) return { results: [], warnings: [] };
   // Paid sources are OPT-IN per call. Default is free only.
   const usePaid = opts.usePaid === true;
@@ -476,7 +501,7 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
         const next = providers[providerIndex];
         if (next) warn(`Switched to ${next.kind === "serpapi" ? "SerpApi" : next.kind === "brave" ? "Brave" : "Serper"} for the Google lookups (the previous provider is unavailable)`);
       }
-      return { blob: "", firstLink: "" };
+      return { blob: "", firstLink: "", results: [] as SearchResult[] };
     });
     searchTail = run.catch(() => undefined);
     return run;
@@ -492,6 +517,14 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
     name: "",
     title: "",
     linkedin: "",
+    instagram: "",
+    instagramSure: false,
+    instagramVia: "",
+    instagramFollowers: null as number | null,
+    instagramWhy: "",
+    facebook: "",
+    tiktok: "",
+    youtube: "",
     mx: null as boolean | null,
     guessed: false,
     score: 0,
@@ -506,6 +539,21 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
     } | null,
   }));
   const byId = new Map(results.map((r) => [r.id, r]));
+  const setIg = (r: (typeof results)[number], pick: IgPick) => {
+    r.instagram = pick.url;
+    r.instagramSure = pick.confidence === "sure";
+    r.instagramVia = pick.via;
+    r.instagramFollowers = pick.followers;
+    r.instagramWhy = pick.why;
+  };
+  // Instagram, source 1: the listing itself. Plenty of small businesses give
+  // their Instagram as their "website" — nothing is more certain than that.
+  for (const p of people) {
+    const r = p.id ? byId.get(p.id) : undefined;
+    const handle = r && p.instagram ? igHandle(p.instagram) : "";
+    if (r && handle)
+      setIg(r, { url: igUrl(handle), handle, confidence: "sure", via: "listing", followers: null, why: "their listing gives this Instagram as their website" });
+  }
 
   // 0) FREE pass — read each company's own website. Cached per domain for 30 days,
   //    tiered crawl, Claude only when the pages didn't already name owner + email.
@@ -547,6 +595,22 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
     r.mx = prof.mx;
     r.signals = prof.signals;
     if (prof.linkedin && !r.linkedin) r.linkedin = prof.linkedin;
+    // Instagram, source 2: their own website (ranked, see pickSiteInstagram).
+    if (prof.instagram && !r.instagram) {
+      const handle = igHandle(prof.instagram);
+      if (handle)
+        setIg(r, {
+          url: igUrl(handle),
+          handle,
+          confidence: prof.instagramSure === false ? "likely" : "sure",
+          via: "site",
+          followers: null,
+          why: prof.instagramWhy || "linked on their website",
+        });
+    }
+    if (prof.facebook && !r.facebook) r.facebook = prof.facebook;
+    if (prof.tiktok && !r.tiktok) r.tiktok = prof.tiktok;
+    if (prof.youtube && !r.youtube) r.youtube = prof.youtube;
     if (!r.phone && prof.phone) r.phone = prof.phone;
     if (prof.name && !p.name) r.name = prof.name;
     if (prof.title) r.title = prof.title;
@@ -559,6 +623,25 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
       (r as { _guess?: string })._guess = prof.email;
     }
   });
+
+  // Instagram, source 3: a link-in-bio page (Linktree and friends) the listing
+  // gave as the "website" — one small page, read like any other public site.
+  await enrichMany(
+    people.filter((p) => p.bioLink && p.id && !byId.get(p.id)?.instagram),
+    6,
+    async (p) => {
+      const r = byId.get(p.id);
+      const url = bioLinkUrl(p.bioLink || "");
+      if (!r || !url) return;
+      const page = await withTimeout(
+        fetchPublicSite(url, 8_000, { "User-Agent": BIO_UA, Accept: "text/html,application/xhtml+xml,*/*;q=0.8", "Accept-Language": "en" }),
+        10_000,
+        "link-in-bio page",
+      ).catch(() => null);
+      const pick = page ? pickBioInstagram(page.html, url, { name: p.organizationName, city: p.city }) : null;
+      if (pick) setIg(r, pick);
+    },
+  );
 
   // 1) Apollo enrichment (paid, opt-in): emails + websites + phones, one batch call.
   if (apolloKey) {
@@ -655,6 +738,20 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
       }
     }
   });
+
+  // Search is explicit and shares the serialized, paced provider waterfall.
+  await enrichMany(opts.findInstagram === true ? people : [], 2, async (p) => {
+    const r = byId.get(p.id);
+    if (!r || r.instagram || !p.organizationName) return;
+    const biz = { name: p.organizationName, domain: r.website, city: p.city, phone: r.phone || p.phone };
+    for (const q of igSearchQueries(biz)) {
+      try {
+        const res = await search(q);
+        const pick = pickSearchInstagram(res.results ?? [], biz);
+        if (pick) { setIg(r, pick); break; }
+      } catch { /* Social discovery never blocks email recovery. */ }
+    }
+  });
   if (slowSites) warn(`${slowSites} website${slowSites === 1 ? "" : "s"} took longer than ${SITE_TIMEOUT_MS / 1000} s and ${slowSites === 1 ? "was" : "were"} skipped`);
 
   // 3) Optional last resort: a pattern guess (info@…) on a domain that accepts
@@ -717,6 +814,7 @@ async function enrich(request: Request, env: Env): Promise<Response> {
     usePaid?: boolean;
     useClaude?: boolean;
     findLinkedin?: boolean;
+    findInstagram?: boolean;
   } = {};
   try {
     payload = (await request.json()) as typeof payload;
@@ -783,7 +881,7 @@ interface SearchKey {
 async function googleSearch(
   p: SearchKey,
   q: string,
-): Promise<{ blob: string; firstLink: string; error?: string; stop?: boolean }> {
+): Promise<{ blob: string; firstLink: string; results: SearchResult[]; error?: string; stop?: boolean }> {
   if (p.kind === "brave") {
     // Brave Search — a free tier (≈2,000 searches/mo) that keeps website/email
     // discovery working after Serper runs out. Returns the real result links.
@@ -796,7 +894,7 @@ async function googleSearch(
     });
     if (!res.ok) {
       const prob = searchProviderProblem("Brave", res.status, await res.text().catch(() => ""));
-      return { blob: "", firstLink: "", error: prob.text, stop: prob.stop };
+      return { blob: "", firstLink: "", results: [], error: prob.text, stop: prob.stop };
     }
     const d = (await res.json()) as {
       web?: { results?: { url?: string; title?: string; description?: string; extra_snippets?: string[] }[] };
@@ -806,7 +904,7 @@ async function googleSearch(
       title: o.title,
       snippet: [o.description, ...(o.extra_snippets ?? [])].filter(Boolean).join(" "),
     }));
-    return { blob: JSON.stringify(organic).replace(PROVIDER_URL_RE, ""), firstLink: organic[0]?.link ?? "" };
+    return { blob: JSON.stringify(organic).replace(PROVIDER_URL_RE, ""), firstLink: organic[0]?.link ?? "", results: organic };
   }
   if (p.kind === "serpapi") {
     const u = new URL("https://serpapi.com/search.json");
@@ -817,7 +915,7 @@ async function googleSearch(
     const res = await fetch(u.toString());
     if (!res.ok) {
       const p = searchProviderProblem("SerpApi", res.status, await res.text().catch(() => ""));
-      return { blob: "", firstLink: "", error: p.text, stop: p.stop };
+      return { blob: "", firstLink: "", results: [], error: p.text, stop: p.stop };
     }
     const d = (await res.json()) as {
       organic_results?: { link?: string; title?: string; snippet?: string }[];
@@ -827,7 +925,7 @@ async function googleSearch(
     };
     if (d.error && /limit|exceed|run out|plan/i.test(d.error)) {
       const p = searchProviderProblem("SerpApi", 429, d.error);
-      return { blob: "", firstLink: "", error: p.text, stop: true };
+      return { blob: "", firstLink: "", results: [], error: p.text, stop: true };
     }
     // Only the fields that describe the RESULT. The raw SerpApi JSON is full of
     // serpapi.com links (serpapi_link, thumbnails, pagination) that used to leak
@@ -847,6 +945,7 @@ async function googleSearch(
     return {
       blob: (JSON.stringify(organic) + JSON.stringify(kg)).replace(PROVIDER_URL_RE, ""),
       firstLink: organic[0]?.link ?? "",
+      results: organic,
     };
   }
   // Serper.dev
@@ -857,7 +956,7 @@ async function googleSearch(
   });
   if (!res.ok) {
     const p = searchProviderProblem("Serper", res.status, await res.text().catch(() => ""));
-    return { blob: "", firstLink: "", error: p.text, stop: p.stop };
+    return { blob: "", firstLink: "", results: [], error: p.text, stop: p.stop };
   }
   const d = (await res.json()) as {
     organic?: { link?: string; title?: string; snippet?: string }[];
@@ -874,6 +973,7 @@ async function googleSearch(
       "",
     ),
     firstLink: organic[0]?.link ?? "",
+    results: organic,
   };
 }
 
@@ -952,6 +1052,11 @@ async function apolloBulkMatch(
 
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const PHONE_RE = /(\+?\d[\d\s().-]{7,}\d)/g;
+
+/** First real Instagram profile URL in a text blob — a handle, never a /p/ post, /reel/ or a section page. */
+export function pickInstagram(text: string): string {
+  return igUrl([...igHandlesIn(text).keys()][0] || "");
+}
 
 /** Best-effort phone extraction from a text blob. */
 function pickPhone(text: string): string {
@@ -1720,6 +1825,7 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
               id: r.cid || `${(r.title || "").toLowerCase()}|${cleanDomain(r.website || "")}`,
               company: r.title || "",
               website: cleanDomain(r.website || ""),
+              ...listingSocials(r.website),
               phone: r.phoneNumber || "",
               address: r.address || "",
               city,
@@ -1772,6 +1878,7 @@ export async function discoverCore(f: DiscoverFilters, env: Env): Promise<Discov
               id: r.place_id || `${(r.title || "").toLowerCase()}|${cleanDomain(r.website)}`,
               company: r.title || "",
               website: cleanDomain(r.website || ""),
+              ...listingSocials(r.website),
               phone: r.phone || "",
               address: r.address || "",
               city,
@@ -1942,6 +2049,9 @@ interface DiscoveredBusiness {
   lng?: number;
   /** Pre-found address (the self-hosted Maps scraper reads sites itself). */
   email?: string;
+  /** The listing's "website" was really an Instagram profile / a link-in-bio page. */
+  instagram?: string;
+  bioLink?: string;
   source: "Google Maps" | "Google";
 }
 
@@ -2008,6 +2118,7 @@ async function googleBusinesses(request: Request, env: Env): Promise<Response> {
               id,
               company: r.title || "",
               website: cleanDomain(r.website || ""),
+              ...listingSocials(r.website),
               phone: r.phone || "",
               address: r.address || "",
               city: location.split(",")[0] || "",
@@ -2047,6 +2158,7 @@ async function googleBusinesses(request: Request, env: Env): Promise<Response> {
               id,
               company: r.title || "",
               website: cleanDomain(r.website || ""),
+              ...listingSocials(r.website),
               phone: r.phoneNumber || "",
               address: r.address || "",
               city: location.split(",")[0] || "",

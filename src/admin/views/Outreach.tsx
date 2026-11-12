@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { getSendingStatus } from "@/lib/sending-status.functions";
+import { cantSend } from "@/lib/send-errors";
 import { inboxCheck } from "@/lib/inbox-check";
 type SendingStatus = Awaited<ReturnType<typeof getSendingStatus>>;
 import {
@@ -60,6 +61,7 @@ import {
   addSuppression,
   removeSuppression,
   runDispatchNow,
+  linkMailboxToActiveSequences,
   sendReply,
   markHandled,
   abStats,
@@ -93,7 +95,11 @@ function toastDispatch(rep: DispatchSummary | undefined, prefix = "") {
     ...skips,
     ...errs.slice(0, 2),
   ].filter(Boolean);
+  // Waiting for the next slot is the plan working, not a problem.
+  const justPacing =
+    sent === 0 && !errs.length && skips.length > 0 && (rep?.mailboxes ?? []).every((m) => !m.skipped || /^next email in|nobody is due|isn't used by/.test(m.skipped));
   if (sent > 0) toast.success(parts.join(" · "), { duration: 8000 });
+  else if (justPacing) toast.message(parts.join(" · "), { duration: 9000 });
   else toast.warning(parts.join(" · "), { duration: 10000 });
 }
 
@@ -297,6 +303,7 @@ export function Outreach({
           counts={counts}
           go={go}
           setTab={setTab}
+          refresh={refresh}
         />
       )}
       {tab === "sequences" && (
@@ -329,6 +336,7 @@ function Overview({
   counts,
   go,
   setTab,
+  refresh,
 }: {
   mailboxes: Mailbox[];
   sequences: Sequence[];
@@ -336,6 +344,7 @@ function Overview({
   counts: Record<string, number>;
   go?: (v: "settings" | "raw") => void;
   setTab: (t: Tab) => void;
+  refresh?: () => Promise<void>;
 }) {
   const max = Math.max(1, ...series.map((d) => d.sent));
   const noMailbox = mailboxes.length === 0;
@@ -343,8 +352,8 @@ function Overview({
   const nothingQueued = !(counts.queued || counts.active);
   return (
     <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr] lg:items-start">
-      <div className="lg:col-span-2"><SendingStatusPanel go={go} /></div>
-      <Panel>
+      <div className="min-w-0 lg:col-span-2"><SendingStatusPanel go={go} onChanged={refresh} /></div>
+      <Panel className="min-w-0">
         <h3 className="font-display text-lg font-bold">Sent per day</h3>
         <p className="text-xs text-muted-foreground">
           Last 14 days · bars are emails sent, dots are replies
@@ -369,7 +378,7 @@ function Overview({
         </div>
       </Panel>
 
-      <Panel>
+      <Panel className="min-w-0">
         <h3 className="font-display text-lg font-bold">Getting started</h3>
         <ol className="mt-3 space-y-2 text-sm">
           <Step
@@ -415,7 +424,7 @@ function Overview({
                   {m.last_sync_at ? `synced ${fmt(m.last_sync_at)}` : "not synced yet"}
                 </div>
                 {m.last_error && (
-                  <div className="mt-0.5 truncate text-xs text-destructive">{m.last_error}</div>
+                  <div className="mt-0.5 break-words text-xs text-destructive">{m.last_error}</div>
                 )}
               </div>
               <Pill s={m.status} />
@@ -629,12 +638,13 @@ function Sequences({
     await setSequenceStatus(seq.id, starting ? "active" : "paused");
     await refresh();
     if (starting) {
-      // Pressing play sends the first emails right now; the scheduler sends the
-      // rest one by one at the sequence's gap.
-      toast.message("Sequence started — the first emails go out now, the rest one by one in the background.");
-      const r = await sendNow({ sequenceId: seq.id });
-      if (r.ok) toastDispatch(r.report, `"${seq.name}": `);
-      else toast.error(r.error || "Could not send");
+      // Pressing play starts the ordinary, paced sending straight away: the
+      // first email goes out now if its slot is free, the rest follow one by
+      // one with the mailbox's daily cap spread over the day — never a burst.
+      // ("Send to everyone now" under People is there for when you want one.)
+      const r = await runDispatchNow(false);
+      if (r.ok) toastDispatch(r.report as DispatchSummary | undefined, `"${seq.name}" is on · `);
+      else toast.error(r.error || "Could not start sending");
       await refresh();
     }
   }
@@ -665,7 +675,7 @@ function Sequences({
                   <Pill s={s.status} />
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {s.mailbox_ids.length} mailbox{s.mailbox_ids.length === 1 ? "" : "es"} ·{" "}
+                  <SendsFrom seq={s} mailboxes={mailboxes} /> ·{" "}
                   {s.stop_on_reply ? "stops on reply" : "continues after reply"} · {s.gap_min_sec}–
                   {s.gap_max_sec}s between sends ·{" "}
                   {s.send_anytime ? "sends any time" : "business hours only"}
@@ -1064,8 +1074,9 @@ function Sequences({
             const sq = sequences.find((x) => x.id === seqId);
             if (sq && sq.status !== "active" && sq.mailbox_ids.length)
               await setSequenceStatus(seqId, "active");
-            const r = await sendNow({ sequenceId: seqId });
-            if (r.ok) toastDispatch(r.report);
+            // Paced start (see toggle): one now if the slot is free, the rest spread over the day.
+            const r = await runDispatchNow(false);
+            if (r.ok) toastDispatch(r.report as DispatchSummary | undefined);
           }
           await refresh();
         }}
@@ -1076,12 +1087,13 @@ function Sequences({
 }
 
 /** "Is it sending right now, and if not, why?" — the dispatcher's own checks, in words. */
-function SendingStatusPanel({ go }: { go?: (v: "settings" | "raw") => void }) {
+function SendingStatusPanel({ go, onChanged }: { go?: (v: "settings" | "raw") => void; onChanged?: () => Promise<void> }) {
   const checkStatus = useServerFn(getSendingStatus);
   const checking = useRef(false);
   const [st, setSt] = useState<SendingStatus | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [linking, setLinking] = useState<string | null>(null);
   const load = useCallback(async () => {
     if (checking.current) return;
     checking.current = true;
@@ -1102,13 +1114,40 @@ function SendingStatusPanel({ go }: { go?: (v: "settings" | "raw") => void }) {
     return () => clearInterval(t);
   }, [load]);
 
-  const allGood = st && st.blockers.length === 0 && st.mailboxes.some((m) => m.can_send_now);
+  /** One click: this mailbox sends for every Active sequence from now on. */
+  async function link(m: SendingStatus["mailboxes"][number]) {
+    setLinking(m.id);
+    try {
+      const n = await linkMailboxToActiveSequences(m.id);
+      toast.success(
+        n
+          ? `${m.email} now sends for ${n} Active sequence${n === 1 ? "" : "s"}. People still waiting for their first email move over within a minute.`
+          : `${m.email} was already in every Active sequence.`,
+        { duration: 9000 },
+      );
+      await Promise.all([load(), onChanged?.()]);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setLinking(null);
+    }
+  }
+
+  const sending = st?.mailboxes.filter((m) => m.can_send_now || m.on_schedule) ?? [];
+  const allGood = !!st && st.blockers.length === 0 && sending.length > 0;
+  const nextAt = sending
+    .map((m) => m.next_send_at)
+    .filter((x): x is string => !!x)
+    .sort()[0];
   return (
     <Panel>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="font-display text-lg font-bold">Is it sending?</h3>
-          
+          <p className="text-xs text-muted-foreground">
+            Each mailbox spreads its daily cap over the day by itself — 40 a day is one email about every 36
+            minutes. Only “Send now” goes faster.
+          </p>
         </div>
         <Btn variant="ghost" onClick={() => void load()} disabled={busy}>
           <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} /> Re-check
@@ -1131,8 +1170,10 @@ function SendingStatusPanel({ go }: { go?: (v: "settings" | "raw") => void }) {
                 <AlertTriangle className="h-4 w-4 text-muted-foreground" />
               )}
               {allGood
-                ? "At least one mailbox is eligible to send now."
-                : "Sending may be waiting. Check the details below:"}
+                ? sending.some((m) => m.can_send_now)
+                  ? "Sending — the next email goes out within a minute."
+                  : `On schedule — the next email goes out ${nextAt ? `in about ${Math.max(1, Math.round((Date.parse(nextAt) - Date.now()) / 60_000))} min` : "at its next slot"}.`
+                : "Not sending right now. Here is why:"}
             </div>
             <div className="mt-1 text-xs text-muted-foreground">{st.scheduler.note}</div>
             {!st.scheduler.ok && go && (
@@ -1154,17 +1195,17 @@ function SendingStatusPanel({ go }: { go?: (v: "settings" | "raw") => void }) {
           </div>
           <div className="grid gap-2 md:grid-cols-2">
             {st.mailboxes.map((m) => (
-              <div key={m.email} className="rounded-lg border border-border p-3 text-xs">
+              <div key={m.id || m.email} className="rounded-lg border border-border p-3 text-xs">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0 break-all font-mono text-sm font-semibold">{m.email}</div>
                   <span
-                    className={`rounded-full px-2 py-0.5 text-[.65rem] font-semibold ${
-                      m.can_send_now
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-[.65rem] font-semibold ${
+                      m.can_send_now || m.on_schedule
                         ? "bg-primary/10 text-primary"
                         : "bg-secondary text-muted-foreground"
                     }`}
                   >
-                    {m.can_send_now ? "can send now" : "waiting"}
+                    {m.can_send_now ? "sending" : m.on_schedule ? "on schedule" : "not sending"}
                   </span>
                 </div>
                 <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
@@ -1182,13 +1223,18 @@ function SendingStatusPanel({ go }: { go?: (v: "settings" | "raw") => void }) {
                     {m.provider === "ghl" ? "GoHighLevel" : "Google"} ·{" "}
                     {m.sequences.length ? m.sequences.join(", ") : "no active sequence"}
                   </span>
-                  {m.pace && <span>{m.pace}</span>}
                   {m.eta && m.waiting_total > 0 && (
                     <span>
                       queue through <b className="text-foreground">{m.eta}</b>
                     </span>
                   )}
                 </div>
+                {m.pace && (
+                  <div className="mt-1.5 text-foreground">
+                    <Clock className="mr-1 inline h-3.5 w-3.5 text-muted-foreground" />
+                    {m.pace}
+                  </div>
+                )}
                 {m.reasons.length > 0 && (
                   <ul className="mt-2 list-disc space-y-1 pl-4">
                     {m.reasons.map((r, i) => (
@@ -1203,6 +1249,13 @@ function SendingStatusPanel({ go }: { go?: (v: "settings" | "raw") => void }) {
                     ))}
                   </ul>
                 )}
+                {m.unlinked && <Btn variant="ghost" disabled={linking === m.id} onClick={() => void link(m)} className="mt-2 text-xs">
+                  {linking === m.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  Send my Active sequences from this mailbox
+                </Btn>}
+                {m.last_error && go && <Btn variant="ghost" onClick={() => go("settings")} className="mt-2 text-xs">
+                  Open mailbox settings <ChevronRight className="h-3 w-3" />
+                </Btn>}
               </div>
             ))}
           </div>
@@ -1210,6 +1263,29 @@ function SendingStatusPanel({ go }: { go?: (v: "settings" | "raw") => void }) {
       )}
     </Panel>
   );
+}
+
+/** "from olivier@… " on a sequence card — and a clear warning when none of its mailboxes can send. */
+function SendsFrom({ seq, mailboxes }: { seq: Sequence; mailboxes: Mailbox[] }) {
+  const own = mailboxes.filter((m) => seq.mailbox_ids.includes(m.id));
+  const working = own.filter((m) => !cantSend(m));
+  if (!seq.mailbox_ids.length) return <span className="font-semibold text-destructive">no mailbox picked — edit to choose one</span>;
+  if (!own.length) {
+    // Its mailboxes were all disconnected: it sends from whatever mailbox is left.
+    const left = mailboxes.filter((m) => m.status === "active");
+    return left.length ? (
+      <span>from {left.map((m) => m.email).join(", ")} (its own mailbox was disconnected)</span>
+    ) : (
+      <span className="font-semibold text-destructive">its mailbox was disconnected — edit to choose one</span>
+    );
+  }
+  if (!working.length)
+    return (
+      <span className="font-semibold text-destructive" title="Reconnect or resume the mailbox in Settings, or edit this sequence and tick a working mailbox under “Send from”.">
+        {own.map((m) => m.email).join(", ")} can’t send — edit to pick a working mailbox
+      </span>
+    );
+  return <span>from {working.map((m) => m.email).join(", ")}</span>;
 }
 
 /** Small per-sequence summary of who is in it. */

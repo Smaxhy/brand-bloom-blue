@@ -13,6 +13,7 @@
  */
 
 import { cleanDomain, type PlaceBusiness } from "./places";
+import { igHandle, igUrl, listingSocials } from "../instagram";
 
 const ENDPOINTS = [
   "https://overpass-api.de/api/interpreter",
@@ -96,9 +97,13 @@ out center tags ${Math.min(opts.max * 3, 300)};`;
         const t = el.tags ?? {};
         const name = t.name || t["brand"] || "";
         if (!name) continue;
-        const website = cleanDomain(t.website || t["contact:website"] || t.url || "");
+        const rawWebsite = t.website || t["contact:website"] || t.url || "";
+        const website = cleanDomain(rawWebsite);
         const phone = t.phone || t["contact:phone"] || "";
-        if (!website && !phone) continue; // nothing to work with downstream
+        // OpenStreetMap often carries the Instagram itself (a handle or a link).
+        const igTag = igHandle(t["contact:instagram"] || t.instagram || "");
+        const socials = igTag ? { instagram: igUrl(igTag) } : listingSocials(rawWebsite);
+        if (!website && !phone && !socials.instagram) continue; // nothing to work with downstream
         const key = website || name.toLowerCase();
         if (seen.has(key)) continue;
         seen.add(key);
@@ -109,6 +114,7 @@ out center tags ${Math.min(opts.max * 3, 300)};`;
           id: `osm_${el.type}_${el.id}`,
           company: name,
           website,
+          ...socials,
           phone,
           address: addr,
           city: t["addr:city"] || opts.city,

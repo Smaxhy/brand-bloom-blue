@@ -43,6 +43,7 @@ import { Panel, Field, inputCls, Btn, Modal } from "../ui";
 import { useServerFn } from "@tanstack/react-start";
 import { canConfigureIntegrations, saveIntegrationCredentials } from "@/lib/integration-settings.functions";
 import { integrationFields, integrationInputSchema } from "@/lib/integration-settings-schema";
+import { gapLabel } from "@/lib/dispatch-pacing";
 
 export function SettingsView({
   data,
@@ -293,6 +294,53 @@ function BackgroundTimerPanel() {
 
 const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
+/**
+ * How a mailbox paces itself, in words, plus the one-click "40 a day, around
+ * the clock" set-up. The sender spreads the daily cap over the day on its own:
+ * around the clock for "Send any time" sequences, within the hours otherwise.
+ */
+function MailboxPace({ m, onPreset }: { m: Mailbox; onPreset: () => void }) {
+  const cap = Math.max(1, m.daily_cap || 1);
+  const allDay = m.window_start <= 0 && m.window_end >= 24;
+  const hours = m.window_end > m.window_start ? m.window_end - m.window_start : 24;
+  const around = gapLabel(Math.floor(86_400 / cap));
+  const within = gapLabel(Math.floor((hours * 3600) / cap));
+  const isPreset = cap === 40 && allDay && m.send_days.length === 7;
+  const hh = (n: number) => `${String(n).padStart(2, "0")}:00`;
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-secondary/60 px-3 py-2 text-xs">
+      <Timer className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1">
+        Paced automatically, never in a burst:{" "}
+        <b>
+          one email about every {around}
+        </b>{" "}
+        around the clock ({cap} a day)
+        {!allDay && (
+          <>
+            {" "}
+            · business-hours sequences: about every <b>{within}</b> between {hh(m.window_start)} and {hh(m.window_end)}
+          </>
+        )}
+        .
+      </span>
+      {isPreset ? (
+        <span className="inline-flex items-center gap-1 font-semibold text-primary">
+          <CheckCircle2 className="h-3.5 w-3.5" /> 40 a day, around the clock
+        </span>
+      ) : (
+        <Btn
+          onClick={onPreset}
+          title="Sets this mailbox to 40 emails a day, every day, at any hour: one email about every 36 minutes"
+          className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1.5 font-semibold hover:bg-secondary"
+        >
+          Set 40 a day, around the clock
+        </Btn>
+      )}
+    </div>
+  );
+}
+
 function MailboxesPanel() {
   const [rows, setRows] = useState<Mailbox[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -427,7 +475,7 @@ function MailboxesPanel() {
                 )}
               </div>
               <span
-                className={`rounded-full px-2 py-0.5 text-[.65rem] font-semibold uppercase ${m.status === "active" ? "bg-[oklch(.7_.18_150)]/15 text-[oklch(.4_.12_150)]" : m.status === "error" ? "bg-destructive/10 text-destructive" : "bg-secondary text-muted-foreground"}`}
+                className={`rounded-full px-2 py-0.5 text-[.65rem] font-semibold uppercase ${m.status === "active" ? "bg-[oklch(.7_.18_150)]/15 text-primary" : m.status === "error" ? "bg-destructive/10 text-destructive" : "bg-secondary text-muted-foreground"}`}
               >
                 {m.status}
               </span>
@@ -479,7 +527,7 @@ function MailboxesPanel() {
                 <input
                   type="number"
                   min={1}
-                  max={300}
+                  max={40}
                   className={inputCls}
                   value={m.daily_cap}
                   onChange={(e) =>
@@ -546,6 +594,7 @@ function MailboxesPanel() {
                 </div>
               </Field>
             </div>
+            <MailboxPace m={m} onPreset={() => void patch(m.id, { daily_cap: 40, window_start: 0, window_end: 24, send_days: [0, 1, 2, 3, 4, 5, 6] })} />
             <div className="mt-3">
               <Field label="Signature (added under every email)">
                 <textarea
@@ -659,7 +708,7 @@ function MailboxesPanel() {
           </div>
           <p className="text-xs text-muted-foreground">
             Where to find these: GHL → Settings → Private Integrations (token); the Location ID is
-            in Settings → Business Profile. Daily cap starts at 1000; change it under the mailbox once
+            in Settings → Business Profile. Daily cap starts at 40; change it under the mailbox once
             connected.
           </p>
           <div className="flex justify-end gap-2 pt-1">
@@ -775,20 +824,7 @@ function SenderIdentityPanel() {
               <option value="block">Classic grey footer with Unsubscribe link</option>
             </select>
           </Field>
-          <Field label="Sending rhythm">
-            <select
-              className={inputCls}
-              value={s.spread_across_day ? "spread" : "burst"}
-              onChange={(e) => setS({ ...s, spread_across_day: e.target.value === "spread" })}
-            >
-              <option value="spread">Spread across the day (recommended for cold — gentle, human-looking)</option>
-              <option value="burst">Send as fast as the pace allows, then stop</option>
-            </select>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Spread = each mailbox's daily cap divided evenly over its sending hours. Example: a 40/day cap over 24 h ≈ one
-              email every ~36 min. Set the rate with the mailbox's <b>daily cap</b> and <b>sending hours</b>.
-            </p>
-          </Field>
+
         </div>
         {(s.footer_style || "sentence") !== "block" ? (
           <div className="grid gap-3 sm:grid-cols-2">
@@ -1141,7 +1177,7 @@ function TwoFactorPanel() {
           </p>
         </div>
         {active.length > 0 ? (
-          <span className="rounded-full bg-[oklch(.7_.18_150)]/15 px-2.5 py-1 text-xs font-semibold text-[oklch(.4_.12_150)]">
+          <span className="rounded-full bg-[oklch(.7_.18_150)]/15 px-2.5 py-1 text-xs font-semibold text-primary">
             On
           </span>
         ) : (

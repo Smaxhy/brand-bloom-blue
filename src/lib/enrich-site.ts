@@ -26,7 +26,7 @@ const secret = (e: Env, k: string) => e[k] || process.env?.[k];
 const OWNERISH =
   /\b(owner|founder|co-founder|ceo|president|principal|proprietor|managing director|director|zaakvoerder|eigenaar|oprichter|bestuurder|g[ée]rant|fondateur|directeur|inhaber|geschäftsführer)\b/i;
 const CACHE_DAYS = 30;
-const EMAIL_EXTRACTION_VERSION = 4;
+export const EMAIL_EXTRACTION_VERSION = 5;
 const BUSINESS_WORDS =
   /\b(roofing|roofers?|plumbing|plumbers?|hvac|heating|cooling|electric(al)?|landscap\w*|lawn|tree|dental|dentistry|clinic|law|legal|realty|real estate|construction|contractors?|services?|solutions|group|company|co\.?|inc\.?|llc|ltd|bv|bvba|nv|gmbh|sarl|srl|studio|salon|spa|shop|store|center|centre|agency|partners|associates|brothers|sons|team|home|house|auto|motors?|cleaning|painting|design|media|marketing|consulting|insurance|bank|church|school|academy)\b/i;
 
@@ -55,6 +55,15 @@ export interface SiteProfile {
   linkedin: string;
   /** We already searched for the owner's LinkedIn (don't spend another credit). */
   linkedinTried?: boolean;
+  /** Business social profiles pulled off the site — Instagram is the priority. Optional so older caches stay valid. */
+  instagram?: string;
+  /** false = found, but only "likely" theirs (worth a look before messaging). */
+  instagramSure?: boolean;
+  /** Why we think this profile is theirs, in plain words. */
+  instagramWhy?: string;
+  facebook?: string;
+  tiktok?: string;
+  youtube?: string;
   phone: string;
   name: string;
   title: string;
@@ -479,6 +488,12 @@ export async function enrichSite(env: Env, o: EnrichSiteOpts): Promise<SiteProfi
     signals: fe.signals,
     linkedin,
     linkedinTried,
+    instagram: fe.socials.instagram || "",
+    instagramSure: fe.ig ? fe.ig.confidence === "sure" : undefined,
+    instagramWhy: fe.ig?.why,
+    facebook: fe.socials.facebook || "",
+    tiktok: fe.socials.tiktok || "",
+    youtube: fe.socials.youtube || "",
     phone: fe.phones[0] || "",
     name,
     title,

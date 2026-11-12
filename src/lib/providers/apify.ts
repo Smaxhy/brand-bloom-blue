@@ -10,6 +10,7 @@
  * cheaper community actors can be swapped in if their output uses the same fields).
  */
 
+import { listingSocials } from "../instagram";
 import type { PlaceBusiness } from "./places";
 import { MAX_SCRAPE_RESULTS } from "../scrape-limits";
 
@@ -155,14 +156,18 @@ export async function apifyItems(
     const seen = new Set<string>();
     for (const r of rows) {
       if (!r.title || r.permanentlyClosed) continue;
-      const website = cleanDomain(r.website || "");
-      // Skip aggregator "websites" that aren't the business's own site.
+      let website = cleanDomain(r.website || "");
+      // Aggregator "websites" aren't the business's own site. Skip those — unless
+      // the link is their Instagram or a link-in-bio page, which is worth keeping.
+      const socials = listingSocials(r.website);
       if (
         /facebook\.com|instagram\.com|yelp\.com|linktr\.ee|google\.com|business\.site$/.test(
           website,
         )
-      )
-        continue;
+      ) {
+        if (!socials.instagram && !socials.bioLink) continue;
+        website = "";
+      } else if (socials.bioLink) website = "";
       const id = r.placeId ? `apify_${r.placeId}` : `apify_${r.title.toLowerCase()}|${website}`;
       if (seen.has(id)) continue;
       seen.add(id);
@@ -170,6 +175,7 @@ export async function apifyItems(
         id,
         company: r.title,
         website,
+        ...socials,
         phone: r.phone || r.phoneUnformatted || "",
         address: r.address || "",
         city: r.city || fallbackCity,

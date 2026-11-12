@@ -328,6 +328,16 @@ export async function saveSequence(
     );
   return id;
 }
+export async function linkMailboxToActiveSequences(mailboxId: string): Promise<number> {
+  const seqs = await listSequences();
+  let changed = 0;
+  for (const s of seqs) {
+    if (s.status !== "active" || s.mailbox_ids.includes(mailboxId)) continue;
+    must(await (await tbl("sequences")).update({ mailbox_ids: [...s.mailbox_ids, mailboxId] }).eq("id", s.id).select("id"));
+    changed++;
+  }
+  return changed;
+}
 export async function setSequenceStatus(id: string, status: Sequence["status"]): Promise<void> {
   must(await (await tbl("sequences")).update({ status }).eq("id", id).select("id"));
 }
