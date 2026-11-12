@@ -1249,6 +1249,13 @@ function SendingStatusPanel({ go, onChanged }: { go?: (v: "settings" | "raw") =>
                     ))}
                   </ul>
                 )}
+                {m.unlinked && <Btn variant="ghost" disabled={linking === m.id} onClick={() => void link(m)} className="mt-2 text-xs">
+                  {linking === m.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  Send my Active sequences from this mailbox
+                </Btn>}
+                {m.last_error && go && <Btn variant="ghost" onClick={() => go("settings")} className="mt-2 text-xs">
+                  Open mailbox settings <ChevronRight className="h-3 w-3" />
+                </Btn>}
               </div>
             ))}
           </div>
