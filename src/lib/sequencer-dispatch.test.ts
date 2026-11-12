@@ -887,10 +887,11 @@ describe("dispatcher sends whole queues", () => {
   it("waits for the automatic slot before claiming or verifying a person", async () => {
     seed({ people: 2 });
     pacing.enabled = true;
+    const originalDueAt = tables.enrollments[1].next_send_at;
     const report = await runDispatch({}, { source: "tick" });
     expect(report.mailboxes[0].sent).toBe(1);
     expect(tables.enrollments[1].current_step).toBe(0);
-    expect(tables.enrollments[1].next_send_at).toBe(past(29));
+    expect(tables.enrollments[1].next_send_at).toBe(originalDueAt);
     expect(report.mailboxes[0].next_send_in_sec).toBeGreaterThan(60);
   });
 });
