@@ -11,11 +11,9 @@ export interface ScanJob {
 }
 const lite = "id,label,status,cursor,total,warnings,last_error,created_at,updated_at,finished_at";
 /** A runner holds a scan for this long; it renews after every saved chunk. A closed tab lets go within this time. */
-export const SCAN_LEASE_MS = 90_000;
+export const SCAN_LEASE_MS = 600_000;
 /** Websites read side by side in one chunk. */
 export const SCAN_CHUNK = 6;
-export const MAX_RESULT_ROWS = 4000;
-export const MAX_RESULT_BYTES = 3_500_000;
 
 /**
  * A scan's results live in one database row. Past these sizes it stops cleanly

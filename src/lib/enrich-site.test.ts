@@ -10,13 +10,13 @@ import type { Db } from "./db";
 describe("optional LinkedIn lookup", () => {
   it("does not spend search credits when disabled on a cached profile", async () => {
     lookup.mockClear();
-    const db = { one: vi.fn(async () => ({ data: { name: "Alex Smith", linkedin: "", linkedinTried: false, emailExtractionVersion: 4 } })) } as unknown as Db;
+    const db = { one: vi.fn(async () => ({ data: { name: "Alex Smith", linkedin: "", linkedinTried: false, emailExtractionVersion: 5 } })) } as unknown as Db;
     await enrichSite({ SERPER_API_KEY: "test-only" }, { website: "example.com", company: "Example", findLinkedin: false, db });
     expect(lookup).not.toHaveBeenCalled();
   });
   it("looks up the cached owner when explicitly enabled", async () => {
     lookup.mockClear();
-    const db = { one: vi.fn(async () => ({ data: { name: "Alex Smith", linkedin: "", linkedinTried: false, emailExtractionVersion: 4 } })), upsert: vi.fn(async () => []) } as unknown as Db;
+    const db = { one: vi.fn(async () => ({ data: { name: "Alex Smith", linkedin: "", linkedinTried: false, emailExtractionVersion: 5 } })), upsert: vi.fn(async () => []) } as unknown as Db;
     const result = await enrichSite({ SERPER_API_KEY: "test-only" }, { website: "example.com", company: "Example", findLinkedin: true, db });
     expect(lookup).toHaveBeenCalledTimes(1);
     expect(result?.linkedin).toBe("https://www.linkedin.com/in/alex-smith");
@@ -40,7 +40,7 @@ describe("published email recovery", () => {
     expect(crawl).toHaveBeenCalledTimes(1);
     expect(result?.email).toBe("owner@business.test");
     expect(result?.emailGuessed).toBe(false);
-    expect(result?.emailExtractionVersion).toBe(4);
+    expect(result?.emailExtractionVersion).toBe(5);
   });
   it.each(["owner@business.test", "local.business@gmail.com"])("keeps published %s even when website MX is absent", async (email) => {
     crawl.mockResolvedValue({ ok: true, website: "business.test", mx: false, emails: [{ email, source: "site", page: "/contact" }], names: [], socials: { linkedin: "" }, phones: [], text: "", signals: null });

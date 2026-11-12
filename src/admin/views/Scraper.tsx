@@ -1211,8 +1211,8 @@ export function Scraper({
       bioLink: p.bioLink || undefined,
     }));
     const options = { useClaude: sources.claude, usePaid, revealPhone, findLinkedin, findInstagram, allowGuesses };
-    try {
       for (let offset = 0; offset < people.length; offset += 2000) {
+        if (stopRequested.current) break;
         const slice = people.slice(offset, offset + 2000);
         const started = await startScan(
           slice,

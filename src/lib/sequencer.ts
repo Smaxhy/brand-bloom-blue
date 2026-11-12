@@ -64,7 +64,7 @@ import {
 } from "./send-errors";
 import { applyReply, enrollmentForThread } from "./reply-actions";
 import { companyAlreadyContacted } from "./company-contact";
-import { isCompanyDomain } from "./business-key";
+import { cleanDomain, isCompanyDomain } from "./business-key";
 
 type Env = Record<string, string | undefined>;
 
@@ -552,7 +552,14 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
           `mailbox_id=eq.${mb.id}&direction=eq.out&status=in.(sent,bounced)&sent_at=gte.${enc(startOfLocalDayIso(mb.timezone))}&select=id`,
         )
       ).length;
-      let remaining = Math.max(0, mb.daily_cap - sentToday);
+      const sentLast24h = (await db.select<{ id: string }>("messages",
+        `direction=eq.out&status=in.(sent,bounced)&sent_at=gte.${enc(new Date(Date.now() - 86_400_000).toISOString())}&select=id&limit=40`)).length;
+      const globalLeft = Math.max(0, GLOBAL_DAILY_SEND_LIMIT - sentLast24h);
+      if (!globalLeft) {
+        entry.skipped = `account limit reached (${sentLast24h}/${GLOBAL_DAILY_SEND_LIMIT} in the last 24 hours)`;
+        return;
+      }
+      let remaining = Math.min(globalLeft, Math.max(0, Math.min(mb.daily_cap, GLOBAL_DAILY_SEND_LIMIT) - sentToday));
       entry.remaining_today = remaining;
       if (!remaining) {
         entry.skipped = `daily cap reached (${sentToday}/${mb.daily_cap}) — continues after midnight ${mb.timezone}`;
@@ -1300,6 +1307,9 @@ export async function runDispatch(env: Env, opts: DispatchOptions = {}): Promise
   await Promise.all(work);
   return report;
 }
+
+/** Permanent combined sending ceiling, including manual sequence sends. */
+export const GLOBAL_DAILY_SEND_LIMIT = 40;
 
 /** Look at the mailbox inbox for replies / bounces to our threads. */
 async function syncMailbox(
