@@ -4,11 +4,19 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/sonner";
+import {
+  META_PIXEL_BASE_CODE,
+  META_PIXEL_NOSCRIPT_SRC,
+  isTrackedPath,
+  trackPageView,
+} from "@/lib/meta-pixel";
 
 import appCss from "../styles.css?url";
 
@@ -105,12 +113,26 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: React.ReactNode }) {
+  // The Meta pixel goes on the public pages only (src/lib/meta-pixel.ts).
+  const tracked = useRouterState({ select: (state) => isTrackedPath(state.location.pathname) });
   return (
     <html lang="en">
       <head>
         <HeadContent />
+        {tracked && <script dangerouslySetInnerHTML={{ __html: META_PIXEL_BASE_CODE }} />}
       </head>
       <body>
+        {tracked && (
+          <noscript>
+            <img
+              height="1"
+              width="1"
+              style={{ display: "none" }}
+              src={META_PIXEL_NOSCRIPT_SRC}
+              alt=""
+            />
+          </noscript>
+        )}
         {children}
         <Scripts />
       </body>
@@ -120,6 +142,17 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const router = useRouter();
+
+  // A full page load is counted by the pixel code in the head. Moving between
+  // pages without a reload is counted here, once per page.
+  useEffect(
+    () =>
+      router.subscribe("onResolved", (event) => {
+        if (event.fromLocation && event.pathChanged) trackPageView(event.toLocation.pathname);
+      }),
+    [router],
+  );
 
   return (
     <QueryClientProvider client={queryClient}>
