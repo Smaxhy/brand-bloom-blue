@@ -183,6 +183,17 @@ export function RawData({
 
   // Instagram: only rows that have one (the DM working list), and "copied" feedback.
   const [igOnly, setIgOnly] = useState(false);
+  const [igView, setIgView] = useState<"any" | "dmed" | "notDmed">("any");
+  function markSelectedDmed(sent: boolean) {
+    const handles = data.raw
+      .filter((r) => selectedIds.has(r.id) && r.instagram)
+      .map((r) => igHandleOf(r.instagram))
+      .filter(Boolean);
+    if (!handles.length) return toast.error("None of the selected people have an Instagram account.");
+    update((prev) => handles.reduce((acc, h) => logIgDm(acc, h, sent), prev));
+    toast.success(sent ? `Moved ${handles.length} to Already DMed` : `Removed ${handles.length} from Already DMed`);
+    setSelectedIds(new Set());
+  }
   const [dmCopiedId, setDmCopiedId] = useState<string | null>(null);
   function dmInstagram(r: RawBusiness) {
     const handle = openInstagramDm({ instagram: r.instagram, company: r.business, name: r.contactName, city: r.city, industry: r.industry });
@@ -372,6 +383,11 @@ export function RawData({
       return r.status === filter;
     })
     .filter((r) => !igOnly || !!r.instagram)
+    .filter((r) => {
+      if (igView === "any") return true;
+      const dmed = !!r.instagram && !!data.igDms?.[igHandleOf(r.instagram)];
+      return igView === "dmed" ? dmed : !!r.instagram && !dmed;
+    })
     .filter(
       (r) =>
         !q || (r.business + r.email + r.city + r.industry).toLowerCase().includes(q.toLowerCase()),
@@ -473,6 +489,16 @@ export function RawData({
         <Button variant={igOnly ? "default" : "outline"} aria-pressed={igOnly} onClick={() => { setIgOnly((v) => !v); clearSelection(); }}>
           <Instagram className="h-4 w-4" /> Instagram only · {data.raw.filter((r) => r.instagram).length}
         </Button>
+        <select
+          aria-label="Instagram DM status"
+          value={igView}
+          onChange={(e) => { setIgView(e.target.value as typeof igView); clearSelection(); }}
+          className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs"
+        >
+          <option value="any">All DM statuses</option>
+          <option value="notDmed">Not DMed yet</option>
+          <option value="dmed">Already DMed · {data.raw.filter((r) => r.instagram && data.igDms?.[igHandleOf(r.instagram)]).length}</option>
+        </select>
         <span className="text-xs text-muted-foreground">{igDmsToday(data.igDms)} DM chats opened today</span>
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -524,6 +550,15 @@ export function RawData({
               >
                 <X className="h-3.5 w-3.5" /> Reject selected
               </button>
+              {igView === "dmed" ? (
+                <button onClick={() => markSelectedDmed(false)} className="inline-flex items-center gap-1.5 rounded-lg bg-secondary px-3 py-1.5 text-xs font-semibold hover:bg-secondary/70">
+                  <Instagram className="h-3.5 w-3.5" /> Move back to not DMed
+                </button>
+              ) : (
+                <button onClick={() => markSelectedDmed(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-secondary px-3 py-1.5 text-xs font-semibold hover:bg-secondary/70">
+                  <Instagram className="h-3.5 w-3.5" /> Move to Already DMed
+                </button>
+              )}
               <button
                 onClick={() => {
                   setEnrollResult(null);
