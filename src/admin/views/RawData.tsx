@@ -17,9 +17,11 @@ import {
   SquareStop,
   Instagram,
 } from "lucide-react";
-import { type AdminData, type RawBusiness, type ScanJobLite, type EnrichResult, uid, startScan, stepScan, scanStatus, cancelScan, igDmsToday, igHandleOf, logIgDm } from "../store";
+import { type AdminData, type RawBusiness, type ScanJobLite, type EnrichResult, uid, startScan, stepScan, scanStatus, cancelScan, igHandleOf, logIgDm } from "../store";
 import { IgChip } from "../IgChip";
 import { openInstagramDm } from "../ig-dm";
+import { igAccounts, igCounts, igFinderTargets, igRowTrust, igStageOf } from "../ig-board";
+import { useInstagramFinder } from "../ig-finder";
 import { createRevealScanControl } from "../reveal-scan-control";
 import { mergeRawReveal, needsRawEnrichment, rawScanPerson, runRawReveal } from "../raw-reveal";
 import { type Sequence, listSequences, enrollLeads } from "../outreach";
@@ -181,18 +183,20 @@ export function RawData({
   const revealControl = useRef<ReturnType<typeof createRevealScanControl> | null>(null);
   const [revealMessage, setRevealMessage] = useState("");
 
-  // Instagram: only rows that have one (the DM working list), and "copied" feedback.
-  const [igOnly, setIgOnly] = useState(false);
-  const [igView, setIgView] = useState<"any" | "dmed" | "notDmed">("any");
-  function markSelectedDmed(sent: boolean) {
-    const handles = data.raw
-      .filter((r) => selectedIds.has(r.id) && r.instagram)
-      .map((r) => igHandleOf(r.instagram))
-      .filter(Boolean);
-    if (!handles.length) return toast.error("None of the selected people have an Instagram account.");
-    update((prev) => handles.reduce((acc, h) => logIgDm(acc, h, sent), prev));
-    toast.success(sent ? `Moved ${handles.length} to Already DMed` : `Removed ${handles.length} from Already DMed`);
-    setSelectedIds(new Set());
+  // Instagram: the working list (sections, sorting, bulk moves) is its own page; here a row shows its account.
+  const igCount = useMemo(() => igCounts(igAccounts(data)), [data.raw, data.igDms, data.igMarks]); // eslint-disable-line react-hooks/exhaustive-deps
+  const igFinder = useInstagramFinder(update);
+  /** Look up the Instagram of the selected businesses: an Instagram-only run, so no email searches are paid for. */
+  function findInstagramForSelected() {
+    const { targets, rested } = igFinderTargets(data.raw, selectedIds);
+    if (!targets.length)
+      return toast.info(
+        rested
+          ? "These were searched for in the last 30 days. Searching again so soon costs credits and finds the same."
+          : "The selected businesses already have an Instagram.",
+      );
+    if (rested) toast.info(`${rested} searched for in the last 30 days ${rested === 1 ? "is" : "are"} left alone.`);
+    void igFinder.run(targets);
   }
   const [dmCopiedId, setDmCopiedId] = useState<string | null>(null);
   function dmInstagram(r: RawBusiness) {
@@ -203,11 +207,10 @@ export function RawData({
     update((prev) => logIgDm(prev, handle));
   }
 
-  /** `instagramToo`: also read rows that have everything else but no Instagram yet. */
-  async function revealRows(ids: Set<string>, instagramToo = false) {
+  async function revealRows(ids: Set<string>) {
     if (revealControl.current) return;
     setRevealedIds((prev) => new Set([...prev, ...ids]));
-    const targets = data.raw.filter((row) => ids.has(row.id) && (needsRawEnrichment(row) || (instagramToo && !row.instagram)));
+    const targets = data.raw.filter((row) => ids.has(row.id) && needsRawEnrichment(row));
     if (!targets.length) return;
     const control = createRevealScanControl();
     revealControl.current = control;
@@ -224,12 +227,13 @@ export function RawData({
     };
     try {
       const warnings = await runRawReveal(targets.map(rawScanPerson), {
-        // "Reveal emails" reads listings and websites only; "Find Instagram" also searches (search credits).
-        start: (people) => startScan(people, { useClaude: false, usePaid: false, revealPhone: true, findLinkedin: false, findInstagram: instagramToo }, `Raw Data · ${people.length} businesses`, control.canContinue),
+        // "Reveal emails" reads listings and websites only (their Instagram too, when it's linked there).
+        // Searching for an Instagram is its own run: "Find Instagram".
+        start: (people) => startScan(people, { useClaude: false, usePaid: false, revealPhone: true, findLinkedin: false, findInstagram: false }, `Raw Data · ${people.length} businesses`, control.canContinue),
         step: (id) => stepScan(id, control.canContinue), status: (id) => scanStatus(id, true),
         canContinue: control.canContinue,
         // The server step itself takes ~20 s; no need for a long pause between steps.
-        wait: () => new Promise((resolve) => setTimeout(resolve, 400)),
+        wait: () => new Promise((resolve) => setTimeout(resolve, 2000)),
         onJob: setRevealJob, onRows: apply,
         onProgress: (done, total) => setRevealProgress({ done, total }),
       });
@@ -382,12 +386,6 @@ export function RawData({
       if (filter === "all") return r.status !== "accepted";
       return r.status === filter;
     })
-    .filter((r) => !igOnly || !!r.instagram)
-    .filter((r) => {
-      if (igView === "any") return true;
-      const dmed = !!r.instagram && !!data.igDms?.[igHandleOf(r.instagram)];
-      return igView === "dmed" ? dmed : !!r.instagram && !dmed;
-    })
     .filter(
       (r) =>
         !q || (r.business + r.email + r.city + r.industry).toLowerCase().includes(q.toLowerCase()),
@@ -486,20 +484,9 @@ export function RawData({
           ))}
         </div>
 
-        <Button variant={igOnly ? "default" : "outline"} aria-pressed={igOnly} onClick={() => { setIgOnly((v) => !v); clearSelection(); }}>
-          <Instagram className="h-4 w-4" /> Instagram only · {data.raw.filter((r) => r.instagram).length}
+        <Button variant="outline" onClick={() => go("instagram")} title="The Instagram working list: one line per account, with sections for To DM, DMed, Replied and Not a fit">
+          <Instagram className="h-4 w-4" /> Instagram list · {igCount.todo + igCount.check} to DM · {igCount.dmed + igCount.replied} DMed
         </Button>
-        <select
-          aria-label="Instagram DM status"
-          value={igView}
-          onChange={(e) => { setIgView(e.target.value as typeof igView); clearSelection(); }}
-          className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs"
-        >
-          <option value="any">All DM statuses</option>
-          <option value="notDmed">Not DMed yet</option>
-          <option value="dmed">Already DMed · {data.raw.filter((r) => r.instagram && data.igDms?.[igHandleOf(r.instagram)]).length}</option>
-        </select>
-        <span className="text-xs text-muted-foreground">{igDmsToday(data.igDms)} DM chats opened today</span>
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
@@ -550,15 +537,6 @@ export function RawData({
               >
                 <X className="h-3.5 w-3.5" /> Reject selected
               </button>
-              {igView === "dmed" ? (
-                <button onClick={() => markSelectedDmed(false)} className="inline-flex items-center gap-1.5 rounded-lg bg-secondary px-3 py-1.5 text-xs font-semibold hover:bg-secondary/70">
-                  <Instagram className="h-3.5 w-3.5" /> Move back to not DMed
-                </button>
-              ) : (
-                <button onClick={() => markSelectedDmed(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-secondary px-3 py-1.5 text-xs font-semibold hover:bg-secondary/70">
-                  <Instagram className="h-3.5 w-3.5" /> Move to Already DMed
-                </button>
-              )}
               <button
                 onClick={() => {
                   setEnrollResult(null);
@@ -576,8 +554,8 @@ export function RawData({
               >
                 {revealBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />} Reveal emails
               </Btn>
-              <Btn variant="soft" disabled={revealBusy} onClick={() => void revealRows(new Set(selectedIds), true)} title="Includes optional Instagram searches using search credits">
-                <Instagram className="h-4 w-4" /> Find Instagram
+              <Btn variant="soft" disabled={revealBusy || igFinder.busy} onClick={findInstagramForSelected} title="Reads their listing and website first (free), then searches: usually 1 search per business. Nothing else is looked up, and businesses searched for in the last 30 days are left alone.">
+                {igFinder.busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Instagram className="h-4 w-4" />} Find Instagram
               </Btn>
               <button
                 onClick={hideSelected}
@@ -610,6 +588,21 @@ export function RawData({
         </div>
       )}
       {revealMessage && <p className="text-sm text-muted-foreground" role="status">{revealMessage}</p>}
+      {igFinder.busy && (
+        <div className="flex flex-wrap items-center gap-3 text-sm" role="status">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Looking for Instagram accounts {igFinder.progress.done}/{igFinder.progress.total}</span>
+          <Btn variant="ghost" onClick={() => void igFinder.stop()} disabled={igFinder.stopping || !igFinder.canStop}>
+            <SquareStop className="h-4 w-4" /> {igFinder.stopping ? "Stopping…" : "Stop"}
+          </Btn>
+        </div>
+      )}
+      {igFinder.message && (
+        <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground" role="status">
+          <span>{igFinder.message}</span>
+          <button type="button" className="font-semibold text-primary hover:underline" onClick={() => go("instagram")}>Open the Instagram list</button>
+        </p>
+      )}
 
       <p className="text-sm text-muted-foreground">
         Your scraping dump lives here. <strong className="text-foreground">Accept</strong> the
@@ -677,19 +670,23 @@ export function RawData({
                       {r.contactTitle ? ` · ${r.contactTitle}` : ""}
                     </span>
                   )}
-                  {r.instagram && (
+                  {r.instagram && (() => {
+                    const trust = igRowTrust(r);
+                    return (
                     <span className="mt-1 block font-normal">
                       <IgChip
                         instagram={r.instagram}
                         followers={r.instagramFollowers}
-                        sure={r.instagramSure}
+                        sure={trust.sure}
+                        why={trust.why}
+                        stage={igStageOf(igHandleOf(r.instagram), data, { sure: trust.sure })}
                         messagedAt={data.igDms?.[igHandleOf(r.instagram)]}
                         copied={dmCopiedId === r.id}
                         onDm={() => dmInstagram(r)}
                         onClearMessaged={() => update((prev) => logIgDm(prev, igHandleOf(r.instagram), false))}
                       />
                     </span>
-                  )}
+                  ); })()}
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">
                   <div className="flex flex-wrap items-center gap-1.5">

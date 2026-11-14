@@ -2,6 +2,7 @@ import { scanJobAction } from "@/lib/scan-jobs.functions";
 import { runScanRequest } from "./scan-request";
 import { businessKey } from "@/lib/business-key";
 import { igHandle } from "@/lib/instagram";
+import { cleanIgMarks, cleanIgUrl, cleanInstagramResults, cleanInstagramRows, type IgMark } from "./ig-board";
 import { cleanDuplicateEmails } from "./email-cleanup";
 import { MAX_SCRAPE_RESULTS } from "@/lib/scrape-limits";
 import { pollBudgetMs, pollWhilePresent } from "./page-presence";
@@ -61,6 +62,15 @@ export interface RawBusiness {
   instagram?: string;
   instagramSure?: boolean;
   instagramFollowers?: number | null;
+  /** Where it was found ("listing" | "site" | "bio" | "search") and why we think it is theirs. */
+  instagramVia?: string;
+  instagramWhy?: string;
+  /** Looked at by hand and confirmed as theirs. */
+  instagramChecked?: boolean;
+  /** Accounts turned down by hand for this business: never put back on it. */
+  instagramNot?: string[];
+  /** When a search for their Instagram last ran, so the same search isn't paid for again soon. */
+  igSearchedAt?: number;
 }
 
 export interface Client {
@@ -208,6 +218,8 @@ export interface AdminData {
   scraper?: ScraperState;
   /** Instagram accounts already messaged by hand: handle → when. Keeps "messaged" marks and the daily count. */
   igDms?: Record<string, number>;
+  /** What else was filed by hand for an account: they replied, or it isn't a fit. */
+  igMarks?: Record<string, IgMark>;
 }
 
 /* ----------------------------------------------------------------------- */
@@ -304,7 +316,9 @@ function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData
     ...d,
     deals: cleanDuplicateDeals(arrayOr<Deal>(d.deals, s.deals)),
     dismissedWebsiteRequestIds: arrayOr<string>(d.dismissedWebsiteRequestIds, []),
-    raw: cleanDuplicateEmails(arrayOr<RawBusiness>(d.raw, s.raw)),
+    // Doubles by email first, then Instagram details that aren't a real profile or sit on the wrong business.
+    raw: cleanInstagramRows(cleanDuplicateEmails(arrayOr<RawBusiness>(d.raw, s.raw))),
+    ...cleanIgMarks(d),
     clients: arrayOr<Client>(d.clients, s.clients),
     transactions: arrayOr<Transaction>(d.transactions, s.transactions),
     templates: arrayOr<EmailTemplate>(d.templates, s.templates),
@@ -315,7 +329,7 @@ function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData
     denylist: { ...(s.denylist ?? {}), ...(denylist as Record<string, DenylistEntry>) },
     scraper: scraper
       ? {
-          results: arrayOr<ScrapedPerson>((scraper as Partial<ScraperState>).results, []),
+          results: cleanInstagramResults(arrayOr<ScrapedPerson>((scraper as Partial<ScraperState>).results, [])),
           emailSource: ((scraper as Partial<ScraperState>).emailSource ?? {}) as Record<
             string,
             string
@@ -350,7 +364,7 @@ function isEmptyRemote(d: unknown): boolean {
 function compactForRemote(data: AdminData): AdminData {
   return {
     ...data,
-    raw: cleanDuplicateEmails(data.raw).slice(0, 5000),
+    raw: cleanInstagramRows(cleanDuplicateEmails(data.raw)).slice(0, 5000),
     deals: cleanDuplicateDeals(data.deals),
     clients: data.clients.slice(0, 1000),
     transactions: data.transactions.slice(0, 3000),
@@ -783,6 +797,8 @@ export interface ScrapedPerson {
   instagramWhy?: string;
   /** A link-in-bio page their listing gave as the website (read for their Instagram). */
   bioLink?: string;
+  /** When a search for their Instagram last ran, so the same search isn't paid for again soon. */
+  igSearchedAt?: number;
   facebook?: string;
   tiktok?: string;
   youtube?: string;
@@ -986,6 +1002,8 @@ export interface EnrichResult {
   instagramVia?: string;
   instagramFollowers?: number | null;
   instagramWhy?: string;
+  /** Searches spent looking for the Instagram during this reveal (absent on an older server). */
+  instagramSearches?: number;
   facebook?: string;
   tiktok?: string;
   youtube?: string;
@@ -1017,6 +1035,10 @@ export interface ScanPerson {
   /** Already known from the listing (their "website" was their Instagram / a link-in-bio page). */
   instagram?: string;
   bioLink?: string;
+  /** Searched for recently without finding one: no search credit is spent on it again. */
+  igSearched?: boolean;
+  /** Accounts turned down by hand for this business: never offered for it again. */
+  igNot?: string[];
 }
 export interface ScanJobLite {
   id: string;
@@ -1033,7 +1055,7 @@ export interface ScanJobLite {
 export interface ScanJobFull extends ScanJobLite {
   people: ScanPerson[];
   results: Record<string, EnrichResult>;
-  options: { useClaude?: boolean; usePaid?: boolean; revealPhone?: boolean; findLinkedin?: boolean; findInstagram?: boolean; allowGuesses?: boolean };
+  options: { useClaude?: boolean; usePaid?: boolean; revealPhone?: boolean; findLinkedin?: boolean; findInstagram?: boolean; /** Only look for the Instagram: no email or website searches. */ instagramOnly?: boolean; allowGuesses?: boolean };
 }
 
 async function scanCall<T>(data: unknown, canContinue?: () => Promise<boolean>): Promise<T> {
@@ -1058,6 +1080,9 @@ export function cancelScan(id: string): Promise<unknown> { return scanCall({ act
 export function rowsFromScan(job: ScanJobFull): ScrapedPerson[] {
   return job.people.map((p) => {
     const r = job.results[p.id];
+    // Only a real profile: an older stored scan may still hold one of Instagram's own pages.
+    const found = cleanIgUrl(r?.instagram);
+    const listed = cleanIgUrl(p.instagram);
     return {
       id: p.id,
       name: p.name || r?.name || "",
@@ -1068,11 +1093,13 @@ export function rowsFromScan(job: ScanJobFull): ScrapedPerson[] {
       emailSource: r?.email ? (r.guessed ? "Guess" : r.source || "Website") : undefined,
       phone: p.phone || r?.phone || "",
       linkedin: p.linkedin || r?.linkedin || "",
-      instagram: r?.instagram || p.instagram || "",
-      instagramSure: r?.instagram ? r.instagramSure !== false : p.instagram ? true : undefined,
-      instagramVia: r?.instagramVia || (p.instagram ? "listing" : undefined),
-      instagramFollowers: r?.instagramFollowers ?? null,
-      instagramWhy: r?.instagramWhy,
+      instagram: found || listed,
+      instagramSure: found ? r?.instagramSure !== false : listed ? true : undefined,
+      instagramVia: (found && r?.instagramVia) || (listed ? "listing" : undefined),
+      instagramFollowers: found ? (r?.instagramFollowers ?? null) : null,
+      instagramWhy: found ? r?.instagramWhy : undefined,
+      // A search was paid for in that scan: not repeated within 30 days.
+      igSearchedAt: (r?.instagramSearches ?? 0) > 0 ? Date.parse(job.updated_at) || undefined : undefined,
       bioLink: p.bioLink,
       facebook: r?.facebook || "",
       tiktok: r?.tiktok || "",
@@ -1185,11 +1212,14 @@ export function igHandleOf(url?: string | null): string {
   return igHandle(url || "");
 }
 
-/** How many Instagram DMs were logged today (local day) — cold DMs are best kept to a few dozen a day. */
-export function igDmsToday(log: Record<string, number> | undefined, now = Date.now()): number {
+/**
+ * How many accounts were DMed today (local day) — cold DMs are best kept to a
+ * few dozen a day. Accounts filed as "DMed earlier" don't count.
+ */
+export function igDmsToday(log: Record<string, number> | undefined, now = Date.now(), marks?: Record<string, IgMark>): number {
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
-  return Object.values(log ?? {}).filter((t) => t >= start.getTime()).length;
+  return Object.entries(log ?? {}).filter(([handle, t]) => t >= start.getTime() && !marks?.[handle]?.filed).length;
 }
 
 /** Record (or clear) that an account was messaged. Keeps the newest 5,000. */
@@ -1197,10 +1227,18 @@ export function logIgDm(data: AdminData, handle: string, sent = true, now = Date
   const h = handle.toLowerCase();
   if (!h) return data;
   const next = { ...(data.igDms ?? {}) };
-  if (sent) next[h] = now;
-  else delete next[h];
+  const marks = { ...(data.igMarks ?? {}) };
+  if (sent) {
+    next[h] = now;
+    // Messaged after all: no longer "not a fit", and a DM sent now is one of today's. A reply stays a reply.
+    if (marks[h]?.stage === "replied") marks[h] = { stage: "replied", at: marks[h].at };
+    else delete marks[h];
+  } else {
+    delete next[h];
+    delete marks[h];
+  }
   const kept = Object.entries(next).sort((a, b) => b[1] - a[1]).slice(0, 5000);
-  return { ...data, igDms: Object.fromEntries(kept) };
+  return { ...data, igDms: Object.fromEntries(kept), igMarks: marks };
 }
 
 export function fmtEuro(n: number): string {

@@ -1,5 +1,24 @@
 import { businessKey } from "@/lib/business-key";
+import { igHandle } from "@/lib/instagram";
+import { cleanIgUrl, cleanInstagramRows } from "./ig-board";
 import type { RawBusiness } from "./store";
+
+/**
+ * The Instagram details a row may take from another copy of the same business:
+ * only a real profile, never one that was turned down for it by hand.
+ */
+export function incomingInstagram(old: RawBusiness, incoming: Pick<RawBusiness, "instagram" | "instagramSure" | "instagramFollowers" | "instagramVia" | "instagramWhy">): Partial<RawBusiness> {
+  if (old.instagram) return {};
+  const url = cleanIgUrl(incoming.instagram);
+  if (!url || (old.instagramNot ?? []).some((h) => igHandle(h) === igHandle(url))) return {};
+  return {
+    instagram: url,
+    instagramSure: incoming.instagramSure,
+    instagramFollowers: incoming.instagramFollowers,
+    instagramVia: incoming.instagramVia,
+    instagramWhy: incoming.instagramWhy,
+  };
+}
 
 const keyOf = (r: RawBusiness) => businessKey({ company: r.business, website: r.website, phone: r.phone, city: r.city });
 
@@ -18,7 +37,8 @@ export function addToRaw(raw: RawBusiness[], incoming: RawBusiness[]): { raw: Ra
   const fresh: RawBusiness[] = [];
   const freshAt = new Map<string, number>();
   let updated = 0;
-  for (const r of incoming) {
+  // Only a real profile is saved, whatever an older scan handed over.
+  for (const r of cleanInstagramRows(incoming)) {
     const k = keyOf(r);
     const i = k ? at.get(k) : undefined;
     const freshIndex = k ? freshAt.get(k) : undefined;
@@ -34,10 +54,9 @@ export function addToRaw(raw: RawBusiness[], incoming: RawBusiness[]): { raw: Ra
         contactName: old.contactName || r.contactName,
         contactTitle: old.contactTitle || r.contactTitle,
         linkedin: old.linkedin || r.linkedin,
-        // The Instagram arrives with what we know about it (certainty, followers).
-        ...(!old.instagram && r.instagram
-          ? { instagram: r.instagram, instagramSure: r.instagramSure, instagramFollowers: r.instagramFollowers }
-          : {}),
+        // The Instagram arrives with what we know about it (certainty, followers, where it was found).
+        ...incomingInstagram(old, r),
+        igSearchedAt: Math.max(old.igSearchedAt ?? 0, r.igSearchedAt ?? 0) || undefined,
         rating: old.rating ?? r.rating,
         reviews: old.reviews ?? r.reviews,
         score: old.score ?? r.score,

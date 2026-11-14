@@ -72,6 +72,7 @@ import { pageAway, waitUntilBack, wasAwaySince } from "../page-presence";
 import { IgChip } from "../IgChip";
 import { openInstagramDm } from "../ig-dm";
 import { addToRaw } from "../raw-merge";
+import { cleanIgUrl, igSearchedLately, igStageOf } from "../ig-board";
 import { leadFilterReason, TEAM_SIZE_BANDS, REVENUE_BANDS } from "@/lib/lead-filters";
 
 const SIZE_PRESETS: { id: string; label: string }[] = [
@@ -635,8 +636,38 @@ export function Scraper({
       if (!handle) return;
       setDmCopiedId(p.id);
       window.setTimeout(() => setDmCopiedId((cur) => (cur === p.id ? null : cur)), 4000);
-      // Remembered across scans and in Raw Data, so nobody is messaged twice.
-      update((prev) => logIgDm(prev, handle));
+      // Remembered across scans and in Raw Data, so nobody is messaged twice. The
+      // business is kept too (a copy in Raw Data, nothing replaced there), so the
+      // Instagram list shows who the account belongs to instead of a bare handle.
+      update((prev) => {
+        const logged = logIgDm(prev, handle);
+        if (!p.company.trim()) return logged;
+        const row: RawBusiness = {
+          id: uid("r"),
+          business: p.company,
+          email: p.emailLocked ? "" : p.email,
+          phone: p.phone,
+          website: p.website,
+          city: p.city,
+          industry: p.industry,
+          status: "raw",
+          scrapedAt: Date.now(),
+          contactName: p.name,
+          contactTitle: p.title,
+          seniority: p.seniority,
+          linkedin: p.linkedin,
+          instagram: p.instagram || undefined,
+          instagramSure: p.instagramSure !== false,
+          instagramFollowers: p.instagramFollowers ?? undefined,
+          instagramVia: p.instagramVia,
+          instagramWhy: p.instagramWhy,
+          igSearchedAt: p.igSearchedAt,
+          rating: p.rating,
+          reviews: p.reviews,
+          source: "Data Scraper",
+        };
+        return { ...logged, raw: addToRaw(logged.raw, [row]).raw };
+      });
     },
     [update],
   );
@@ -824,6 +855,9 @@ export function Scraper({
       instagram: p.instagram || undefined,
       instagramSure: p.instagram ? p.instagramSure !== false : undefined,
       instagramFollowers: p.instagramFollowers ?? undefined,
+      instagramVia: p.instagram ? p.instagramVia : undefined,
+      instagramWhy: p.instagram ? p.instagramWhy : undefined,
+      igSearchedAt: p.igSearchedAt,
       source:
         (discoverSources[p.id] ?? []).map((s) => s[0].toUpperCase() + s.slice(1)).join("+") ||
         "Apollo",
@@ -907,6 +941,8 @@ export function Scraper({
     instagramVia?: string;
     instagramFollowers?: number | null;
     instagramWhy?: string;
+    /** Searches spent on the Instagram during this reveal: remembered, so it isn't searched for again soon. */
+    instagramSearches?: number;
     facebook: string;
     tiktok: string;
     youtube: string;
@@ -945,6 +981,7 @@ export function Scraper({
             (p.title || u.title) === p.title &&
             (p.linkedin || u.linkedin) === p.linkedin &&
             (p.instagram || u.instagram) === (p.instagram || "") &&
+            !u.instagramSearches &&
             (u.email ? false : p.emailLocked) === p.emailLocked
           )
             return p;
@@ -962,6 +999,7 @@ export function Scraper({
             ...(!p.instagram && u.instagram
               ? { instagramSure: u.instagramSure, instagramVia: u.instagramVia, instagramFollowers: u.instagramFollowers, instagramWhy: u.instagramWhy }
               : {}),
+            ...(u.instagramSearches ? { igSearchedAt: Date.now() } : {}),
             facebook: p.facebook || u.facebook,
             tiktok: p.tiktok || u.tiktok,
             youtube: p.youtube || u.youtube,
@@ -1009,11 +1047,13 @@ export function Scraper({
           name: r.name || "",
           title: r.title || "",
           linkedin: r.linkedin || "",
-          instagram: r.instagram || "",
+          // Only a real profile: a section page or a placeholder from an older scan is dropped here.
+          instagram: cleanIgUrl(r.instagram),
           instagramSure: r.instagramSure,
           instagramVia: r.instagramVia,
           instagramFollowers: r.instagramFollowers,
           instagramWhy: r.instagramWhy,
+          instagramSearches: r.instagramSearches,
           facebook: r.facebook || "",
           tiktok: r.tiktok || "",
           youtube: r.youtube || "",
@@ -1184,7 +1224,7 @@ export function Scraper({
   async function revealEmails(targets: ScrapedPerson[], everything = false) {
     // Read anyone missing an email OR a website (the free website pass finds both).
     const busy = new Set([...inFlight.current.values()].flatMap((ids) => [...ids]));
-    const list = (everything ? targets.filter((p) => p.website || !p.email) : targets.filter((p) => p.emailLocked || !p.email || !p.website || (findInstagram && !p.instagram)))
+    const list = (everything ? targets.filter((p) => p.website || !p.email) : targets.filter((p) => p.emailLocked || !p.email || !p.website || (findInstagram && !p.instagram && !igSearchedLately(p.igSearchedAt))))
       .filter((p) => !busy.has(p.id));
     if (!list.length) {
       if (targets.some((p) => busy.has(p.id)))
@@ -1209,6 +1249,8 @@ export function Scraper({
       // Already known from the listing: not searched for again.
       instagram: p.instagram || undefined,
       bioLink: p.bioLink || undefined,
+      // Searched for in the last 30 days without finding one: no second search credit.
+      igSearched: igSearchedLately(p.igSearchedAt) || undefined,
     }));
     const options = { useClaude: sources.claude, usePaid, revealPhone, findLinkedin, findInstagram, allowGuesses };
       for (let offset = 0; offset < people.length; offset += 2000) {
@@ -1384,7 +1426,7 @@ export function Scraper({
     );
   const visibleResults = (showHidden ? results : results.filter((p) => !hiddenReason(p))).filter((p) => !igOnly || !!p.instagram);
   const igCount = results.filter((p) => p.instagram).length;
-  const dmsToday = igDmsToday(data.igDms);
+  const dmsToday = igDmsToday(data.igDms, Date.now(), data.igMarks);
   const hiddenCount = results.length - results.filter((p) => !hiddenReason(p)).length;
   const ordered = sortByScore
     ? [...visibleResults].sort((a, b) => scoreOf(b) - scoreOf(a))
@@ -1419,6 +1461,9 @@ export function Scraper({
       instagram: p.instagram || undefined,
       instagramSure: p.instagram ? p.instagramSure !== false : undefined,
       instagramFollowers: p.instagramFollowers ?? undefined,
+      instagramVia: p.instagram ? p.instagramVia : undefined,
+      instagramWhy: p.instagram ? p.instagramWhy : undefined,
+      igSearchedAt: p.igSearchedAt,
       source:
         (discoverSources[p.id] ?? []).map((s) => s[0].toUpperCase() + s.slice(1)).join("+") ||
         "Apollo",
@@ -1812,7 +1857,7 @@ export function Scraper({
             aria-pressed={findInstagram}
             onClick={() => setFindInstagram((value) => !value)}
             className={pill(findInstagram)}
-            title="Instagram is always read from the listing and the website (free). On: when that finds nothing, search for the profile too — 1–2 search credits per business, checked against the name, town, website and phone. Off: free sources only."
+            title="Instagram is always read from the listing and the website (free). On: when that finds nothing, search for the profile too. Usually 1 search per business, never repeated within 30 days, checked against the name, town, website and phone. Off: free sources only."
           >
             Instagram search (search credits)
           </Button>
@@ -2194,7 +2239,10 @@ export function Scraper({
                   <Button variant={igOnly ? "default" : "outline"} aria-pressed={igOnly} onClick={() => setIgOnly((v) => !v)}>
                     <Instagram className="h-4 w-4" /> Instagram only · {igCount}
                   </Button>
-                  <span className="text-xs text-muted-foreground">{dmsToday} DM chats opened today</span>
+                  <button type="button" onClick={() => go("instagram")} className="text-xs font-semibold text-primary hover:underline" title="Saved businesses, one line per account, in sections: To DM, DMed, Replied, Not a fit">
+                    Instagram list
+                  </button>
+                  <span className="text-xs text-muted-foreground">{dmsToday} DMed today</span>
                   {scoredCount > 0 && (
                     <>
                       <Btn
@@ -2393,6 +2441,7 @@ export function Scraper({
                                   followers={p.instagramFollowers}
                                   sure={p.instagramSure}
                                   why={p.instagramWhy}
+                                  stage={igStageOf(igHandleOf(p.instagram), data, { sure: p.instagramSure !== false })}
                                   messagedAt={data.igDms?.[igHandleOf(p.instagram)]}
                                   copied={dmCopiedId === p.id}
                                   onDm={() => dmInstagram(p)}

@@ -105,10 +105,11 @@ describe("finding a business's Instagram during a reveal", () => {
     expect(s.igAsked()).toEqual(["site:instagram.com Joe's Roofing Denver"]);
   });
 
-  it("5 — the broader search runs only when the precise one found nothing, and a name-only match is marked 'likely'", async () => {
+  it("5 — the broader search runs only when Instagram answered with no profile at all, and a name-only match is marked 'likely'", async () => {
     const s = serper((q) => (q.startsWith("site:instagram.com") ? [] : [profile("joesroofing", "Joe's Roofing", "Quality roofs. Free quotes.")]));
     const { results } = await reveal([joe]);
-    expect(s.igAsked()).toEqual(["site:instagram.com Joe's Roofing Denver", '"Joe\'s Roofing" Denver instagram']);
+    expect(s.igAsked()).toEqual(["site:instagram.com Joe's Roofing Denver", "Joe's Roofing Denver instagram"]);
+    expect(results[0].instagramSearches).toBe(2);
     expect(results[0]).toMatchObject({ instagram: "https://www.instagram.com/joesroofing", instagramSure: false, instagramVia: "search" });
     expect(String(results[0].instagramWhy)).toMatch(/check it's the right business/);
   });
@@ -140,6 +141,89 @@ describe("finding a business's Instagram during a reveal", () => {
     const free = await reveal([joe], { findInstagram: false });
     expect(free.results[0]).toMatchObject({ instagram: "https://www.instagram.com/joesroofing", instagramVia: "site" });
     expect(s.igAsked()).toEqual([]);
+  });
+
+  it("10 — when Instagram answers with profiles and none is theirs, no second search is paid for", async () => {
+    // The usual case for a business that has no Instagram: other roofers come back. Asking again finds the same.
+    const s = serper(() => [
+      profile("eliteroofingdenver", "Elite Roofing Denver", "Denver CO roofing contractor"),
+      profile("denverroofingpros", "Denver Roofing Pros", "Best roofers in Denver"),
+    ]);
+    const { results } = await reveal([joe]);
+    expect(results[0].instagram).toBe("");
+    expect(s.igAsked()).toEqual(["site:instagram.com Joe's Roofing Denver"]);
+    expect(results[0].instagramSearches).toBe(1);
+  });
+
+  it("11 — an Instagram-only run pays for nothing else: no email search, no website search", async () => {
+    const noEmail = site({ email: "" });
+    const answers = (q: string) => (q.startsWith("site:instagram.com") ? [profile("joesroofing", "Joe's Roofing", "Denver roofer · joesroofing.com")] : []);
+    // an ordinary reveal also searches for the address it couldn't find on the website…
+    enrichSite.mockResolvedValue(noEmail);
+    const full = serper(answers);
+    await reveal([joe]);
+    expect(full.asked.length).toBeGreaterThan(1);
+    expect(full.asked.some((q) => /email/.test(q))).toBe(true);
+    // …the Instagram-only run asks one thing
+    enrichSite.mockResolvedValue(noEmail);
+    const only = serper(answers);
+    const { results } = await reveal([joe], { instagramOnly: true });
+    expect(only.asked).toEqual(["site:instagram.com Joe's Roofing Denver"]);
+    expect(results[0]).toMatchObject({ instagram: "https://www.instagram.com/joesroofing", instagramSearches: 1 });
+    // …and a business with no website at all is not sent looking for one first
+    enrichSite.mockResolvedValue(null);
+    const bare = serper(() => []);
+    await reveal([{ id: "b2", organizationName: "Maven Tree Services", city: "Albuquerque" }], { instagramOnly: true });
+    expect(bare.asked.every((q) => /instagram/i.test(q))).toBe(true);
+  });
+
+  it("12 — a business searched for recently is not searched for again; the free sources are still read", async () => {
+    const s = serper(() => [profile("joesroofing", "Joe's Roofing", "Denver roofer · joesroofing.com")]);
+    const rested = await reveal([{ ...joe, igSearched: true }]);
+    expect(rested.results[0].instagram).toBe("");
+    expect(rested.results[0].instagramSearches).toBe(0);
+    expect(s.igAsked()).toEqual([]);
+    enrichSite.mockResolvedValue(site({ instagram: "https://www.instagram.com/joesroofing", instagramSure: true }));
+    const free = await reveal([{ ...joe, igSearched: true }]);
+    expect(free.results[0]).toMatchObject({ instagram: "https://www.instagram.com/joesroofing", instagramVia: "site", instagramSearches: 0 });
+  });
+
+  it("13 — a search account with no credits left is not counted as a search, so the business is tried again later", async () => {
+    const asked: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: { body?: string }) => {
+      asked.push(String((JSON.parse(init?.body || "{}") as { q?: string }).q || ""));
+      return new Response(JSON.stringify({ message: "Not enough credits" }), { status: 400 });
+    }));
+    const { results, warnings } = await reveal([joe]);
+    expect(results[0].instagram).toBe("");
+    expect(results[0].instagramSearches).toBe(0);
+    expect(asked.filter((q) => /instagram/i.test(q))).toHaveLength(1); // asked once, then left alone
+    expect(warnings.join(" ")).toMatch(/no searches left/);
+  });
+
+  it("14 — a name nothing could be recognised by is not searched for", async () => {
+    enrichSite.mockResolvedValue(null);
+    const s = serper(() => [profile("treeservice", "Tree Service", "Trees")]);
+    const { results } = await reveal([{ id: "b3", organizationName: "Tree Service", city: "Denver" }]);
+    expect(s.igAsked()).toEqual([]);
+    expect(results[0].instagramSearches).toBe(0);
+  });
+
+  it("15 — an account turned down by hand is passed over, on their website and in the search", async () => {
+    // the website links a supplier's account; it was turned down, so the search still runs and takes the next match
+    enrichSite.mockResolvedValue(site({ instagram: "https://www.instagram.com/gaf_roofing", instagramSure: true }));
+    const s = serper(() => [
+      profile("joesroofing", "Joe's Roofing", "Denver roofer"),
+      profile("joesroofingco", "Joe's Roofing", "Denver, CO · joesroofing.com"),
+    ]);
+    const { results } = await reveal([{ ...joe, igNot: ["gaf_roofing", "joesroofing"] }]);
+    expect(results[0]).toMatchObject({ instagram: "https://www.instagram.com/joesroofingco", instagramVia: "search" });
+    expect(s.igAsked()).toHaveLength(1);
+    // without the note, the website's link is taken and nothing is searched
+    const t = serper(() => []);
+    const plain = await reveal([joe]);
+    expect(plain.results[0]).toMatchObject({ instagram: "https://www.instagram.com/gaf_roofing", instagramVia: "site" });
+    expect(t.igAsked()).toEqual([]);
   });
 
   it("9 — a business that already has an email still gets its Instagram looked up", async () => {
