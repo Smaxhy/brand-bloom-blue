@@ -14,6 +14,7 @@ import {
   Menu,
   ListChecks,
   BarChart3,
+  Instagram,
 } from "lucide-react";
 import logo from "@/assets/inspirova-logo.png";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,6 +33,7 @@ import { Pipeline } from "./views/Pipeline";
 import { Leads } from "./views/Leads";
 import { Scraper } from "./views/Scraper";
 import { RawData } from "./views/RawData";
+import { InstagramList } from "./views/InstagramList";
 import { Clients } from "./views/Clients";
 import { Finance } from "./views/Finance";
 import { Outreach } from "./views/Outreach";
@@ -49,6 +51,7 @@ type ViewId =
   | "leads"
   | "scraper"
   | "raw"
+  | "instagram"
   | "clients"
   | "statistics"
   | "finance"
@@ -67,6 +70,7 @@ const BASE_NAV: { id: ViewId; label: string; icon: React.ElementType }[] = [
   { id: "leads", label: "Lead Generation", icon: Sparkles },
   { id: "scraper", label: "Data Scraper", icon: Radar },
   { id: "raw", label: "Raw Data", icon: Database },
+  { id: "instagram", label: "Instagram DMs", icon: Instagram },
   { id: "clients", label: "Clients", icon: Users },
   { id: "statistics", label: "Statistics", icon: BarChart3 },
   { id: "finance", label: "Finance", icon: Wallet },
@@ -484,6 +488,7 @@ export function AdminApp() {
             </div>
           )}
           {view === "raw" && <RawData data={data} update={update} go={setView} />}
+          {view === "instagram" && <InstagramList data={data} update={update} go={setView} />}
           {view === "clients" && <Clients data={data} update={update} />}
           {view === "statistics" && <Statistics data={data} update={update} />}
           {view === "finance" && <Finance data={data} update={update} />}

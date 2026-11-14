@@ -1,4 +1,5 @@
 # Admin update conventions
-- Instagram chips open manual chats and record chat-open timestamps, not verified sends; never automate DMs or assume opening a chat delivered a message.
-- Carry Instagram provenance through discovery, persisted scan results and Raw Data merges; existing contact details and outreach history always win.
-- Instagram search requires an explicit opt-in and shares the bounded, serialized provider waterfall so new discovery cannot create unexpected search charges.
+- Instagram chips and the Instagram list open manual chats and record what was filed by hand (DMed, replied, not a fit), not verified sends; never automate DMs or assume opening a chat delivered a message.
+- Carry Instagram provenance (where it was found, why it is theirs) through discovery, persisted scan results and Raw Data merges; existing contact details and outreach history always win, and an account turned down by hand for a business is never put back on it.
+- Instagram search requires an explicit opt-in and shares the bounded, serialized provider waterfall so new discovery cannot create unexpected search charges. Keep it to one search per business in the usual case, never repeat one within 30 days, and keep "Find Instagram" runs Instagram-only (no email or website searches ride along).
+- Only real profiles are stored: Instagram's own pages (popular, explore, hashtag), template placeholders and tool accounts are rejected where a handle is read and cleaned out of saved data at load. The Instagram list shows one line per account, grouped by handle; accounts we are not sure belong to the business stay under "Check first" until confirmed by hand.

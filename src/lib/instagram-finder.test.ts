@@ -6,6 +6,9 @@ import {
   igFollowers,
   igFromListingUrl,
   igHandle,
+  igResultsHaveProfiles,
+  igSearchName,
+  igSearchWorthIt,
   igHandlesIn,
   igMentionsIn,
   igNameScore,
@@ -47,6 +50,34 @@ describe("reading an Instagram handle", () => {
       "two words",
     ])
       expect(igHandle(u), u).toBe("");
+  });
+  it("never takes one of Instagram's own pages, a template's blank or a tool's account for a business", () => {
+    for (const u of [
+      // Instagram's landing page for a search phrase: the "@popular" that used to turn up on business after business
+      "https://www.instagram.com/popular/tree-service-albuquerque/",
+      "https://www.instagram.com/popular/joes-roofing-denver/?hl=en",
+      "instagram.com/hashtag/roofing",
+      "https://www.instagram.com/search/?q=joes",
+      "https://www.instagram.com/a/r/?effect=1", // short links
+      "https://www.instagram.com/s/aGlnaGxpZ2h0",
+      // what a website template leaves behind
+      "https://www.instagram.com/your_username",
+      "https://www.instagram.com/yourbusinessname/",
+      "https://instagram.com/your.handle.here",
+      "https://www.instagram.com/company_name",
+      "https://www.instagram.com/xxxx",
+      "https://www.instagram.com/test12",
+      // feed widgets, site builders and directories
+      "https://www.instagram.com/elfsight",
+      "https://www.instagram.com/smashballoon/",
+      "https://www.instagram.com/housecallpro",
+      "https://www.instagram.com/thumbtack",
+      "https://www.instagram.com/followus",
+    ])
+      expect(igHandle(u), u).toBe("");
+    // …while real names that merely start the same way are left alone
+    for (const h of ["popular_roofing", "yourtreeguy", "yourhomeshop", "urbanstore", "testamenttrees", "demolition_pros", "abc"])
+      expect(igHandle(`https://www.instagram.com/${h}/`), h).toBe(h);
   });
   it("is not fooled by Instagram's image servers, help pages or link wrappers", () => {
     const feed = `
@@ -146,6 +177,21 @@ describe("the profile on their own website", () => {
     expect(pickSiteInstagram([page('<a href="https://www.instagram.com/wix">Follow</a><a href="https://instagram.com/yourusername">ig</a>')], joe)).toBeNull();
     expect(pickSiteInstagram([page("<p>No socials here</p>")], joe)).toBeNull();
   });
+  it("a lone link on one page of several, to an account named nothing like them, is worth a look first", () => {
+    const badge = '<a href="https://www.instagram.com/gaf_roofing/">Certified installer</a>';
+    const pick = pickSiteInstagram([page("<p>Welcome</p>"), page(badge, "/about"), page("<p>Call us</p>", "/contact")], joe);
+    expect(pick?.handle).toBe("gaf_roofing");
+    expect(pick?.confidence).toBe("likely");
+    expect(pick?.why).toMatch(/check it's theirs/);
+    // the same link in the footer of every page is their own social icon
+    expect(pickSiteInstagram([page(badge), page(badge, "/about"), page(badge, "/contact")], joe)?.confidence).toBe("sure");
+  });
+  it("still recognises the handle when the listing name carries keywords after it", () => {
+    const stuffed = { name: "Joe's Roofing | Roof Repair & Replacement Denver", domain: "" };
+    const pick = pickSiteInstagram([page('<a href="https://www.instagram.com/joesroofing/">ig</a><a href="https://www.instagram.com/colorado_home_show/">seen at</a>')], stuffed);
+    expect(pick?.handle).toBe("joesroofing");
+    expect(pick?.why).toMatch(/handle matches the business name/);
+  });
   it("an agency's own Instagram is fine when the business IS an agency", () => {
     const pick = pickSiteInstagram([page('<a href="https://instagram.com/brightpixel.webdesign">ig</a>')], { name: "Bright Pixel Web Design", domain: "brightpixel.co" });
     expect(pick?.handle).toBe("brightpixel.webdesign");
@@ -229,6 +275,79 @@ describe("the profile in search results", () => {
     ];
     expect(pickSearchInstagram(results, joe)?.handle).toBe("joesroofingdenver");
   });
+  it("Instagram's landing page for the search phrase is never the account", () => {
+    // Its title repeats whatever was searched for, so it used to look like a perfect match, on business after business.
+    const popular = { link: "https://www.instagram.com/popular/joes-roofing-denver/", title: "Joes Roofing Denver", snippet: "Joe's Roofing Denver. Discover photos and videos about joes roofing denver on Instagram." };
+    expect(pickSearchInstagram([popular], joe)).toBeNull();
+    // any other page of Instagram's that names no account and shows no numbers is skipped the same way
+    const unknown = { link: "https://www.instagram.com/trending_now/", title: "Joe's Roofing Denver | Instagram", snippet: "Posts about Joe's Roofing in Denver" };
+    expect(pickSearchInstagram([unknown], joe)).toBeNull();
+    // the real profile right below it is still found
+    expect(pickSearchInstagram([popular, profile("joesroofingco", "Joe's Roofing", "Denver's family roofer")], joe)?.handle).toBe("joesroofingco");
+  });
+  it("somebody else's post that mentions them is not their account", () => {
+    const customer = { link: "https://www.instagram.com/happy.homeowner/p/Cxyz/", title: "Sarah K on Instagram: \"New roof by Joe's Roofing, call them on 303-555-0142\"", snippet: "Thanks Joe's Roofing Denver! joesroofing.com" };
+    expect(pickSearchInstagram([customer], joe)).toBeNull();
+    const supplier = { link: "https://www.instagram.com/reel/Cabc/", title: "GAF Roofing (@gaf_roofing) • Instagram reel", snippet: "Installer of the month: Joe's Roofing, Denver (303) 555-0142" };
+    expect(pickSearchInstagram([supplier], joe)).toBeNull();
+    // their own post is fine: the poster carries the name
+    const own = { link: "https://www.instagram.com/joesroofingdenver/p/Cdef/", title: "Joe's Roofing on Instagram: \"Another roof done\"", snippet: "Denver, Colorado" };
+    expect(pickSearchInstagram([own], joe)).toMatchObject({ handle: "joesroofingdenver", confidence: "sure" });
+  });
+  it("a national brand with a similar name is not the local business", () => {
+    const brand = profile("joesroofing", "Joe's Roofing", "America's roofing channel", "812K");
+    expect(pickSearchInstagram([brand], joe)).toBeNull();
+    // unless its bio really is theirs
+    expect(pickSearchInstagram([profile("joesroofing", "Joe's Roofing", "joesroofing.com", "812K")], joe)?.confidence).toBe("sure");
+  });
+  it("their website counts only when it is really theirs", () => {
+    // another domain that merely ends the same way
+    expect(pickSearchInstagram([profile("mile_high_roofs", "Mile High Roofs", "visit bestjoesroofing.com")], joe)).toBeNull();
+    // an email address at their domain is theirs
+    expect(pickSearchInstagram([profile("mile_high_roofs", "Mile High Roofs", "office@joesroofing.com")], joe)?.confidence).toBe("sure");
+    // a Facebook page given as the "website" proves nothing
+    const fbOnly = { name: "Joe's Roofing", domain: "facebook.com", city: "Denver" };
+    expect(pickSearchInstagram([profile("mile_high_roofs", "Mile High Roofs", "find us on facebook.com")], fbOnly)).toBeNull();
+  });
+  it("matches a listing name that carries keywords or a legal form", () => {
+    const stuffed = { name: "Maven Tree Services, LLC - Tree Removal & Trimming", city: "Albuquerque, NM" };
+    const pick = pickSearchInstagram([profile("maventreeservices", "Maven Tree Services", "Albuquerque tree care")], stuffed);
+    expect(pick).toMatchObject({ handle: "maventreeservices", confidence: "sure" });
+  });
+  it("a search run for a whole state accepts the state as the place", () => {
+    const maven = { name: "Maven Tree Services", city: "new mexico" };
+    const hit = pickSearchInstagram([profile("maventreeservices", "Maven Tree Services", "Tree care · Albuquerque, NM")], maven);
+    expect(hit).toMatchObject({ confidence: "sure" });
+    expect(hit?.why).toMatch(/mentions new mexico/);
+    expect(pickSearchInstagram([profile("maventreeservices", "Maven Tree Services", "Proudly serving New Mexico")], maven)?.confidence).toBe("sure");
+    // two capital letters in the middle of a sentence are not a state
+    const maine = { name: "North Star Outfitters", city: "Maine" };
+    expect(pickSearchInstagram([profile("northstaroutfitters", "North Star Outfitters", "CALL ME for gear. Bozeman")], maine)?.confidence).toBe("likely");
+    expect(pickSearchInstagram([profile("northstaroutfitters", "North Star Outfitters", "Gear shop in Portland, ME 04101")], maine)?.confidence).toBe("sure");
+    // a country is no place at all
+    expect(pickSearchInstagram([profile("northstaroutfitters", "North Star Outfitters", "Shipping across the USA")], { name: "North Star Outfitters", city: "USA" })?.confidence).toBe("likely");
+  });
+  it("an account turned down by hand is not offered again", () => {
+    const hit = profile("joesroofing", "Joe's Roofing", "Denver roofer");
+    expect(pickSearchInstagram([hit], joe)?.handle).toBe("joesroofing");
+    expect(pickSearchInstagram([hit], joe, { not: ["https://www.instagram.com/joesroofing"] })).toBeNull();
+  });
+  it("on a page listing several accounts, takes the one that fits the name", () => {
+    const directory = { link: "https://denverroofers.example/list", title: "Roofers in Denver", snippet: "instagram.com/eliteroofingdenver · instagram.com/joesroofingdenver · instagram.com/topnotchroofs" };
+    expect(pickSearchInstagram([directory], joe)?.handle).toBe("joesroofingdenver");
+    // their phone next to somebody else's account is not enough
+    const mixed = { link: "https://denverroofers.example/list", title: "Roofers in Denver", snippet: "Elite Roofing instagram.com/eliteroofingdenver · Joe's Roofing (303) 555-0142" };
+    expect(pickSearchInstagram([mixed], joe)).toBeNull();
+  });
+  it("knows whether a search answered with profiles at all", () => {
+    expect(igResultsHaveProfiles([profile("someoneelse", "Other Biz", "hello")])).toBe(true);
+    expect(igResultsHaveProfiles([])).toBe(false);
+    expect(igResultsHaveProfiles([
+      { link: "https://www.instagram.com/p/Cxyz/", title: "Instagram post", snippet: "" },
+      { link: "https://www.instagram.com/popular/roofers-denver/", title: "Roofers Denver", snippet: "" },
+      { link: "https://www.yelp.com/biz/joes", title: "Joe's", snippet: "" },
+    ])).toBe(false);
+  });
   it("reads follower counts and labels them", () => {
     expect(igFollowers("12.4K Followers, 310 Following")).toBe(12400);
     expect(igFollowers("1,204 Followers")).toBe(1204);
@@ -240,9 +359,33 @@ describe("the profile in search results", () => {
     expect(followersLabel(2_300_000)).toBe("2.3M");
     expect(followersLabel(null)).toBe("");
   });
-  it("asks precise questions first", () => {
-    expect(igSearchQueries(joe)).toEqual(['site:instagram.com Joe\'s Roofing LLC Denver', '"Joe\'s Roofing LLC" Denver instagram']);
+  it("searches for the name as people write it", () => {
+    expect(igSearchName("Joe's Roofing LLC")).toBe("Joe's Roofing");
+    expect(igSearchName("Joe's Roofing, L.L.C.")).toBe("Joe's Roofing");
+    expect(igSearchName("Joe's Roofing | Roof Repair & Replacement Denver")).toBe("Joe's Roofing");
+    expect(igSearchName("Joe's Roofing - Denver Roofers")).toBe("Joe's Roofing");
+    expect(igSearchName("Maven Tree Services Inc. (Albuquerque)")).toBe("Maven Tree Services");
+    expect(igSearchName("Dakwerken Peeters BV")).toBe("Dakwerken Peeters");
+    // not cut where the cut would lose the name
+    expect(igSearchName("A-1 Tree Service")).toBe("A-1 Tree Service");
+    expect(igSearchName("Tree Service | Maven")).toBe("Tree Service | Maven");
+    expect(igSearchName("Casa Linda")).toBe("Casa Linda");
+    expect(igSearchName("The Tree Company")).toBe("The Tree Company");
+  });
+  it("asks Instagram first, and words the question without the legal form or a repeated town", () => {
+    expect(igSearchQueries(joe)).toEqual(["site:instagram.com Joe's Roofing Denver", "Joe's Roofing Denver instagram"]);
+    expect(igSearchQueries({ name: "Joe's Roofing Denver | Roofers", city: "Denver, CO" })).toEqual(["site:instagram.com Joe's Roofing Denver", "Joe's Roofing Denver instagram"]);
+    expect(igSearchQueries({ name: "Maven Tree Services", city: "new mexico" })[0]).toBe("site:instagram.com Maven Tree Services new mexico");
+    expect(igSearchQueries({ name: "Maven Tree Services", city: "USA" })[0]).toBe("site:instagram.com Maven Tree Services");
     expect(igSearchQueries({ name: "" })).toEqual([]);
+  });
+  it("doesn't spend a search on a name nothing could be recognised by", () => {
+    expect(igSearchWorthIt({ name: "Tree Service", city: "Denver" })).toBe(false);
+    expect(igSearchWorthIt({ name: "Roofing Pros LLC" })).toBe(false);
+    expect(igSearchWorthIt({ name: "Tree Service", phone: "(303) 555-0142" })).toBe(true);
+    expect(igSearchWorthIt({ name: "Roofing Pros", domain: "roofingprosdenver.com" })).toBe(true);
+    expect(igSearchWorthIt({ name: "Maven Tree Services" })).toBe(true);
+    expect(igSearchWorthIt({ name: "" })).toBe(false);
   });
 });
 

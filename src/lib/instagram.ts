@@ -7,6 +7,8 @@
  * Pure functions (no network), so every rule here is covered by tests.
  */
 
+import { cleanDomain, isCompanyDomain } from "./business-key";
+
 export interface IgBusiness {
   name?: string;
   /** The business's website domain, e.g. "joesroofing.com". */
@@ -95,7 +97,57 @@ const RESERVED = new Set([
   "igtv",
   "live",
   "threads",
+  // Instagram's own landing pages for a search phrase ("instagram.com/popular/roofers-denver"):
+  // their titles repeat whatever was searched for, so they look like a perfect name match.
+  "popular",
+  "hashtag",
+  "hashtags",
+  "search",
+  "feed",
+  "home",
+  "inbox",
+  "notifications",
+  "saved",
+  "settings",
+  "signup",
+  "register",
+  "create",
+  "your_activity",
+  "places",
+  "local",
+  "music",
+  "product",
+  "products",
+  "marketplace",
+  "sitemap",
+  "security",
+  "safety",
+  "support",
+  "community",
+  "public",
+  "publicapi",
+  "ajax",
+  "async",
+  "logging",
+  "consent",
+  "linkshim",
+  "fragment",
+  "rooms",
 ]);
+
+/** What can follow a profile in its address and still be that profile's own page. */
+const PROFILE_TABS = new Set([
+  "reels",
+  "tagged",
+  "guides",
+  "channel",
+  "followers",
+  "following",
+  "feed",
+  "saved",
+]);
+/** …and what makes it one of their posts. */
+const POST_PARTS = new Set(["p", "reel", "tv"]);
 
 /** Accounts that are never "the business": Instagram itself, site builders, template placeholders. */
 const NOT_A_BUSINESS = new Set([
@@ -163,7 +215,27 @@ const NOT_A_BUSINESS = new Set([
   "ig",
   "null",
   "undefined",
+  // Feed widgets, schedulers and link-in-bio tools whose own account sits in their embed code.
+  ..."smashballoon elfsight lightwidget snapwidget powr powrful taggbox tagembed juicerio curatorio flockler sociablekit embedsocial instafeed pixlee yotpo latermedia planoly hootsuite buffer sproutsocial linkinbio taplink milkshakeapp stanstore kajabi clickfunnels leadpages unbounce mailerlite constantcontact klaviyo".split(
+    " ",
+  ),
+  // Site builders, hosts, themes and the service platforms small businesses run on.
+  ..."vistaprint ionos hostinger bluehost hostgator siteground namecheap zyro site123 carrd tilda framer bigcommerce ecwid woocommerce wpengine elegantthemes themeisle fontawesome bootstrap cloudflare housecallpro jobber getjobber servicetitan thryv hibu yext birdeye podium".split(
+    " ",
+  ),
+  // Directories, review sites, delivery and payment brands: linked from many sites, never the business itself.
+  ..."angi angihomeservices homeadvisor thumbtack thumbtackpros houzz nextdoor nextdoorbusiness bbb bbb_us trustpilot tripadvisor opentable doordash ubereats grubhub toasttab resy paypal stripe venmo cashapp snapchat threads reddit discord twitch telegram messenger spotify apple amazon microsoft netflix googlemaps googlebusiness googlemybusiness applemaps yelpforbusiness metaforbusiness instagramforbusiness".split(
+    " ",
+  ),
+  // Words a template leaves behind, or that say what the link is rather than whose it is.
+  ..."official follow followus follow_us social socialmedia share link links linkinprofile website web site page admin info contact hello sales office team welcome none tbd sample demo template placeholder lorem design creators yourname yourpage yourbrand yourstore yourshop yoursite companyname company_name businessname business_name brandname brand_name storename shopname mybusiness mycompany mybrand mystore myshop mypage user_name user_handle ig_handle insta_handle instagram_handle instagramusername instagramuser instagram_username".split(
+    " ",
+  ),
 ]);
+
+/** "your_username", "yourbusinessname", "your.handle.here", "xxxx", "test12": a template's blank, never a real account. */
+const PLACEHOLDER =
+  /^your[._]?(?:(?:instagram|insta|ig|business|company|brand|store|shop|user|profile|account|page)[._]?)?(?:user|username|handle|account|profile|page|business|company|brand|name|instagram|insta|ig|store|shop|site|website|link)s?(?:[._]?here)?$|^(?:x{3,}|test\d{0,4}|demo\d{0,4}|sample\d{0,4}|example\d{0,4}|changeme|replaceme|todo|n_a)$/;
 
 const HANDLE = /^[a-z0-9_](?:[a-z0-9_.]{0,28}[a-z0-9_])?$/;
 
@@ -173,8 +245,10 @@ function cleanHandle(raw: string): string {
   h = h.replace(/[.]+$/, ""); // "…/joesroofing." at the end of a sentence
   if (!HANDLE.test(h) || /\.\./.test(h)) return "";
   if (/\.(js|css|php|html?|png|jpe?g|gif|svg|webp|json|xml|ico)$/.test(h)) return "";
-  if (RESERVED.has(h) || NOT_A_BUSINESS.has(h)) return "";
+  if (RESERVED.has(h) || NOT_A_BUSINESS.has(h) || PLACEHOLDER.test(h)) return "";
   if (/^\d+$/.test(h)) return ""; // numeric ids, not names
+  // One or two characters are Instagram's short-link paths ("/a/r/…", "/s/…"), not a business.
+  if (h.length < 3) return "";
   return h;
 }
 
@@ -517,7 +591,7 @@ export function pickSiteInstagram(
   const bizIsAgency =
     AGENCY_HINT.test(squash(biz.name || "")) || AGENCY_HINT.test(domainLabel(biz.domain));
   const scored = [...cands.values()].map((c) => {
-    const name = igNameScore(c.handle, biz);
+    const name = igFit(c.handle, biz);
     let score = 40 + name * 0.45;
     if (c.sameAs) score += 14;
     if (c.pages.size >= 2) score += 10; // header/footer icon: on every page
@@ -530,10 +604,15 @@ export function pickSiteInstagram(
   const top = scored[0];
   if (top.score < 30) return null; // only an agency-looking credit
   const alone = scored.filter((s) => s.score >= 30).length === 1;
+  // A social icon sits in the header or footer — on every page. A lone link on
+  // just one of several pages, to an account named nothing like the business,
+  // is more often a supplier's or a partner's badge.
+  const passing =
+    alone && top.c.links >= 1 && top.name < 30 && pages.length >= 2 && top.c.pages.size < 2;
   const sure =
     top.name >= 55 ||
     top.c.sameAs ||
-    (alone && top.c.links >= 1) ||
+    (alone && top.c.links >= 1 && !passing) ||
     (top.c.pages.size >= 2 && top.c.links >= 2);
   const why =
     top.name >= 75
@@ -541,9 +620,11 @@ export function pickSiteInstagram(
       : top.c.sameAs
         ? "their website names it as their own profile"
         : top.c.links
-          ? alone
-            ? "the only Instagram profile their website links to"
-            : "the Instagram profile their website links to most"
+          ? passing
+            ? "linked on one page of their website, under a different name (check it's theirs)"
+            : alone
+              ? "the only Instagram profile their website links to"
+              : "the Instagram profile their website links to most"
           : "written on their website next to the word Instagram";
   return {
     url: igUrl(top.c.handle),
@@ -578,16 +659,171 @@ export function followersLabel(n: number | null | undefined): string {
 }
 
 const digits = (s?: string) => (s || "").replace(/\D/g, "");
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** How well a handle fits the business (0–100), by its listing name or by that name without the "LLC" / "| Roof Repair" tail. */
+export function igFit(handle: string, biz: IgBusiness): number {
+  const short = igSearchName(biz.name);
+  const full = igNameScore(handle, biz);
+  return short && short !== (biz.name || "").trim()
+    ? Math.max(full, igNameScore(handle, { ...biz, name: short }))
+    : full;
+}
+function displayFit(display: string, biz: IgBusiness): number {
+  const short = igSearchName(biz.name);
+  return Math.max(
+    nameMatchScore(display, biz.name || ""),
+    short ? nameMatchScore(display, short) : 0,
+  );
+}
+
+const US_STATES: Record<string, string> = {
+  alabama: "AL",
+  alaska: "AK",
+  arizona: "AZ",
+  arkansas: "AR",
+  california: "CA",
+  colorado: "CO",
+  connecticut: "CT",
+  delaware: "DE",
+  florida: "FL",
+  georgia: "GA",
+  hawaii: "HI",
+  idaho: "ID",
+  illinois: "IL",
+  indiana: "IN",
+  iowa: "IA",
+  kansas: "KS",
+  kentucky: "KY",
+  louisiana: "LA",
+  maine: "ME",
+  maryland: "MD",
+  massachusetts: "MA",
+  michigan: "MI",
+  minnesota: "MN",
+  mississippi: "MS",
+  missouri: "MO",
+  montana: "MT",
+  nebraska: "NE",
+  nevada: "NV",
+  "new hampshire": "NH",
+  "new jersey": "NJ",
+  "new mexico": "NM",
+  "new york": "NY",
+  "north carolina": "NC",
+  "north dakota": "ND",
+  ohio: "OH",
+  oklahoma: "OK",
+  oregon: "OR",
+  pennsylvania: "PA",
+  "rhode island": "RI",
+  "south carolina": "SC",
+  "south dakota": "SD",
+  tennessee: "TN",
+  texas: "TX",
+  utah: "UT",
+  vermont: "VT",
+  virginia: "VA",
+  washington: "WA",
+  "west virginia": "WV",
+  wisconsin: "WI",
+  wyoming: "WY",
+};
+const COUNTRIES = new Set(
+  "usa|us|u.s.|u.s.a.|united states|united states of america|america|canada|uk|united kingdom|england|scotland|wales|ireland|australia|new zealand|belgium|belgië|belgie|belgique|nederland|netherlands|the netherlands|france|deutschland|germany".split(
+    "|",
+  ),
+);
+
+/**
+ * Where the business is, in the words a profile would use. A search is often
+ * run for a whole state ("new mexico"), and then that is all we know: the state
+ * by name, or written the usual way after the town (", NM").
+ */
+function placeOf(city?: string): { label: string; town: string; state: string; abbr: string } {
+  const label = (city || "").split(",")[0].trim();
+  const first = label.toLowerCase();
+  if (!first || COUNTRIES.has(first)) return { label: "", town: "", state: "", abbr: "" };
+  if (US_STATES[first]) return { label, town: "", state: first, abbr: US_STATES[first] };
+  return { label, town: first, state: "", abbr: "" };
+}
+
+/** Does this text (or the handle itself) place the account where the business is? */
+function mentionsPlace(text: string, handle: string, place: ReturnType<typeof placeOf>): boolean {
+  const lower = text.toLowerCase();
+  const word = (w: string) =>
+    new RegExp(`(^|[^a-z0-9])${escapeRe(w)}([^a-z0-9]|$)`, "i").test(lower);
+  const inHandle = (w: string) => {
+    const flat = w.replace(/[^a-z0-9]/g, "");
+    return flat.length >= 4 && handle.replace(/[._]/g, "").includes(flat);
+  };
+  // The town as a whole word ("Ely" must not match "safely"), or built into the handle.
+  if (place.town && place.town.length >= 3 && (word(place.town) || inHandle(place.town)))
+    return true;
+  if (place.state) {
+    if (word(place.state) || inHandle(place.state)) return true;
+    // "Albuquerque, NM" or "NM 87102" — never a bare "ME" or "OK" in the middle of a sentence.
+    if (
+      new RegExp(`,\\s*${place.abbr}(?![A-Za-z])|(?<![A-Za-z])${place.abbr}\\s+\\d{5}(?!\\d)`).test(
+        text,
+      )
+    )
+      return true;
+  }
+  return false;
+}
+
+/** What an address on Instagram points at: a profile, one of somebody's posts, or one of Instagram's own pages. */
+function igLinkKind(link: string): {
+  kind: "off" | "profile" | "post" | "section";
+  handle: string;
+} {
+  const m =
+    /^(?:https?:)?(?:\/\/)?((?:[a-z0-9-]+\.)*)(?:instagram\.com|instagr\.am)\/([^?#]*)/i.exec(
+      unescapeSlashes(link || "").trim(),
+    );
+  if (!m) return { kind: "off", handle: "" };
+  if (!MAIN_HOST.test(m[1] || "")) return { kind: "section", handle: "" };
+  const parts = m[2]
+    .split("/")
+    .filter(Boolean)
+    .map((x) => x.toLowerCase());
+  if (parts[0] === "_u") parts.shift();
+  const first = (parts[0] || "").replace(/^@/, "");
+  if (POST_PARTS.has(first) || first === "reels") return { kind: "post", handle: "" };
+  const handle = cleanHandle(first);
+  if (!handle) return { kind: "section", handle: "" };
+  if (!parts[1] || PROFILE_TABS.has(parts[1])) return { kind: "profile", handle };
+  // instagram.com/<them>/p/<post>: a post, and the handle is whoever posted it.
+  return { kind: "post", handle };
+}
+
+/** Did this search answer with Instagram profiles at all? When it did and none is theirs, asking again rarely helps. */
+export function igResultsHaveProfiles(results: SearchResult[]): boolean {
+  return results.slice(0, 10).some((r) => igLinkKind(r.link || "").kind === "profile");
+}
 
 /**
  * The business's profile among search results — only when something beyond
  * "it was the first hit" says it is theirs: the name, their website or phone
- * in the bio, the town. A similarly named business elsewhere is not accepted.
+ * in the bio, the town. A similarly named business elsewhere is not accepted,
+ * and neither is somebody else's post that happens to mention them.
+ * `not`: handles already turned down for this business by hand.
  */
-export function pickSearchInstagram(results: SearchResult[], biz: IgBusiness): IgPick | null {
-  const domain = (biz.domain || "").toLowerCase().replace(/^www\./, "");
+export function pickSearchInstagram(
+  results: SearchResult[],
+  biz: IgBusiness,
+  opts: { not?: string[] } = {},
+): IgPick | null {
+  const domain = cleanDomain(biz.domain);
+  // Their own domain only: "facebook.com" or "linktr.ee" in a bio proves nothing.
+  const domainRe =
+    isCompanyDomain(domain) && domain.length >= 5
+      ? new RegExp(`(^|[^a-z0-9-])${escapeRe(domain)}(?![a-z0-9-]|\\.[a-z])`)
+      : null;
   const phone = digits(biz.phone).slice(-9);
-  const city = (biz.city || "").toLowerCase().split(",")[0].trim();
+  const place = placeOf(biz.city);
+  const turnedDown = new Set((opts.not ?? []).map((h) => igHandle(h)).filter(Boolean));
   let best: (IgPick & { score: number }) | null = null;
 
   results.slice(0, 10).forEach((r, rank) => {
@@ -596,59 +832,76 @@ export function pickSearchInstagram(results: SearchResult[], biz: IgBusiness): I
     const snippet = r.snippet || "";
     const text = `${title} ${snippet}`;
     const lower = text.toLowerCase();
-    const onInstagram = /(^|\/\/)(www\.)?(instagram\.com|instagr\.am)\//i.test(link);
-    // The profile this result is about: its own URL, or the "(@handle)" Instagram puts in titles.
-    let handle = onInstagram ? igHandle(link) : "";
-    const inTitle = /\(@([A-Za-z0-9_.]{1,30})\)/.exec(text);
-    if (!handle && onInstagram && inTitle) handle = igHandle(inTitle[1]);
-    // Another site (their own, Facebook, a directory) that names their Instagram.
-    const elsewhere = !onInstagram && !handle ? [...igHandlesIn(text).keys()][0] || "" : "";
-    if (!handle && !elsewhere) return;
-    const h = handle || elsewhere;
+    const where = igLinkKind(link);
+    if (where.kind === "section") return; // a hashtag, a location, a "popular" page: nobody's profile
+    const kind: "profile" | "post" | "page" = where.kind === "off" ? "page" : where.kind;
+    let h = where.handle;
+    // A post listed without its owner in the address: Instagram puts "(@handle)" in the title.
+    if (kind === "post" && !h) h = igHandle(/\(@([A-Za-z0-9_.]{1,30})\)/.exec(text)?.[1] || "");
+    // Another site (their own, Facebook, a directory) that names an Instagram: the one that fits the name best.
+    if (kind === "page")
+      h = [...igHandlesIn(text).keys()].sort((a, b) => igFit(b, biz) - igFit(a, biz))[0] || "";
+    if (!h || turnedDown.has(h)) return;
 
-    const display = onInstagram
-      ? title.split(/\s*\(@|\s+[•·|-]\s+Instagram|\s+on Instagram/i)[0].trim()
-      : "";
-    const byHandle = igNameScore(h, biz);
-    const byDisplay = display ? nameMatchScore(display, biz.name || "") : 0;
-    const hasDomain = !!domain && domain.length >= 5 && lower.includes(domain);
-    const hasPhone = phone.length >= 7 && digits(text).includes(phone);
-    // The town as a whole word ("Ely" must not match "safely"), or built into the handle.
-    const hasCity =
-      !!city &&
-      city.length >= 3 &&
-      (new RegExp(
-        `(^|[^a-z0-9])${city.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`,
-        "i",
-      ).test(lower) ||
-        (city.replace(/[^a-z0-9]/g, "").length >= 4 &&
-          h.replace(/[._]/g, "").includes(city.replace(/[^a-z0-9]/g, ""))));
+    // Whose name is on it: the profile's display name, or the poster's (never the caption).
+    const display =
+      kind === "profile"
+        ? title.split(/\s*\(@|\s+[•·|-]\s+Instagram|\s+on Instagram/i)[0].trim()
+        : kind === "post"
+          ? title.split(/\s*\(@|\s+on Instagram|\s+[•·|]\s+/i)[0].trim()
+          : "";
+    const byHandle = igFit(h, biz);
+    const byDisplay = display ? displayFit(display, biz) : 0;
+    const nameFit = Math.max(byHandle, byDisplay);
+    const followers = kind === "profile" ? igFollowers(text) : null;
+    const hasDomain = !!domainRe && domainRe.test(lower);
+    const hasPhone =
+      phone.length >= 7 &&
+      (text.match(/\+?\d[\d\s().-]{5,}\d/g) ?? []).some((t) => digits(t).endsWith(phone));
+    const hasPlace = mentionsPlace(text, h, place);
     const hard = hasDomain || hasPhone;
-    // Something must tie it to THIS business.
-    if (!hard && byHandle < 55 && byDisplay < 65) return;
-    // A name-only match from a general page needs the town too.
-    if (!onInstagram && !hard && !(byHandle >= 75 && hasCity)) return;
-    // A name-only match that doesn't mention the town must at least be near the top.
-    if (!hard && !hasCity && (rank > 2 || Math.max(byHandle, byDisplay) < 75)) return;
 
-    let score = Math.max(byHandle, byDisplay) * 0.5 + Math.min(byHandle, byDisplay) * 0.15;
+    if (kind === "profile") {
+      // A real profile result names its handle or shows its numbers. Anything else under
+      // instagram.com/<word> is one of Instagram's own pages unless the word IS the business.
+      const shown =
+        new RegExp(`\\(@${escapeRe(h)}\\)`, "i").test(text) ||
+        followers != null ||
+        /instagram photos and videos/i.test(title);
+      if (!shown && byHandle < 75) return;
+      // Something must tie it to THIS business.
+      if (!hard && byHandle < 55 && byDisplay < 65) return;
+    } else if (kind === "post") {
+      // A caption can quote anyone's phone number or website: the poster must carry the name.
+      if (byHandle < 55 && byDisplay < 65) return;
+    } else {
+      // A general page: the handle itself must fit, backed by the town or by hard evidence.
+      if (byHandle < 55) return;
+      if (!hard && !(byHandle >= 75 && hasPlace)) return;
+    }
+    // A name-only match that doesn't mention the place must at least be near the top.
+    if (!hard && !hasPlace && (rank > 2 || nameFit < 75)) return;
+    // Hundreds of thousands of followers and nothing but a similar name: a national brand, not this business.
+    if (!hard && followers != null && followers >= 300_000) return;
+
+    let score = nameFit * 0.5 + Math.min(byHandle, byDisplay) * 0.15;
     // Their own website or phone in the bio beats any name match, however good.
     if (hasDomain) score += 100;
     if (hasPhone) score += 100;
-    if (hasCity) score += 12;
-    if (onInstagram) score += 8;
+    if (hasPlace) score += 12;
+    if (kind === "profile") score += 8;
     if (rank === 0) score += 4;
     if (score < 45) return;
 
     // Their website or phone in the bio settles it; a matching name does only
-    // together with the town (same-named businesses exist everywhere).
-    const sure = hard || (Math.max(byHandle, byDisplay) >= 75 && hasCity);
+    // together with the place (same-named businesses exist everywhere).
+    const sure = (hard && (kind === "profile" || nameFit >= 75)) || (nameFit >= 75 && hasPlace);
     const why = hasDomain
       ? "the profile mentions their website"
       : hasPhone
         ? "the profile shows their phone number"
-        : hasCity
-          ? `the name matches and it mentions ${biz.city?.split(",")[0].trim()}`
+        : hasPlace
+          ? `the name matches and it mentions ${place.label}`
           : "the name matches (check it's the right business)";
     if (!best || score > best.score)
       best = {
@@ -656,7 +909,7 @@ export function pickSearchInstagram(results: SearchResult[], biz: IgBusiness): I
         handle: h,
         confidence: sure ? "sure" : "likely",
         via: "search",
-        followers: onInstagram ? igFollowers(text) : null,
+        followers,
         why,
         score,
       };
@@ -666,14 +919,54 @@ export function pickSearchInstagram(results: SearchResult[], biz: IgBusiness): I
   return pick;
 }
 
-/** The searches worth running for a business, most precise first. */
+const LEGAL_TAIL =
+  /[\s,]+(?:l\.?l\.?c|inc|incorporated|ltd|limited|corp|corporation|pllc|plc|llp|bvba|gmbh|sarl|srl|vzw)\.?$/i;
+/** Two-letter forms only when written as such ("Dakwerken Peeters BV"), never the end of an ordinary word. */
+const LEGAL_TAIL_SHORT = /[\s,]+(?:BV|NV|SA|LP|PC|CV)\.?$/;
+
+/**
+ * The business's name as people — and its Instagram — write it: without "LLC",
+ * and without the keywords a listing adds after it ("Joe's Roofing | Roof
+ * Repair Denver"). Searching and matching on this finds far more than the raw
+ * listing name does.
+ */
+export function igSearchName(raw?: string): string {
+  let name = (raw || "").replace(/["“”]/g, "").replace(/\s+/g, " ").trim();
+  const head = name.split(/\s+[|•·–—]\s+|\s+-\s+|\s*:\s+|\s*\(/)[0].trim();
+  // Only when what's left still names someone ("Tree Service | Maven" keeps everything).
+  if (head && head !== name && nameTokens(head).some((t) => !TRADE.has(t) && t.length >= 2))
+    name = head;
+  for (let i = 0; i < 3 && (LEGAL_TAIL.test(name) || LEGAL_TAIL_SHORT.test(name)); i++)
+    name = name.replace(LEGAL_TAIL, "").replace(LEGAL_TAIL_SHORT, "").trim();
+  return name.replace(/[\s,.&-]+$/, "");
+}
+
+/**
+ * Is a search worth a credit? With a name made only of trade words ("Tree
+ * Service") and neither a website nor a phone number to recognise the profile
+ * by, no result could ever be told apart from the next business.
+ */
+export function igSearchWorthIt(biz: IgBusiness): boolean {
+  const name = igSearchName(biz.name);
+  if (!name) return false;
+  if (nameTokens(name).some((t) => !TRADE.has(t) && t.length >= 3)) return true;
+  return isCompanyDomain(cleanDomain(biz.domain)) || digits(biz.phone).length >= 7;
+}
+
+/**
+ * The searches for a business, best first. The first is restricted to
+ * Instagram, so every result is a candidate; the second is only for when
+ * Instagram answered with no profile at all.
+ */
 export function igSearchQueries(biz: IgBusiness): string[] {
-  const name = (biz.name || "").replace(/["“”]/g, "").trim();
-  const city = (biz.city || "").split(",")[0].trim();
+  const name = igSearchName(biz.name);
   if (!name) return [];
+  const { label } = placeOf(biz.city);
+  // "Joe's Roofing Denver" already says where.
+  const place = label && !name.toLowerCase().includes(label.toLowerCase()) ? label : "";
   return [
-    `site:instagram.com ${name} ${city}`.trim(),
-    `"${name}" ${city} instagram`.replace(/\s+/g, " ").trim(),
+    `site:instagram.com ${name} ${place}`.trim(),
+    `${name} ${place} instagram`.replace(/\s+/g, " ").trim(),
   ];
 }
 

@@ -1,3 +1,5 @@
+import { igSearchedLately } from "./ig-board";
+import { incomingInstagram } from "./raw-merge";
 import type { EnrichResult, RawBusiness, ScanPerson, ScanJobLite, ScanJobFull } from "./store";
 
 export function rawScanPerson(row: RawBusiness): ScanPerson {
@@ -5,14 +7,18 @@ export function rawScanPerson(row: RawBusiness): ScanPerson {
     organizationName: row.business, phone: row.phone, linkedin: row.linkedin,
     city: row.city, industry: row.industry, rating: row.rating, reviews: row.reviews,
     // Already on file: not searched for again.
-    instagram: row.instagram || undefined };
+    instagram: row.instagram || undefined,
+    // Searched for in the last 30 days without finding one: not paid for twice.
+    igSearched: igSearchedLately(row.igSearchedAt) || undefined,
+    // Turned down by hand for this business: the next search looks past them.
+    igNot: row.instagramNot?.length ? row.instagramNot.slice(-10) : undefined };
 }
 
 export function needsRawEnrichment(row: RawBusiness) {
   return !row.email || !row.contactName || !row.contactTitle || !row.phone || !row.website;
 }
 
-export function mergeRawReveal(row: RawBusiness, result: EnrichResult): RawBusiness {
+export function mergeRawReveal(row: RawBusiness, result: EnrichResult, now = Date.now()): RawBusiness {
   // An uncertain pattern must never replace an address already on file.
   const useEmail = !!result.email && (!row.email || (row.emailSource === "Guess" && !result.guessed));
   return { ...row,
@@ -23,9 +29,15 @@ export function mergeRawReveal(row: RawBusiness, result: EnrichResult): RawBusin
     contactName: row.contactName || result.name || "",
     contactTitle: row.contactTitle || result.title || "",
     linkedin: row.linkedin || result.linkedin || "",
-    ...(!row.instagram && result.instagram
-      ? { instagram: result.instagram, instagramSure: result.instagramSure !== false, instagramFollowers: result.instagramFollowers ?? undefined }
-      : {}),
+    ...incomingInstagram(row, {
+      instagram: result.instagram,
+      instagramSure: result.instagramSure !== false,
+      instagramFollowers: result.instagramFollowers ?? undefined,
+      instagramVia: result.instagramVia || undefined,
+      instagramWhy: result.instagramWhy || undefined,
+    }),
+    // A search was paid for: remember when, found or not.
+    ...((result.instagramSearches ?? 0) > 0 ? { igSearchedAt: now } : {}),
     score: result.score ?? row.score,
     scoreWhy: result.scoreReasons ?? row.scoreWhy,
     ai: result.ai ?? row.ai,

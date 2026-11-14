@@ -1,3 +1,8 @@
+# November 14 Instagram update
+- [x] Install Instagram DMs list, safer account matching and lower-cost Instagram-only searches; preserve existing data, sending limits and scan protections.
+- [x] Verify 411 regression tests, clean preview build, public/admin entry and isolated desktop/phone DM/reply moves without sending or saving test data.
+- [ ] Signed-in saved-data and live search checks: blocked because no auth account matches the requesting user's email; preview sign-in required.
+
 # Public website refresh
 # November 11 v2 admin update
 - [x] Merge Instagram discovery/manual messaging, scan-size recovery and safe sender improvements without reverting existing protections, history, first-contact filters or the permanent daily cap.

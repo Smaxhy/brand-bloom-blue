@@ -49,6 +49,8 @@ import { MAX_SCRAPE_RESULTS } from "./scrape-limits";
 import { fetchPublicSite } from "./public-site-fetch";
 import {
   bioLinkUrl,
+  igResultsHaveProfiles,
+  igSearchWorthIt,
   igHandle,
   igHandlesIn,
   igSearchQueries,
@@ -444,6 +446,10 @@ export interface EnrichInput {
   instagram?: string;
   /** Their listing gave a link-in-bio page (Linktree…) as the "website". */
   bioLink?: string;
+  /** Already searched for recently without finding one: the free sources are still read, no search credit is spent again. */
+  igSearched?: boolean;
+  /** Accounts turned down by hand for this business: never offered for it again, wherever they turn up. */
+  igNot?: string[];
 }
 
 export type EnrichRow = {
@@ -452,6 +458,8 @@ export type EnrichRow = {
   instagram: string; facebook: string; tiktok: string; youtube: string;
   /** Instagram: false = only "likely" theirs; where it was found; followers when a search showed them; why it's theirs. */
   instagramSure: boolean; instagramVia: string; instagramFollowers: number | null; instagramWhy: string;
+  /** How many searches were spent looking for the Instagram (0 = the free sources settled it, or nothing was asked). */
+  instagramSearches: number;
   score: number; scoreReasons: string[]; signals: SiteSignals | null;
   ai: { need: number; reasons: string[]; pitch: string; gap: string; siteQuality: string } | null;
 };
@@ -459,7 +467,7 @@ export type EnrichRow = {
 /** One website may take at most this long; a slow site can no longer stall a whole reveal. */
 const SITE_TIMEOUT_MS = 25_000;
 
-export async function enrichPeople(env: Env, people: EnrichInput[], opts: { usePaid?: boolean; useClaude?: boolean; revealPhone?: boolean; findLinkedin?: boolean; /** Search for the Instagram when the listing and website don't give it (default on; uses search credits). */ findInstagram?: boolean; allowGuesses?: boolean } = {}): Promise<{ results: EnrichRow[]; warnings: string[] }> {
+export async function enrichPeople(env: Env, people: EnrichInput[], opts: { usePaid?: boolean; useClaude?: boolean; revealPhone?: boolean; findLinkedin?: boolean; /** Search for the Instagram when the listing and website don't give it (opt-in; uses search credits). */ findInstagram?: boolean; /** Only look for the Instagram: no paid contact lookups and no email or website searches (the website is still read, free). */ instagramOnly?: boolean; allowGuesses?: boolean } = {}): Promise<{ results: EnrichRow[]; warnings: string[] }> {
   if (!people.length) return { results: [], warnings: [] };
   // Paid sources are OPT-IN per call. Default is free only.
   const usePaid = opts.usePaid === true;
@@ -496,12 +504,12 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
         }
         const result = await withTimeout(googleSearch(provider, q), Math.max(1, deadline - Date.now()), "search");
         if (result.error) warn(result.error);
-        if (!result.stop) return result;
+        if (!result.stop) return { ...result, answered: !result.error };
         providerIndex++;
         const next = providers[providerIndex];
         if (next) warn(`Switched to ${next.kind === "serpapi" ? "SerpApi" : next.kind === "brave" ? "Brave" : "Serper"} for the Google lookups (the previous provider is unavailable)`);
       }
-      return { blob: "", firstLink: "", results: [] as SearchResult[] };
+      return { blob: "", firstLink: "", results: [] as SearchResult[], answered: false };
     });
     searchTail = run.catch(() => undefined);
     return run;
@@ -522,6 +530,7 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
     instagramVia: "",
     instagramFollowers: null as number | null,
     instagramWhy: "",
+    instagramSearches: 0,
     facebook: "",
     tiktok: "",
     youtube: "",
@@ -539,6 +548,8 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
     } | null,
   }));
   const byId = new Map(results.map((r) => [r.id, r]));
+  /** Was this account turned down by hand for this business? Then it is not theirs, whatever links to it. */
+  const turnedDown = (p: EnrichInput, handle: string) => (p.igNot ?? []).some((h) => igHandle(h) === handle);
   const setIg = (r: (typeof results)[number], pick: IgPick) => {
     r.instagram = pick.url;
     r.instagramSure = pick.confidence === "sure";
@@ -598,7 +609,7 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
     // Instagram, source 2: their own website (ranked, see pickSiteInstagram).
     if (prof.instagram && !r.instagram) {
       const handle = igHandle(prof.instagram);
-      if (handle)
+      if (handle && !turnedDown(p, handle))
         setIg(r, {
           url: igUrl(handle),
           handle,
@@ -639,12 +650,16 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
         "link-in-bio page",
       ).catch(() => null);
       const pick = page ? pickBioInstagram(page.html, url, { name: p.organizationName, city: p.city }) : null;
-      if (pick) setIg(r, pick);
+      if (pick && !turnedDown(p, pick.handle)) setIg(r, pick);
     },
   );
 
+  // An Instagram-only run stops at the free sources and the Instagram search:
+  // no paid contact lookups, no website or email searches.
+  const instagramOnly = opts.instagramOnly === true;
+
   // 1) Apollo enrichment (paid, opt-in): emails + websites + phones, one batch call.
-  if (apolloKey) {
+  if (apolloKey && !instagramOnly) {
     try {
       const missing = people.filter((p) => {
         const r = byId.get(p.id);
@@ -670,7 +685,7 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
 
   // 2) Per-contact gap-filling with Hunter + Google for anyone Apollo missed
   //    (four at a time, each lookup time-limited).
-  await enrichMany(people, 4, async (p) => {
+  await enrichMany(instagramOnly ? [] : people, 4, async (p) => {
     const r = byId.get(p.id);
     if (!r) return;
     if (r.email && (!opts.revealPhone || r.phone)) return;
@@ -739,17 +754,24 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
     }
   });
 
-  // Search is explicit and shares the serialized, paced provider waterfall.
-  await enrichMany(opts.findInstagram === true ? people : [], 2, async (p) => {
+  // Instagram, source 4: a search — explicit, and through the same serialized,
+  // paced provider waterfall. One search per business in the usual case: the
+  // second is asked only when Instagram answered the first with no profile at all.
+  await enrichMany(opts.findInstagram === true && providers.length ? people : [], 2, async (p) => {
     const r = byId.get(p.id);
-    if (!r || r.instagram || !p.organizationName) return;
+    if (!r || r.instagram || !p.organizationName || p.igSearched === true) return;
     const biz = { name: p.organizationName, domain: r.website, city: p.city, phone: r.phone || p.phone };
+    if (!igSearchWorthIt(biz)) return;
     for (const q of igSearchQueries(biz)) {
       try {
         const res = await search(q);
-        const pick = pickSearchInstagram(res.results ?? [], biz);
+        // A provider that is out of credits answered nothing: not a search, and not a "nothing found".
+        if (!res.answered) break;
+        r.instagramSearches++;
+        const pick = pickSearchInstagram(res.results ?? [], biz, { not: p.igNot });
         if (pick) { setIg(r, pick); break; }
-      } catch { /* Social discovery never blocks email recovery. */ }
+        if (igResultsHaveProfiles(res.results ?? [])) break;
+      } catch { break; /* Social discovery never blocks email recovery. */ }
     }
   });
   if (slowSites) warn(`${slowSites} website${slowSites === 1 ? "" : "s"} took longer than ${SITE_TIMEOUT_MS / 1000} s and ${slowSites === 1 ? "was" : "were"} skipped`);
@@ -815,6 +837,7 @@ async function enrich(request: Request, env: Env): Promise<Response> {
     useClaude?: boolean;
     findLinkedin?: boolean;
     findInstagram?: boolean;
+    instagramOnly?: boolean;
   } = {};
   try {
     payload = (await request.json()) as typeof payload;
@@ -881,7 +904,7 @@ interface SearchKey {
 async function googleSearch(
   p: SearchKey,
   q: string,
-): Promise<{ blob: string; firstLink: string; results: SearchResult[]; error?: string; stop?: boolean }> {
+): Promise<{ blob: string; firstLink: string; results: SearchResult[]; error?: string; stop?: boolean; /** A provider gave a real answer (set by the waterfall). */ answered?: boolean }> {
   if (p.kind === "brave") {
     // Brave Search — a free tier (≈2,000 searches/mo) that keeps website/email
     // discovery working after Serper runs out. Returns the real result links.

@@ -4,7 +4,7 @@ import type { EnrichInput, EnrichRow } from "./api-proxies";
 type Env = Record<string, string | undefined>;
 export interface ScanJob {
   id: string; created_by: string; label: string; status: "queued" | "running" | "done" | "failed" | "cancelled";
-  options: { useClaude?: boolean; usePaid?: boolean; revealPhone?: boolean; findLinkedin?: boolean; findInstagram?: boolean; allowGuesses?: boolean; _stalls?: number };
+  options: { useClaude?: boolean; usePaid?: boolean; revealPhone?: boolean; findLinkedin?: boolean; findInstagram?: boolean; instagramOnly?: boolean; allowGuesses?: boolean; _stalls?: number };
   people: (EnrichInput & { id: string })[]; results: Record<string, EnrichRow>;
   cursor: number; total: number; warnings: string[]; last_error: string | null;
   lease_token: string | null; lease_until: string | null; created_at: string; updated_at: string; finished_at: string | null;
