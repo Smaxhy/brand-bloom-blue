@@ -21,7 +21,8 @@ vi.mock("./db", () => ({
 vi.mock("./integration-settings.server", () => ({
   resolveIntegrationEnv: vi.fn(async (env) => env),
 }));
-vi.mock("./request-security", () => ({
+vi.mock("./request-security", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./request-security")>(),
   requestIpHash: vi.fn(async () => "test-ip"),
   securityJson: (data: unknown, status: number) => Response.json(data, { status }),
 }));
@@ -261,5 +262,19 @@ describe("the ecom scan route", () => {
       { SERPER_API_KEY: "s" },
     );
     expect(bad?.status).toBe(400);
+  });
+
+  it.each([null, [], { niche: 123 }, { step: -1 }, { source: "other" }, { have: [42] }])("rejects malformed scanner options before searching: %j", async (body) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const response = await handleApiRequest(new Request("https://example.com/api/discover/ecom", { method: "POST", body: JSON.stringify(body) }), { SERPER_API_KEY: "s" });
+    expect(response?.status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects oversized scan input before reading any site", async () => {
+    const response = await handleApiRequest(new Request("https://example.com/api/discover/ecom", { method: "POST", body: JSON.stringify({ niche: "a".repeat(128_000) }) }), { SERPER_API_KEY: "s" });
+    expect(response?.status).toBe(413);
+    expect(reader.freeEnrich).not.toHaveBeenCalled();
   });
 });

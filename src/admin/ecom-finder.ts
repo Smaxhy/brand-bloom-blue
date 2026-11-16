@@ -296,6 +296,7 @@ export function useEcomScan(update: Update) {
     async (options: EcomScanOptions, list: EcomBrand[]) => {
       if (flag.current) return;
       const mine: { stop: boolean; wake?: () => void } = { stop: false };
+      let attached = true;
       flag.current = mine;
       setBusy(true);
       setStopping(false);
@@ -317,7 +318,8 @@ export function useEcomScan(update: Update) {
             }),
           stopped: () => mine.stop,
           list,
-          onBrands: (found) =>
+          onBrands: (found) => {
+            if (!attached || flag.current !== mine) return;
             update((prev) => ({
               ...prev,
               ecom: {
@@ -325,9 +327,11 @@ export function useEcomScan(update: Update) {
                 brands: trimEcomList(mergeEcomBrands(prev.ecom?.brands ?? [], found).brands),
                 updatedAt: Date.now(),
               },
-            })),
+            }));
+          },
           onProgress: setProgress,
         });
+        if (flag.current !== mine) { attached = false; return; }
         setOutcome(result);
         // With "Only new", the next scan of this niche carries on after these searches.
         if (options.hideSeen && result.tally.searches > 0)
@@ -368,8 +372,10 @@ export function useEcomScan(update: Update) {
   useEffect(
     () => () => {
       if (!flag.current) return;
-      flag.current.stop = true;
-      flag.current.wake?.();
+      const current = flag.current;
+      current.stop = true;
+      current.wake?.();
+      flag.current = null;
     },
     [],
   );

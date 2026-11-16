@@ -44,7 +44,7 @@ import { hideSeenBusinesses, rememberBusinesses } from "./seen-businesses";
 import { Db } from "./db";
 import { resolveIntegrationEnv } from "./integration-settings.server";
 import { runTick, keepAlive, verifySchedulerToken } from "./tick";
-import { requestIpHash, securityJson } from "./request-security";
+import { readBoundedBody, requestIpHash, securityJson } from "./request-security";
 import { MAX_SCRAPE_RESULTS } from "./scrape-limits";
 import { fetchPublicSite } from "./public-site-fetch";
 import { ecomScanStep, type EcomStepInput } from "./ecom-scan";
@@ -857,8 +857,18 @@ async function ecomDiscover(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") return json({ error: "POST only" }, 405);
   let body: EcomStepInput & { hideSeen?: boolean; since?: string } = {};
   try {
-    body = (await request.json()) as typeof body;
-  } catch {
+    const parsed: unknown = JSON.parse(new TextDecoder().decode(await readBoundedBody(request, 128_000)));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return json({ error: "invalid scan options" }, 400);
+    body = parsed as typeof body;
+    if ((body.niche !== undefined && (typeof body.niche !== "string" || body.niche.length > 160)) ||
+        (body.market !== undefined && typeof body.market !== "string") ||
+        (body.source !== undefined && body.source !== "stores" && body.source !== "instagram") ||
+        (body.step !== undefined && (!Number.isInteger(body.step) || body.step < 0 || body.step > 60)) ||
+        (body.have !== undefined && (!Array.isArray(body.have) || body.have.length > 800 || body.have.some((key) => typeof key !== "string" || key.length > 200)))) {
+      return json({ error: "invalid scan options" }, 400);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message === "body_too_large") return json({ error: "scan options too large" }, 413);
     return json({ error: "invalid json" }, 400);
   }
   const warnings = new Set<string>();
