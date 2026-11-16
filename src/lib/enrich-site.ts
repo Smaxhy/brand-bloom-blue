@@ -26,7 +26,7 @@ const secret = (e: Env, k: string) => e[k] || process.env?.[k];
 const OWNERISH =
   /\b(owner|founder|co-founder|ceo|president|principal|proprietor|managing director|director|zaakvoerder|eigenaar|oprichter|bestuurder|g[ée]rant|fondateur|directeur|inhaber|geschäftsführer)\b/i;
 const CACHE_DAYS = 30;
-export const EMAIL_EXTRACTION_VERSION = 5;
+export const EMAIL_EXTRACTION_VERSION = 6;
 const BUSINESS_WORDS =
   /\b(roofing|roofers?|plumbing|plumbers?|hvac|heating|cooling|electric(al)?|landscap\w*|lawn|tree|dental|dentistry|clinic|law|legal|realty|real estate|construction|contractors?|services?|solutions|group|company|co\.?|inc\.?|llc|ltd|bv|bvba|nv|gmbh|sarl|srl|studio|salon|spa|shop|store|center|centre|agency|partners|associates|brothers|sons|team|home|house|auto|motors?|cleaning|painting|design|media|marketing|consulting|insurance|bank|church|school|academy)\b/i;
 

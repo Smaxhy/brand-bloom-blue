@@ -30,6 +30,8 @@ export interface FreeEnrichResult {
   mx: boolean | null; // null = unknown (lookup failed)
   pages: string[];
   signals: SiteSignals;
+  /** The pages that were read (HTML), only when asked for with `keepPages`. */
+  pagesHtml?: { path: string; html: string }[];
   error?: string;
 }
 
@@ -295,9 +297,17 @@ export function hiddenEmails(html: string): string[] {
     .replace(/&#0*64;|&#x0*40;|&commat;/gi, "@")
     .replace(/&#0*46;|&#x0*2e;|&period;/gi, ".");
   // Use visible text rather than script/style content to avoid tracking addresses.
+  // Only a deliberate disguise is undone. "Shop at kaiju.com", "follow us @kaiju.co"
+  // and an address that ends a sentence ("…@kaiju.com. Returns are free") are
+  // ordinary prose, and used to come out as addresses nobody published. So a bare
+  // "at" counts only together with a spelled-out "dot", an "@" only when it is
+  // tight or has a space on both sides, and a real dot never has a space around it.
   const spelled = htmlToText(entities).replace(
-    /\b([a-z0-9._%+-]{1,})\s*(?:\[\s*at\s*\]|\(\s*at\s*\)|\s+at\s+|@)\s*([a-z0-9-]+(?:\s*(?:\[\s*dot\s*\]|\(\s*dot\s*\)|\s+dot\s+|\.)\s*[a-z0-9-]+)+)\b/gi,
-    (_match, user: string, domain: string) => `${user}@${domain.replace(/\[\s*dot\s*\]|\(\s*dot\s*\)|\bdot\b/gi, ".").replace(/\s+/g, "")}`,
+    /\b([a-z0-9._%+-]{1,})(\s*\[\s*at\s*\]\s*|\s*\(\s*at\s*\)\s*|\s+at\s+|\s+@\s+|@)([a-z0-9-]+(?:(?:\s*\[\s*dot\s*\]\s*|\s*\(\s*dot\s*\)\s*|\s+dot\s+|\.)[a-z0-9-]+)+)\b/gi,
+    (match, user: string, at: string, domain: string) =>
+      /^\s+at\s+$/i.test(at) && !/\bdot\b/i.test(domain)
+        ? match
+        : `${user}@${domain.replace(/\[\s*dot\s*\]|\(\s*dot\s*\)|\bdot\b/gi, ".").replace(/\s+/g, "")}`,
   );
   for (const email of spelled.match(EMAIL_RE) ?? []) found.add(email.toLowerCase());
   return Array.from(found);
@@ -542,6 +552,14 @@ export async function freeEnrich(input: {
   maxPages?: number;
   /** Fetch /contact + /about first and the deeper pages only when needed. */
   tiered?: boolean;
+  /**
+   * Choose the further pages from the homepage itself, in place of the usual
+   * list: a web shop keeps its contact details under /pages/… and /policies/…,
+   * which no fixed list finds. Same site only; `maxPages` still bounds it.
+   */
+  pagesFor?: (home: { html: string; domain: string }) => string[];
+  /** Hand back the HTML that was read, for callers that look for more than contact details. */
+  keepPages?: boolean;
 }): Promise<FreeEnrichResult> {
   const domain = cleanDomain(input.website);
   const empty: FreeEnrichResult = {
@@ -596,7 +614,12 @@ export async function freeEnrich(input: {
     !!x;
 
   let extras: { path: string; html: string }[];
-  if (input.tiered) {
+  if (input.pagesFor) {
+    const wanted = input
+      .pagesFor({ html: home.html, domain: finalDomain })
+      .filter((p) => /^\/[^/\\]/.test(p) && !/[\s<>"']/.test(p));
+    extras = (await grab([...new Set(wanted)], 5000)).filter(notNull);
+  } else if (input.tiered) {
     extras = (await grab(TIER1, 5000)).filter(notNull);
     const queued = new Set<string>(["/", ...TIER1, ...TIER2]);
     const everything = () => [home.html, ...extras.map((e) => e.html)].join("\n");
@@ -769,5 +792,6 @@ export async function freeEnrich(input: {
     names: people,
     mx,
     pages: pages.map((p) => p.path || "/"),
+    ...(input.keepPages ? { pagesHtml: pages } : {}),
   };
 }

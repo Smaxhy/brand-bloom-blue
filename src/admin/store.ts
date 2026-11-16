@@ -8,6 +8,8 @@ import { MAX_SCRAPE_RESULTS } from "@/lib/scrape-limits";
 import { pollBudgetMs, pollWhilePresent } from "./page-presence";
 import { cleanDuplicateDeals, type WebsiteRequest } from "./pipeline-merge";
 import type { LeadAi } from "@/lib/lead-filters";
+import { type EcomBrand, ecomKind } from "@/lib/ecom-brands";
+import { ECOM_LIST_MAX, cleanEcomBrands, cleanEcomCursors } from "./ecom-board";
 /** Inspirova Admin — per-account Lovable Cloud data layer. */
 
 /* ----------------------------------------------------------------------- */
@@ -147,6 +149,14 @@ export interface ScraperState {
   updatedAt: number;
 }
 
+/** What the Ecom scanner found and that is not saved or removed yet. */
+export interface EcomState {
+  brands: EcomBrand[];
+  /** How far each niche has been searched, so the next scan of it asks new searches (see ecomStartAt). */
+  cursors?: Record<string, number>;
+  updatedAt: number;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -220,6 +230,8 @@ export interface AdminData {
   igDms?: Record<string, number>;
   /** What else was filed by hand for an account: they replied, or it isn't a fit. */
   igMarks?: Record<string, IgMark>;
+  /** Persisted Ecom scanner results so a page refresh keeps them (and the searches they cost). */
+  ecom?: EcomState;
 }
 
 /* ----------------------------------------------------------------------- */
@@ -353,7 +365,18 @@ function withSchemaDefaults(d: Partial<AdminData> | null | undefined): AdminData
           updatedAt: Number((scraper as Partial<ScraperState>).updatedAt ?? Date.now()),
         }
       : s.scraper,
+    ecom: ecomStateOr(d.ecom),
   };
+}
+
+/** The saved Ecom list and scan progress made safe to use; nothing at all when both are empty. */
+function ecomStateOr(value: unknown): EcomState | undefined {
+  const saved = value && typeof value === "object" ? (value as Partial<EcomState>) : null;
+  const brands = cleanEcomBrands(saved?.brands);
+  const cursors = cleanEcomCursors(saved?.cursors);
+  return brands.length || Object.keys(cursors).length
+    ? { brands, cursors, updatedAt: Number(saved?.updatedAt) || Date.now() }
+    : undefined;
 }
 
 function isEmptyRemote(d: unknown): boolean {
@@ -379,6 +402,9 @@ function compactForRemote(data: AdminData): AdminData {
           updatedAt: Date.now(),
         }
       : undefined,
+    ecom: ecomStateOr(
+      data.ecom ? { ...data.ecom, brands: data.ecom.brands.slice(0, ECOM_LIST_MAX) } : undefined,
+    ),
   };
 }
 
@@ -1198,8 +1224,40 @@ const IG_DM_OPENERS: ((x: { hi: string; who: string; where: string; trade: strin
 ];
 export const IG_DM_VARIANTS = IG_DM_OPENERS.length;
 
+/**
+ * The same for an online brand found by the Ecom scanner: a shop has no town
+ * and is not after "local customers", so it gets its own wording. Starting
+ * points to tweak, never an automated send.
+ */
+const IG_DM_ECOM_OPENERS: ((x: { hi: string; who: string; kind: string }) => string)[] = [
+  ({ hi, who, kind }) =>
+    `${hi} Came across ${who} and really like what you're putting out. I run a small marketing agency that helps ${kind} brands turn followers into orders. Mind if I share a quick idea or two?`,
+  ({ hi, who, kind }) =>
+    `${hi} Been looking through ${who}'s page, great stuff. I help ${kind} brands get more sales from Instagram and ads. Open to one short idea for your store?`,
+  ({ hi, who, kind }) =>
+    `${hi} Quick question: who looks after the ads and email for ${who}? I work with ${kind} brands on exactly that and had an idea for you. Want me to send it over?`,
+  ({ hi, who, kind }) =>
+    `${hi} Love what ${who} is building. I work with ${kind} brands on growing sales without discounting everything. Would it be OK if I sent you a couple of thoughts? No pitch deck, promise.`,
+];
+
 export function igDmText(p: { company?: string; name?: string; city?: string; industry?: string }, variant = 0): string {
   const first = (p.name || "").trim().split(/\s+/)[0];
+  // Saved by the Ecom scanner ("online anime brands"): the wording for an online brand.
+  const kind = ecomKind(p.industry);
+  if (kind) {
+    const n = IG_DM_ECOM_OPENERS.length;
+    // "KAIJU | anime streetwear" is greeted as KAIJU.
+    const brand =
+      (p.company || "")
+        .trim()
+        .split(/\s+[|•·–—]\s+/)[0]
+        .trim() || "your brand";
+    return IG_DM_ECOM_OPENERS[((Math.floor(variant) % n) + n) % n]({
+      hi: `Hey${first ? ` ${first}` : ""}!`,
+      who: brand,
+      kind,
+    });
+  }
   const who = (p.company || "").trim() || "your business";
   const where = p.city ? ` in ${p.city.split(",")[0].trim()}` : "";
   const trade = (p.industry || "").trim() ? (p.industry || "").toLowerCase() : "local businesses";

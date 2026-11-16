@@ -104,12 +104,14 @@ function ScoreChip({ score }: { score: number | null }) {
 }
 
 const smallBtn =
-  "inline-flex min-h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50";
+  "inline-flex min-h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 [&_svg]:size-3.5";
+// Each tone names its own hover text colour: the shared ghost button otherwise
+// turns the text white on hover, which is unreadable on these light backgrounds.
 const tone = {
-  primary: "bg-primary text-primary-foreground hover:bg-primary/90",
-  soft: "bg-secondary text-foreground hover:bg-secondary/70",
-  good: "bg-success/15 text-success-foreground hover:bg-success/25",
-  bad: "bg-destructive/10 text-destructive hover:bg-destructive/20",
+  primary: "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
+  soft: "bg-secondary text-foreground hover:bg-secondary/70 hover:text-foreground",
+  good: "bg-success/15 text-success-foreground hover:bg-success/25 hover:text-success-foreground",
+  bad: "bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive",
 };
 
 export function InstagramList({
@@ -301,7 +303,9 @@ export function InstagramList({
       <Button variant="ghost"
         type="button"
         onClick={() => setSort(k)}
-        className={`inline-flex items-center gap-1 uppercase tracking-wide hover:text-foreground ${sort.key === k ? "text-foreground" : ""}`}
+        // A column heading, not a button-sized control: without these the columns
+        // grow until the actions no longer fit beside them.
+        className={`inline-flex h-auto items-center gap-1 p-0 text-xs font-semibold uppercase tracking-wide hover:bg-transparent hover:text-foreground [&_svg]:size-3 ${sort.key === k ? "text-foreground" : ""}`}
       >
         {children}
         {sort.key === k ? (
@@ -341,7 +345,8 @@ export function InstagramList({
 
   const actions = (a: IgAccount) => (
     <div
-      className={`flex flex-wrap items-center gap-1.5 md:justify-end ${a.stage === "check" ? "" : "md:flex-nowrap"}`}
+      // One line on a wide screen; on a laptop the buttons wrap rather than push the table sideways.
+      className={`flex flex-wrap items-center gap-1.5 md:justify-end ${a.stage === "check" ? "" : "min-[1340px]:flex-nowrap"}`}
     >
       {a.stage === "check" && (
         <>
@@ -605,8 +610,8 @@ export function InstagramList({
               }}
               className={`inline-flex min-h-9 shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                 tab === s.id
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-secondary"
+                  ? "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
+                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
               }`}
             >
               {s.label}
@@ -796,9 +801,12 @@ export function InstagramList({
                     className="h-4 w-4 rounded border-border"
                   />
                 </td>
-                <td className="max-w-[230px] px-3 py-3">{account(a)}</td>
-                <td className="max-w-[260px] px-3 py-3">{business(a)}</td>
-                <td className="px-3 py-3 text-muted-foreground">
+                <td className="max-w-[210px] px-3 py-3 min-[1340px]:max-w-[230px]">{account(a)}</td>
+                {/* Names and towns wrap between words, never in the middle of one */}
+                <td className="max-w-[260px] px-3 py-3 [overflow-wrap:break-word]">
+                  {business(a)}
+                </td>
+                <td className="px-3 py-3 text-muted-foreground [overflow-wrap:break-word]">
                   {a.city}
                   {a.industry && <span className="block text-xs">{a.industry}</span>}
                 </td>
@@ -811,7 +819,8 @@ export function InstagramList({
                 <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
                   {whenText(a).replace(/^(Saved|DMed|Replied|Set aside) /, "")}
                 </td>
-                <td className="px-3 py-3">{actions(a)}</td>
+                {/* Wide enough for two buttons side by side, so a wrapped row stays two lines high */}
+                <td className="min-w-[11.5rem] px-3 py-3">{actions(a)}</td>
               </tr>
             ))}
             {page.length === 0 && (

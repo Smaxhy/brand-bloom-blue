@@ -1591,11 +1591,13 @@ export function Scraper({
       : n >= 45
         ? "bg-[oklch(.78_.15_80)]"
         : "bg-[oklch(.8_.02_290)]";
+  // The hover colours are named for both states: two of these pills are the shared
+  // ghost button, which otherwise turns the label white on hover (unreadable when off).
   const pill = (on: boolean) =>
     `rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
       on
-        ? "border-transparent bg-[var(--brand-violet)] text-white"
-        : "border-border bg-background text-muted-foreground hover:bg-secondary"
+        ? "border-transparent bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
+        : "border-border bg-background text-muted-foreground hover:bg-secondary hover:text-foreground"
     }`;
   const busy = scrapeBusy || enrichBusy;
 

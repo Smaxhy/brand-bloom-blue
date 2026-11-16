@@ -1,3 +1,8 @@
+# November 16 ecommerce scanner update
+- [x] Install ecommerce brand discovery, saved results and manual Instagram workflow; preserve sending limits, private credentials and crash protections.
+- [x] Passed 534 regression tests and checked desktop/phone filters, Save and Undo using isolated data; no paid searches or outbound messages.
+- [ ] Signed-in saved-data and live ecommerce searches: blocked by no matching own-account session; preview sign-in required.
+
 # November 14 Instagram update
 - [x] Install Instagram DMs list, safer account matching and lower-cost Instagram-only searches; preserve existing data, sending limits and scan protections.
 - [x] Verify 411 regression tests, clean preview build, public/admin entry and isolated desktop/phone DM/reply moves without sending or saving test data.
