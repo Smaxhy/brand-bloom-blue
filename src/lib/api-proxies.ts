@@ -47,6 +47,8 @@ import { runTick, keepAlive, verifySchedulerToken } from "./tick";
 import { requestIpHash, securityJson } from "./request-security";
 import { MAX_SCRAPE_RESULTS } from "./scrape-limits";
 import { fetchPublicSite } from "./public-site-fetch";
+import { ecomScanStep, type EcomStepInput } from "./ecom-scan";
+import { storeContactPaths } from "./ecom-brands";
 import {
   bioLinkUrl,
   igResultsHaveProfiles,
@@ -183,6 +185,7 @@ export async function handleApiRequest(
   if (outreach) return outreach;
   if (path === "/api/geocode") return geocode(url, env);
   if (path === "/api/discover/businesses") return discoverBusinesses(request, env);
+  if (path === "/api/discover/ecom") return ecomDiscover(request, env);
   if (path === "/api/enrich/free") return enrichFree(request, env);
   if (path === "/api/verify-domain") return verifyDomain(url);
   if (path === "/api/diag") return diag(env);
@@ -467,15 +470,16 @@ export type EnrichRow = {
 /** One website may take at most this long; a slow site can no longer stall a whole reveal. */
 const SITE_TIMEOUT_MS = 25_000;
 
-export async function enrichPeople(env: Env, people: EnrichInput[], opts: { usePaid?: boolean; useClaude?: boolean; revealPhone?: boolean; findLinkedin?: boolean; /** Search for the Instagram when the listing and website don't give it (opt-in; uses search credits). */ findInstagram?: boolean; /** Only look for the Instagram: no paid contact lookups and no email or website searches (the website is still read, free). */ instagramOnly?: boolean; allowGuesses?: boolean } = {}): Promise<{ results: EnrichRow[]; warnings: string[] }> {
-  if (!people.length) return { results: [], warnings: [] };
-  // Paid sources are OPT-IN per call. Default is free only.
-  const usePaid = opts.usePaid === true;
-  const apolloKey = usePaid ? secret(env, "APOLLO_API_KEY") : undefined;
-  const hunterKey = usePaid ? secret(env, "HUNTER_API_KEY") : undefined;
-  // Free Google-style search first (Serper ≈ $1/1k after a free tier, then Brave's
-  // free tier), and SerpApi only as a paid fallback. We walk down the chain as
-  // each provider runs out, so one empty account no longer stops discovery.
+/**
+ * The search providers in the order they are tried, as one serialized `search`:
+ * Serper (≈ $1/1k after a free tier), then Brave's free tier, and SerpApi only
+ * with the paid opt-in. We walk down the chain as each provider runs out, so one
+ * empty account no longer stops discovery. Callers queue behind each other, so
+ * concurrent lookups cannot skip a provider and Brave's one-search-a-second pace
+ * holds. Shared by contact enrichment and the ecom brand scan: neither can spend
+ * searches outside these limits.
+ */
+function searchWaterfall(env: Env, usePaid: boolean, warn: (w: string) => void) {
   const serperKey = secret(env, "SERPER_API_KEY");
   const braveKey = secret(env, "BRAVE_SEARCH_API_KEY");
   const serpapiKey = usePaid ? secret(env, "SERPAPI_API_KEY") : undefined;
@@ -483,14 +487,11 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
   if (serperKey) providers.push({ kind: "serper", key: serperKey });
   if (braveKey) providers.push({ kind: "brave", key: braveKey });
   if (serpapiKey) providers.push({ kind: "serpapi", key: serpapiKey });
-  // Provider problems (quota used up, bad key) — shown once in the scraper banner.
-  const warnings = new Set<string>();
-  const warn = (w: string) => warnings.add(w);
   // Serialize fallback selection so concurrent contacts cannot skip a provider.
   let providerIndex = 0;
   let searchTail: Promise<unknown> = Promise.resolve();
   let lastBraveSearch = 0;
-  const search = (q: string): ReturnType<typeof googleSearch> => {
+  const search = (q: string, opts: SearchOpts = {}): ReturnType<typeof googleSearch> => {
     const deadline = Date.now() + 11_000;
     const run = searchTail.then(async () => {
       while (providerIndex < providers.length && Date.now() < deadline) {
@@ -502,7 +503,7 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
           if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
           lastBraveSearch = Date.now();
         }
-        const result = await withTimeout(googleSearch(provider, q), Math.max(1, deadline - Date.now()), "search");
+        const result = await withTimeout(googleSearch(provider, q, opts), Math.max(1, deadline - Date.now()), "search");
         if (result.error) warn(result.error);
         if (!result.stop) return { ...result, answered: !result.error };
         providerIndex++;
@@ -514,6 +515,19 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
     searchTail = run.catch(() => undefined);
     return run;
   };
+  return { providers, search };
+}
+
+export async function enrichPeople(env: Env, people: EnrichInput[], opts: { usePaid?: boolean; useClaude?: boolean; revealPhone?: boolean; findLinkedin?: boolean; /** Search for the Instagram when the listing and website don't give it (opt-in; uses search credits). */ findInstagram?: boolean; /** Only look for the Instagram: no paid contact lookups and no email or website searches (the website is still read, free). */ instagramOnly?: boolean; allowGuesses?: boolean } = {}): Promise<{ results: EnrichRow[]; warnings: string[] }> {
+  if (!people.length) return { results: [], warnings: [] };
+  // Paid sources are OPT-IN per call. Default is free only.
+  const usePaid = opts.usePaid === true;
+  const apolloKey = usePaid ? secret(env, "APOLLO_API_KEY") : undefined;
+  const hunterKey = usePaid ? secret(env, "HUNTER_API_KEY") : undefined;
+  // Provider problems (quota used up, bad key) — shown once in the scraper banner.
+  const warnings = new Set<string>();
+  const warn = (w: string) => warnings.add(w);
+  const { providers, search } = searchWaterfall(env, usePaid, warn);
 
   const results = people.map((p) => ({
     id: p.id,
@@ -828,6 +842,64 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
   return { results: results as EnrichRow[], warnings: Array.from(warnings) };
 }
 
+/* --------------------------------------------------------------------- */
+/* Ecom brand scan — one search per request, then the shops are read      */
+/* --------------------------------------------------------------------- */
+
+/**
+ * One step of an ecom scan (see ecom-scan.ts). The admin screen asks step by
+ * step, so it counts every search and can stop between any two. Searches go
+ * through the same serialized waterfall as contact enrichment — Serper, then
+ * Brave — and never through SerpApi, which needs the paid opt-in. Reading the
+ * shops is free and uses the guarded website reader. Nothing is sent to anyone.
+ */
+async function ecomDiscover(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") return json({ error: "POST only" }, 405);
+  let body: EcomStepInput & { hideSeen?: boolean; since?: string } = {};
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    return json({ error: "invalid json" }, 400);
+  }
+  const warnings = new Set<string>();
+  const { providers, search } = searchWaterfall(env, false, (w) => warnings.add(w));
+  if (!providers.length)
+    return json({
+      brands: [],
+      query: "",
+      searches: 0,
+      done: false,
+      stopped: true,
+      retry: false,
+      skipped: { notBrands: 0, seen: 0, notShops: 0 },
+      noProvider: true,
+      warnings: [],
+    });
+  const db = Db.available(env) ? new Db(env) : null;
+  const since =
+    typeof body.since === "string" && Number.isFinite(Date.parse(body.since)) ? body.since : null;
+  const result = await ecomScanStep(body, {
+    search,
+    // The plan is written for the provider that answers first: with no Serper key that is Brave.
+    operators: providers[0].kind !== "brave",
+    readSite: ({ website, companyName }) =>
+      freeEnrich({
+        website,
+        companyName,
+        maxPages: 5,
+        keepPages: true,
+        pagesFor: ({ html, domain }) => storeContactPaths(html, domain),
+      }),
+    // Blacklisted companies (bounced, opted out) are always hidden; "seen before" only with Only new.
+    hideSeen: db
+      ? async (list) =>
+          (await hideSeenBusinesses(db, list, { hideSeen: body.hideSeen !== false, since })).kept
+      : undefined,
+    remember: db ? (list) => rememberBusinesses(db, list) : undefined,
+  });
+  return json({ ...result, warnings: [...warnings] });
+}
+
 async function enrich(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") return json({ error: "POST only" }, 405);
   let payload: {
@@ -900,17 +972,29 @@ interface SearchKey {
   kind: SearchProvider;
   key: string;
 }
+/** Which page of results (from 1) and which country's results to ask for. Both optional. */
+interface SearchOpts {
+  page?: number;
+  /** Two-letter country ("us", "gb", "be"): the market the results should come from. */
+  gl?: string;
+}
 
 async function googleSearch(
   p: SearchKey,
   q: string,
+  opts: SearchOpts = {},
 ): Promise<{ blob: string; firstLink: string; results: SearchResult[]; error?: string; stop?: boolean; /** A provider gave a real answer (set by the waterfall). */ answered?: boolean }> {
+  const page = Math.max(1, Math.min(10, Math.floor(opts.page || 1)));
+  const gl = /^[a-z]{2}$/i.test(opts.gl || "") ? (opts.gl as string).toLowerCase() : "";
   if (p.kind === "brave") {
     // Brave Search — a free tier (≈2,000 searches/mo) that keeps website/email
     // discovery working after Serper runs out. Returns the real result links.
     const u = new URL("https://api.search.brave.com/res/v1/web/search");
     u.searchParams.set("q", q);
     u.searchParams.set("count", "10");
+    // Brave counts pages from 0 and stops at 9.
+    if (page > 1) u.searchParams.set("offset", String(Math.min(page - 1, 9)));
+    if (gl) u.searchParams.set("country", gl.toUpperCase());
     const res = await fetch(u.toString(), {
       headers: { "X-Subscription-Token": p.key, Accept: "application/json" },
       signal: AbortSignal.timeout(12_000),
@@ -934,6 +1018,9 @@ async function googleSearch(
     u.searchParams.set("engine", "google");
     u.searchParams.set("q", q);
     u.searchParams.set("num", "10");
+    if (page > 1) u.searchParams.set("start", String((page - 1) * 10));
+    // Google itself writes the United Kingdom as "uk".
+    if (gl) u.searchParams.set("gl", gl === "gb" ? "uk" : gl);
     u.searchParams.set("api_key", p.key);
     const res = await fetch(u.toString());
     if (!res.ok) {
@@ -975,7 +1062,7 @@ async function googleSearch(
   const res = await fetch("https://google.serper.dev/search", {
     method: "POST",
     headers: { "X-API-KEY": p.key, "Content-Type": "application/json" },
-    body: JSON.stringify({ q, num: 10 }),
+    body: JSON.stringify({ q, num: 10, ...(page > 1 ? { page } : {}), ...(gl ? { gl } : {}) }),
   });
   if (!res.ok) {
     const p = searchProviderProblem("Serper", res.status, await res.text().catch(() => ""));

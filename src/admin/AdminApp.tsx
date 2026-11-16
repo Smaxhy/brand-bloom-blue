@@ -15,6 +15,7 @@ import {
   ListChecks,
   BarChart3,
   Instagram,
+  ShoppingBag,
 } from "lucide-react";
 import logo from "@/assets/inspirova-logo.png";
 import { supabase } from "@/integrations/supabase/client";
@@ -32,6 +33,7 @@ import { Dashboard } from "./views/Dashboard";
 import { Pipeline } from "./views/Pipeline";
 import { Leads } from "./views/Leads";
 import { Scraper } from "./views/Scraper";
+import { EcomScanner } from "./views/EcomScanner";
 import { RawData } from "./views/RawData";
 import { InstagramList } from "./views/InstagramList";
 import { Clients } from "./views/Clients";
@@ -50,6 +52,7 @@ type ViewId =
   | "pipeline"
   | "leads"
   | "scraper"
+  | "ecom"
   | "raw"
   | "instagram"
   | "clients"
@@ -69,6 +72,7 @@ const BASE_NAV: { id: ViewId; label: string; icon: React.ElementType }[] = [
   { id: "tasks", label: "Tasks", icon: ListChecks },
   { id: "leads", label: "Lead Generation", icon: Sparkles },
   { id: "scraper", label: "Data Scraper", icon: Radar },
+  { id: "ecom", label: "Ecom Scanner", icon: ShoppingBag },
   { id: "raw", label: "Raw Data", icon: Database },
   { id: "instagram", label: "Instagram DMs", icon: Instagram },
   { id: "clients", label: "Clients", icon: Users },
@@ -87,8 +91,10 @@ export function AdminApp() {
   const [accountName, setAccountName] = useState("");
   const [view, setView] = useState<ViewId>("dashboard");
   const [scraperOpened, setScraperOpened] = useState(false);
+  const [ecomOpened, setEcomOpened] = useState(false);
   useEffect(() => {
     if (view === "scraper") setScraperOpened(true);
+    if (view === "ecom") setEcomOpened(true);
   }, [view]);
   const [data, setData] = useState<AdminData | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -124,6 +130,7 @@ export function AdminApp() {
       setLoadError("");
       // A signed-out session (or the next account) never inherits a background scraper.
       setScraperOpened(false);
+      setEcomOpened(false);
       unsubData?.();
       unsubData = null;
     }
@@ -485,6 +492,13 @@ export function AdminApp() {
           {(view === "scraper" || scraperOpened) && (
             <div hidden={view !== "scraper"}>
               <Scraper data={data} update={update} go={setView} />
+            </div>
+          )}
+          {/* The same for the Ecom scanner: a running scan carries on, and its
+              brands land in the list, while you work on another page. */}
+          {(view === "ecom" || ecomOpened) && (
+            <div hidden={view !== "ecom"}>
+              <EcomScanner data={data} update={update} go={setView} />
             </div>
           )}
           {view === "raw" && <RawData data={data} update={update} go={setView} />}

@@ -803,6 +803,54 @@ export function igResultsHaveProfiles(results: SearchResult[]): boolean {
   return results.slice(0, 10).some((r) => igLinkKind(r.link || "").kind === "profile");
 }
 
+/** What a search result says about the Instagram profile it points at. */
+export interface IgProfileResult {
+  handle: string;
+  /** The name on the profile ("" when the result only shows the handle). */
+  name: string;
+  followers: number | null;
+  /** The profile's own description, as far as the result quotes it. */
+  bio: string;
+}
+
+/**
+ * A search result that is an Instagram PROFILE: not a post, a reel, a hashtag
+ * or one of Instagram's own pages. Used to find accounts by what they are
+ * about (a niche), where there is no business name to match yet.
+ */
+export function igProfileResult(r: SearchResult): IgProfileResult | null {
+  const where = igLinkKind(r.link || "");
+  if (where.kind !== "profile") return null;
+  const title = (r.title || "").replace(/\s+/g, " ").trim();
+  const snippet = (r.snippet || "").replace(/\s+/g, " ").trim();
+  const followers = igFollowers(`${title} ${snippet}`);
+  // A real profile result names its handle or shows its numbers (the same test as pickSearchInstagram).
+  const shown =
+    new RegExp(`\\(@${escapeRe(where.handle)}\\)`, "i").test(`${title} ${snippet}`) ||
+    followers != null ||
+    /instagram photos and videos/i.test(title);
+  if (!shown) return null;
+  const name = title.split(/\s*\(@|\s+[•·|-]\s+Instagram|\s+on Instagram/i)[0].trim();
+  // 12K Followers, 310 Following, 245 Posts - Name (@handle) on Instagram: "what the profile says"
+  // (also written "12K followers · 310 following · 245 posts · @handle: “what the profile says”").
+  const afterCounts = snippet.replace(/^.{0,80}?\bposts\b\s*[-–—·•|:,]?\s*/i, (lead) =>
+    /followers/i.test(lead) ? "" : lead,
+  );
+  const said =
+    /\bon Instagram:\s*([\s\S]*)$/i.exec(afterCounts) ??
+    new RegExp(`^@?${escapeRe(where.handle)}\\s*:\\s*([\\s\\S]*)$`, "i").exec(afterCounts);
+  const bio = (said ? said[1] : afterCounts)
+    .replace(/^See Instagram photos and videos from\b.*$/i, "")
+    .replace(/^["“]|["”]$/g, "")
+    .trim();
+  return {
+    handle: where.handle,
+    name: name.replace(/^@/, "").toLowerCase() === where.handle ? "" : name,
+    followers,
+    bio,
+  };
+}
+
 /**
  * The business's profile among search results — only when something beyond
  * "it was the first hit" says it is theirs: the name, their website or phone

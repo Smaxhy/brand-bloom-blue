@@ -1,0 +1,685 @@
+import { describe, expect, it } from "vitest";
+import {
+  ECOM_MARKETS,
+  ECOM_MAX_STEPS,
+  ECOM_NICHES,
+  type EcomBrand,
+  bioWebsite,
+  ecomFit,
+  ecomCursorKey,
+  ecomIndustry,
+  ecomKind,
+  ecomMarket,
+  ecomQueryPlan,
+  igBrandPages,
+  looksLikeBrandPage,
+  mergeEcomBrand,
+  mergeEcomBrands,
+  notABrandShop,
+  readStore,
+  resolveNiche,
+  storeCandidates,
+  storeContactPaths,
+  titleBrand,
+} from "./ecom-brands";
+import { igProfileResult } from "./instagram";
+
+const brand = (over: Partial<EcomBrand>): EcomBrand => {
+  const b = {
+    key: "kaijuclothing.com",
+    name: "Kaiju Clothing",
+    website: "kaijuclothing.com",
+    about: "",
+    kind: "shop" as const,
+    platform: "Shopify",
+    email: "",
+    instagram: "",
+    instagramSure: false,
+    instagramVia: "" as const,
+    instagramWhy: "",
+    followers: null,
+    tiktok: "",
+    tools: [],
+    currency: "",
+    niche: "Anime",
+    industry: "online anime brands",
+    source: "stores" as const,
+    query: "anime streetwear",
+    foundAt: 1_000,
+    ...over,
+  };
+  return { ...b, ...ecomFit(b) };
+};
+
+describe("the niche to scan for", () => {
+  it("knows the presets by name, whatever the capitals", () => {
+    expect(resolveNiche("Anime")?.id).toBe("anime");
+    expect(resolveNiche("  household ")?.noun).toBe("home goods");
+    expect(resolveNiche("Kids & baby")?.id).toBe("kids");
+  });
+
+  it("takes anything typed, and several things with commas", () => {
+    const one = resolveNiche("Handmade Soap");
+    expect(one).toMatchObject({ id: "custom", label: "Handmade soap", terms: ["handmade soap"] });
+    expect(resolveNiche("cat furniture, cat trees; cat furniture")?.terms).toEqual([
+      "cat furniture",
+      "cat trees",
+    ]);
+  });
+
+  it("never lets typed text become a search operator", () => {
+    const terms = resolveNiche('site:evil.com "k-pop merch" (free)')?.terms ?? [];
+    expect(terms).toEqual(["site evil.com k-pop merch free"]);
+  });
+
+  it("has nothing to scan for when nothing was typed", () => {
+    expect(resolveNiche("")).toBeNull();
+    expect(resolveNiche(" , ; ")).toBeNull();
+    expect(resolveNiche(undefined)).toBeNull();
+  });
+
+  it("gives every preset eight different things to search for", () => {
+    for (const n of ECOM_NICHES) {
+      expect(n.terms.length).toBe(8);
+      expect(new Set(n.terms).size).toBe(8);
+    }
+  });
+});
+
+describe("the trade a brand is saved under", () => {
+  it("reads right in a sentence", () => {
+    expect(ecomIndustry(resolveNiche("anime")!)).toBe("online anime brands");
+    expect(ecomIndustry(resolveNiche("household")!)).toBe("online home goods brands");
+    expect(ecomIndustry(resolveNiche("scented candles")!)).toBe("online scented candle brands");
+    expect(ecomIndustry(resolveNiche("cat toys")!)).toBe("online cat toy brands");
+    expect(ecomIndustry(resolveNiche("watches")!)).toBe("online watch brands");
+    expect(ecomIndustry(resolveNiche("phone accessories")!)).toBe("online phone accessory brands");
+  });
+
+  it("leaves words alone that it cannot safely make singular", () => {
+    expect(ecomIndustry(resolveNiche("hoodies")!)).toBe("online hoodies brands");
+    expect(ecomIndustry(resolveNiche("vintage jeans")!)).toBe("online vintage jeans brands");
+    expect(ecomIndustry(resolveNiche("streetwear")!)).toBe("online streetwear brands");
+  });
+
+  it("is recognised again, and a local trade is not", () => {
+    expect(ecomKind("online anime brands")).toBe("anime");
+    expect(ecomKind("Online Home Goods Brands")).toBe("home goods");
+    expect(ecomKind("roofers")).toBe("");
+    expect(ecomKind("online marketing")).toBe("");
+    expect(ecomKind("")).toBe("");
+  });
+});
+
+describe("the searches of a scan", () => {
+  const anime = resolveNiche("anime")!;
+
+  it("covers every term with a different kind of search in the first round", () => {
+    const plan = ecomQueryPlan(anime, "stores");
+    const first = plan.slice(0, 8).map((s) => s.q);
+    for (const term of anime.terms) expect(first.some((q) => q.startsWith(term))).toBe(true);
+    expect(first[0]).toBe('anime streetwear "powered by shopify"');
+    expect(first[1]).toContain('"add to cart"');
+    expect(first[2]).toBe("anime merch inurl:collections");
+    expect(plan.every((s) => s.page >= 1 && s.page <= 3)).toBe(true);
+  });
+
+  it("never plans the same search twice, and stops at the limit", () => {
+    for (const source of ["stores", "instagram"] as const) {
+      const plan = ecomQueryPlan(anime, source);
+      expect(new Set(plan.map((s) => `${s.q}#${s.page}`)).size).toBe(plan.length);
+      expect(plan.length).toBeLessThanOrEqual(ECOM_MAX_STEPS);
+    }
+  });
+
+  it("gives one typed term every kind of search, then the next pages", () => {
+    const plan = ecomQueryPlan(resolveNiche("handmade soap")!, "stores");
+    // One term is searched five pages deep, so a later scan still has new searches to ask.
+    expect(plan.length).toBe(25);
+    expect(plan[24].page).toBe(5);
+    expect(
+      ecomQueryPlan(resolveNiche("cat furniture, cat trees, cat beds")!, "stores").at(-1)?.page,
+    ).toBe(4);
+    expect(plan.slice(0, 5).every((s) => s.page === 1)).toBe(true);
+    expect(new Set(plan.slice(0, 5).map((s) => s.q)).size).toBe(5);
+    expect(plan[5]).toEqual({ q: plan[0].q, page: 2 });
+  });
+
+  it("asks a provider without Google's inurl: for the words a shop's menu carries instead", () => {
+    const google = ecomQueryPlan(anime, "stores");
+    const brave = ecomQueryPlan(anime, "stores", ECOM_MARKETS[0], { operators: false });
+    expect(google.some((s) => s.q.includes("inurl:"))).toBe(true);
+    expect(brave.some((s) => s.q.includes("inurl:"))).toBe(false);
+    expect(brave.length).toBe(google.length);
+    expect(brave[2].q).toBe('anime merch "shop all" "new arrivals"');
+    expect(brave[4].q).toBe('anime figures "best sellers" "shipping policy"');
+    // The searches every provider understands are the same.
+    expect(brave[0]).toEqual(google[0]);
+    expect(brave[1]).toEqual(google[1]);
+  });
+
+  it("names a scan by its niche, country and source, however the niche was typed", () => {
+    expect(ecomCursorKey("Anime", "", "stores")).toBe("anime||stores");
+    expect(ecomCursorKey(" anime ", "BE", "instagram")).toBe("anime|be|instagram");
+    expect(ecomCursorKey("Cat Trees, cat furniture", "zz", "stores")).toBe(
+      "cat trees,cat furniture||stores",
+    );
+    expect(ecomCursorKey("", "", "stores")).toBe("");
+  });
+
+  it("asks Instagram for profile pages only", () => {
+    const plan = ecomQueryPlan(anime, "instagram");
+    expect(plan.every((s) => s.q.startsWith("site:instagram.com "))).toBe(true);
+    expect(plan[0].q).toBe('site:instagram.com anime streetwear brand shop "followers"');
+  });
+
+  it("uses the words shops use in the chosen country", () => {
+    const be = ecomMarket("be");
+    expect(be.gl).toBe("be");
+    const plan = ecomQueryPlan(resolveNiche("kaarsen")!, "stores", be);
+    expect(plan[1].q).toBe(
+      'kaarsen ("in winkelwagen" OR "ajouter au panier") -amazon -etsy -ebay -aliexpress -temu -walmart',
+    );
+    expect(plan[3].q).toContain("webshop");
+    expect(ecomMarket("zz")).toBe(ECOM_MARKETS[0]);
+    expect(ecomMarket(undefined).gl).toBe("");
+  });
+});
+
+describe("who is not a brand to contact", () => {
+  it("leaves out marketplaces, giants, builders, link pages and social sites in every country", () => {
+    for (const d of [
+      "amazon.com",
+      "www.amazon.co.uk",
+      "etsy.com",
+      "ebay.de",
+      "store.crunchyroll.com",
+      "hottopic.com",
+      "shopify.com",
+      "myshopify.com",
+      "redbubble.com",
+      "linktr.ee",
+      "instagram.com",
+      "reddit.com",
+      "x.com",
+      "bol.com",
+      "next.co.uk",
+      "target.com.au",
+      "gmail.com",
+      "forbes.com",
+      "usa.gov",
+      "1.2.3.4",
+      "localhost",
+      "",
+    ])
+      expect(notABrandShop(d), d).toBe(true);
+  });
+
+  it("keeps a brand's own shop, also on its shop software's address", () => {
+    for (const d of [
+      "kaijuclothing.com",
+      "us.super-groupies.com",
+      "kaiju.myshopify.com",
+      "kaiju.bigcartel.com",
+      "targetarchery.co.uk",
+      "amazonia-candles.com",
+      "soraclothing.ca",
+    ])
+      expect(notABrandShop(d), d).toBe(false);
+  });
+});
+
+describe("a brand's name in a page title", () => {
+  it("is the part that is the domain", () => {
+    expect(titleBrand("Anime Hoodies & Streetwear – Kaiju Clothing", "kaijuclothing.com")).toBe(
+      "Kaiju Clothing",
+    );
+    expect(titleBrand("KAIJU CO | Anime Streetwear", "kaijuco.shop")).toBe("KAIJU CO");
+    expect(titleBrand("Sora World: anime apparel made in Canada", "soraworld.ca")).toBe(
+      "Sora World",
+    );
+  });
+
+  it("is never one generic word of the domain", () => {
+    expect(titleBrand("Anime | Hoodies", "animeshop.com")).toBe("Animeshop");
+  });
+
+  it("falls back to the domain, written as a name", () => {
+    expect(titleBrand("Home", "kaiju-clothing.com")).toBe("Kaiju Clothing");
+    expect(titleBrand(undefined, "www.otaku-supply.co.uk")).toBe("Otaku Supply");
+  });
+});
+
+describe("shops in a page of search results", () => {
+  it("keeps one line per site and counts what it left out", () => {
+    const { candidates, skipped } = storeCandidates([
+      {
+        link: "https://kaijuclothing.com/collections/hoodies",
+        title: "Anime Hoodies – Kaiju Clothing",
+        snippet: "Free shipping over $80.",
+      },
+      { link: "https://kaijuclothing.com/products/akira-tee", title: "Akira Tee – Kaiju Clothing" },
+      { link: "https://www.etsy.com/shop/DOTIC", title: "DOTIC - Etsy" },
+      {
+        link: "https://www.amazon.com/anime-hoodie/s?k=anime+hoodie",
+        title: "Amazon.com: anime hoodie",
+      },
+      {
+        link: "https://animecollective.com/best-quality-anime-clothing/",
+        title: "Best quality anime clothing for the price",
+      },
+      { link: "https://www.instagram.com/kaijuclothing/", title: "Kaiju (@kaijuclothing)" },
+      { link: "ftp://weird.example/file", title: "x" },
+      { link: "https://otaku.myshopify.com/", title: "Otaku Supply" },
+    ]);
+    expect(candidates.map((c) => c.domain)).toEqual([
+      "kaijuclothing.com",
+      "animecollective.com",
+      "otaku.myshopify.com",
+    ]);
+    expect(skipped).toBe(3);
+    expect(candidates[0]).toMatchObject({
+      name: "Kaiju Clothing",
+      shopLink: true,
+      snippet: "Free shipping over $80.",
+    });
+    // A magazine page is not a shop page: whether the site sells is settled by reading it.
+    expect(candidates[1].shopLink).toBe(false);
+    expect(candidates[2].shopLink).toBe(true);
+  });
+});
+
+const SHOPIFY_HOME = `<!doctype html><html><head>
+<title>Kaiju Clothing &ndash; Anime Streetwear</title>
+<meta name="description" content="Limited anime streetwear drops, designed in Brussels &amp; shipped worldwide.">
+<meta property="og:site_name" content="Kaiju Clothing®">
+<script>window.Shopify = window.Shopify || {}; Shopify.shop = "kaiju-clothing.myshopify.com"; Shopify.currency = {"active":"EUR","rate":"1.0"}; Shopify.theme = {"name":"Dawn"};</script>
+<script id="web-pixels-manager-setup">{"pixel_type":"facebook_pixel"}</script>
+<script src="https://static.klaviyo.com/onsite/js/klaviyo.js"></script>
+</head><body>
+<div id="shopify-section-header" class="shopify-section"><a href="/collections/all">Shop</a><a href="/cart">Cart</a></div>
+<footer>
+<a href="/pages/about-us">Our story</a>
+<a href="/pages/contact">Contact</a>
+<a href="/pages/contact-wholesale">Wholesale contact</a>
+<a href="/policies/refund-policy">Refund policy</a>
+<a href="/policies/privacy-policy">Privacy policy</a>
+<a href="/collections/hoodies">Hoodies</a>
+<a href="/products/akira-tee">Akira tee</a>
+<a href="https://www.instagram.com/kaijuclothing">Instagram</a>
+<a href="mailto:hello@kaijuclothing.com">Email us</a>
+</footer></body></html>`;
+
+describe("what a shop's pages say about it", () => {
+  it("reads a Shopify shop: software, name, what it sells, tools and currency", () => {
+    expect(readStore([{ path: "/", html: SHOPIFY_HOME }], "kaijuclothing.com")).toEqual({
+      platform: "Shopify",
+      sells: true,
+      name: "Kaiju Clothing",
+      about: "Limited anime streetwear drops, designed in Brussels & shipped worldwide.",
+      tools: ["Meta pixel", "Klaviyo"],
+      currency: "EUR",
+    });
+  });
+
+  it("reads a WooCommerce shop and takes the name from the title when the site gives none", () => {
+    const html = `<html><head><title>Shop anime figures - Otaku Supply</title>
+      <meta content="Figures and merch." name="description"></head>
+      <body class="home woocommerce-no-js"><a class="button" href="?add-to-cart=12">Add to basket</a>
+      <script>gtag('config', 'AW-123456789');</script></body></html>`;
+    expect(readStore([{ path: "/", html }], "otakusupply.co.uk")).toMatchObject({
+      platform: "WooCommerce",
+      sells: true,
+      name: "Otaku Supply",
+      about: "Figures and merch.",
+      tools: ["Google Ads"],
+    });
+  });
+
+  it("does not take a magazine for a shop because it shows product photos from Shopify's image host", () => {
+    const html = `<html><head><title>10 best anime clothing brands</title></head>
+      <body class="wp"><link href="/wp-content/themes/x/style.css">
+      <img src="https://cdn.shopify.com/s/files/1/0001/hoodie.jpg"><p>Free shipping on some of these!</p></body></html>`;
+    expect(readStore([{ path: "/", html }], "animecollective.com")).toMatchObject({
+      platform: "WordPress",
+      sells: false,
+    });
+  });
+
+  it("recognises a shop built by hand from its cart and its prices", () => {
+    const html = `<html><head><title>Sora World</title></head><body>
+      <a href="/cart">Cart (0)</a><button>Add to cart</button>
+      <script type="application/ld+json">{"@type":"Product","offers":{"priceCurrency":"CAD"}}</script></body></html>`;
+    expect(readStore([{ path: "/", html }], "soraworld.ca")).toMatchObject({
+      platform: "",
+      sells: true,
+      name: "Sora World",
+      currency: "CAD",
+    });
+  });
+
+  it("ignores the name a shop template leaves behind", () => {
+    const html = `<html><head><title>My Store</title><meta property="og:site_name" content="My Store">
+      <script>Shopify.shop = "x.myshopify.com";</script></head><body></body></html>`;
+    expect(readStore([{ path: "/", html }], "kaiju-clothing.com").name).toBe("Kaiju Clothing");
+  });
+
+  it("is not a shop when there is nothing to read", () => {
+    expect(readStore([], "kaijuclothing.com")).toMatchObject({
+      platform: "",
+      sells: false,
+      tools: [],
+    });
+  });
+});
+
+describe("where a shop keeps its email address", () => {
+  it("reads the contact page first, then a policy page and the about page: never products", () => {
+    expect(storeContactPaths(SHOPIFY_HOME, "kaijuclothing.com")).toEqual([
+      "/pages/contact",
+      "/policies/refund-policy",
+      "/pages/about-us",
+      "/pages/contact-wholesale",
+    ]);
+  });
+
+  it("stays on the shop's own site", () => {
+    const html = `<a href="https://other.com/contact">Contact</a><a href="//kaijuclothing.com/contact/">Contact</a>
+      <a href="/about">About</a>`;
+    expect(storeContactPaths(html, "kaijuclothing.com")).toEqual(["/contact", "/about"]);
+  });
+
+  it("tries the usual addresses when the homepage links none", () => {
+    expect(storeContactPaths("<script>Shopify.theme = {}</script>", "kaijuclothing.com")).toEqual([
+      "/pages/contact",
+      "/policies/refund-policy",
+      "/policies/privacy-policy",
+    ]);
+    expect(storeContactPaths("<p>hello</p>", "kaijuclothing.com")).toEqual([
+      "/contact",
+      "/contact-us",
+      "/about",
+    ]);
+  });
+});
+
+describe("the shop named in an Instagram description", () => {
+  it("is a real site of their own", () => {
+    expect(bioWebsite("Anime streetwear 🔥 shop: www.kaijuclothing.com")).toBe("kaijuclothing.com");
+    expect(bioWebsite("Worldwide shipping 📦 KAIJU.CO")).toBe("kaiju.co");
+    expect(bioWebsite("orders via otaku-supply.co.uk/new")).toBe("otaku-supply.co.uk");
+  });
+
+  it("is never a link page, a marketplace, an email address or two sentences run together", () => {
+    expect(bioWebsite("all links: linktr.ee/kaiju")).toBe("");
+    expect(bioWebsite("find us on etsy.com/shop/kaiju")).toBe("");
+    expect(bioWebsite("mail hello@kaijuclothing.com")).toBe("");
+    expect(bioWebsite("Anime streetwear.Worldwide shipping")).toBe("");
+    expect(bioWebsite("est.2020 · dm.us")).toBe("");
+    expect(bioWebsite("")).toBe("");
+  });
+});
+
+describe("brand pages on Instagram", () => {
+  const profile = (handle: string, name: string, followers: string, bio: string) => ({
+    link: `https://www.instagram.com/${handle}/`,
+    title: `${name} (@${handle}) • Instagram photos and videos`,
+    snippet: `${followers} Followers, 310 Following, 245 Posts - ${name} (@${handle}) on Instagram: "${bio}"`,
+  });
+
+  it("keeps the pages that read like a shop, with what the result says about them", () => {
+    const { pages, skipped } = igBrandPages([
+      profile(
+        "kaijuclothing",
+        "Kaiju Clothing",
+        "12.4K",
+        "Anime streetwear 🔥 Worldwide shipping 📦 kaijuclothing.com",
+      ),
+      profile("animedaily", "Anime Daily", "880K", "Daily anime memes and edits. DM for credit"),
+      profile(
+        "crunchyroll",
+        "Crunchyroll",
+        "6M",
+        "Shop the official store. Worldwide shipping. crunchyroll.com",
+      ),
+      {
+        link: "https://www.instagram.com/p/Cxyz123/",
+        title: "Kaiju Clothing on Instagram: new drop",
+        snippet: "120 likes",
+      },
+      {
+        link: "https://www.instagram.com/explore/tags/animestreetwear/",
+        title: "#animestreetwear",
+      },
+      profile(
+        "otaku.supply",
+        "OTAKU SUPPLY | anime goods",
+        "950",
+        "Small business · handmade pins · DM to order",
+      ),
+      profile("kaijuclothing", "Kaiju Clothing", "12.4K", "again"),
+    ]);
+    expect(pages.map((p) => p.handle)).toEqual(["kaijuclothing", "otaku.supply"]);
+    expect(skipped).toBe(2);
+    expect(pages[0]).toEqual({
+      handle: "kaijuclothing",
+      name: "Kaiju Clothing",
+      followers: 12_400,
+      bio: "Anime streetwear 🔥 Worldwide shipping 📦 kaijuclothing.com",
+      website: "kaijuclothing.com",
+    });
+    expect(pages[1]).toMatchObject({
+      name: "OTAKU SUPPLY | anime goods",
+      followers: 950,
+      website: "",
+    });
+  });
+
+  it("tells a brand from a fan page, a creator and an artist", () => {
+    const page = (handle: string, name: string, bio: string, followers: number | null = 5_000) =>
+      looksLikeBrandPage({ handle, name, bio, followers });
+    expect(page("kaijuclothing", "Kaiju Clothing", "")).toBe(true);
+    expect(page("kaiju", "KAIJU", "Shop now 👉 kaiju.co")).toBe(true);
+    expect(page("animememes", "Anime Memes", "Fan page. Shop link in bio")).toBe(false);
+    expect(page("miku_art", "Miku", "Artist · prints in my shop mikuart.com")).toBe(false);
+    expect(page("someguy", "Some Guy", "I like anime")).toBe(false);
+    expect(page("kaijuclothing", "Kaiju Clothing", "shop", 2_400_000)).toBe(false);
+    // An artist page that is plainly a shop too, with everything a shop says.
+    expect(page("mikuartshop", "Miku Art Shop", "Artist. Worldwide shipping. mikuart.com")).toBe(
+      true,
+    );
+  });
+});
+
+describe("how ready a brand is to contact", () => {
+  it("ranks a confirmed shop with an Instagram and an email first", () => {
+    const full = brand({
+      instagram: "https://www.instagram.com/kaijuclothing",
+      instagramSure: true,
+      email: "hello@kaijuclothing.com",
+      followers: 12_400,
+    });
+    const noEmail = brand({
+      instagram: "https://www.instagram.com/kaijuclothing",
+      instagramSure: true,
+    });
+    const likely = brand({
+      instagram: "https://www.instagram.com/kaijuclothing",
+      instagramSure: false,
+    });
+    const bare = brand({});
+    const unread = brand({ kind: "unread", platform: "" });
+    expect(full.score).toBe(95);
+    expect(full.why).toEqual([
+      "Shopify shop",
+      "Instagram found",
+      "email on their site",
+      "12k followers",
+    ]);
+    expect([full, noEmail, likely, bare, unread].map((b) => b.score)).toEqual([95, 60, 50, 35, 20]);
+    expect(unread.why).toEqual(["site could not be opened"]);
+  });
+
+  it("prefers an audience that is neither empty nor a household name", () => {
+    const at = (followers: number) => brand({ kind: "page", platform: "", followers }).score;
+    expect(at(12_000)).toBeGreaterThan(at(300_000));
+    expect(at(300_000)).toBeGreaterThan(at(500));
+    expect(at(500)).toBeGreaterThan(at(50));
+    expect(at(900_000)).toBe(at(50));
+  });
+});
+
+describe("one brand found twice", () => {
+  const shop = brand({
+    email: "hello@kaijuclothing.com",
+    instagram: "https://www.instagram.com/kaijuclothing",
+    instagramSure: false,
+    instagramVia: "site",
+    instagramWhy: "linked on one page of their website, under a different name (check it's theirs)",
+    tools: ["Meta pixel"],
+    foundAt: 2_000,
+  });
+  const page = brand({
+    key: "ig:kaijuclothing",
+    website: "",
+    kind: "page",
+    platform: "",
+    about: "Anime streetwear 🔥",
+    instagram: "https://www.instagram.com/kaijuclothing/",
+    instagramSure: true,
+    instagramVia: "search",
+    instagramWhy: "found by searching Instagram for anime brands",
+    followers: 12_400,
+    source: "instagram",
+    foundAt: 1_000,
+  });
+
+  it("becomes one line with everything known, whichever was found first", () => {
+    for (const merged of [mergeEcomBrand(shop, page), mergeEcomBrand(page, shop)]) {
+      expect(merged).toMatchObject({
+        key: "kaijuclothing.com",
+        kind: "shop",
+        platform: "Shopify",
+        email: "hello@kaijuclothing.com",
+        instagram: "https://www.instagram.com/kaijuclothing",
+        instagramSure: true,
+        instagramWhy: "linked on their shop, and found on Instagram",
+        followers: 12_400,
+        about: "Anime streetwear 🔥",
+        tools: ["Meta pixel"],
+        foundAt: 1_000,
+        score: 95,
+      });
+    }
+  });
+
+  it("is added once to a list, and a new brand is added", () => {
+    const other = brand({
+      key: "otakusupply.co.uk",
+      website: "otakusupply.co.uk",
+      name: "Otaku Supply",
+    });
+    const first = mergeEcomBrands([], [shop, other]);
+    expect(first.added).toBe(2);
+    const second = mergeEcomBrands(first.brands, [page, other, brand({ key: "", website: "" })]);
+    expect(second.added).toBe(0);
+    expect(second.brands.map((b) => b.key)).toEqual(["kaijuclothing.com", "otakusupply.co.uk"]);
+    expect(second.brands[0].followers).toBe(12_400);
+  });
+
+  it("keeps the account the shop itself links to over another one found by search", () => {
+    const sureShop = { ...shop, instagramSure: true };
+    const stranger = {
+      ...page,
+      website: "kaijuclothing.com",
+      key: "kaijuclothing.com",
+      instagram: "https://www.instagram.com/kaiju_fans",
+      followers: 40_000,
+    };
+    const merged = mergeEcomBrand(sureShop, stranger);
+    expect(merged.instagram).toBe("https://www.instagram.com/kaijuclothing");
+    expect(merged.followers).toBeNull();
+  });
+});
+
+describe("an Instagram profile in a search result", () => {
+  it("gives the account, its name, its followers and what it says about itself", () => {
+    expect(
+      igProfileResult({
+        link: "https://www.instagram.com/kaijuclothing/?hl=en",
+        title: "Kaiju Clothing (@kaijuclothing) • Instagram photos and videos",
+        snippet:
+          '12.4K Followers, 310 Following, 245 Posts - Kaiju Clothing (@kaijuclothing) on Instagram: "Anime streetwear 🔥 Worldwide shipping"',
+      }),
+    ).toEqual({
+      handle: "kaijuclothing",
+      name: "Kaiju Clothing",
+      followers: 12_400,
+      bio: "Anime streetwear 🔥 Worldwide shipping",
+    });
+  });
+
+  it("reads the description in the other way results are written, and a result without numbers", () => {
+    expect(
+      igProfileResult({
+        link: "https://www.instagram.com/kaijuclothing/",
+        title: "Kaiju Clothing (@kaijuclothing) · Instagram photos and videos",
+        snippet:
+          "12K followers · 310 following · 245 posts · @kaijuclothing: “Anime streetwear 🔥 Worldwide shipping”",
+      }),
+    ).toEqual({
+      handle: "kaijuclothing",
+      name: "Kaiju Clothing",
+      followers: 12_000,
+      bio: "Anime streetwear 🔥 Worldwide shipping",
+    });
+    expect(
+      igProfileResult({
+        link: "https://www.instagram.com/kaijuclothing/",
+        title: "Kaiju Clothing (@kaijuclothing) • Instagram photos and videos",
+        snippet: "Anime streetwear brand. New posts every week. Shop now.",
+      })?.bio,
+    ).toBe("Anime streetwear brand. New posts every week. Shop now.");
+  });
+
+  it("has no description when the result only repeats who it is", () => {
+    expect(
+      igProfileResult({
+        link: "https://instagram.com/otaku.supply",
+        title: "@otaku.supply • Instagram photos and videos",
+        snippet:
+          "950 Followers, 12 Following, 80 Posts - See Instagram photos and videos from Otaku Supply (@otaku.supply)",
+      }),
+    ).toEqual({ handle: "otaku.supply", name: "", followers: 950, bio: "" });
+  });
+
+  it("is never a post, a reel, a hashtag, one of Instagram's own pages or another site", () => {
+    for (const link of [
+      "https://www.instagram.com/p/Cxyz123/",
+      "https://www.instagram.com/kaijuclothing/p/Cxyz123/",
+      "https://www.instagram.com/reel/Cabc/",
+      "https://www.instagram.com/explore/tags/anime/",
+      "https://www.instagram.com/popular/anime-streetwear/",
+      "https://about.instagram.com/blog",
+      "https://kaijuclothing.com/",
+    ])
+      expect(
+        igProfileResult({
+          link,
+          title: "Kaiju (@kaijuclothing) • Instagram photos and videos",
+          snippet: "12K Followers",
+        }),
+        link,
+      ).toBeNull();
+  });
+
+  it("is not taken from a result that shows neither the handle nor any numbers", () => {
+    expect(
+      igProfileResult({
+        link: "https://www.instagram.com/kaijuclothing/",
+        title: "Log in • Instagram",
+        snippet: "",
+      }),
+    ).toBeNull();
+  });
+});
