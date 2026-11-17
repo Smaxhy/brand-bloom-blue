@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import siteHtml from "../inspirova.html?raw";
 import funnelHtml from "../inspirova-funnel.html?raw";
 import reelsHtml from "../inspirova-reels.html?raw";
-import logo from "@/assets/inspirova-logo.png";
+import logo from "@/assets/logo-new-transparent.png";
 import proof from "@/assets/proof-1.png";
 import publicCss from "../styles.css?url";
 
