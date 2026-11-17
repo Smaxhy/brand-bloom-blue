@@ -1,6 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import siteHtml from "../inspirova.html?raw";
+import funnelHtml from "../inspirova-funnel.html?raw";
+import reelsHtml from "../inspirova-reels.html?raw";
 import logo from "@/assets/inspirova-logo.png";
 import proof from "@/assets/proof-1.png";
 import publicCss from "../styles.css?url";
@@ -20,7 +22,9 @@ export const Route = createFileRoute("/")({
 function HomePage() {
   const frame = useRef<HTMLIFrameElement>(null);
   const navigate = useNavigate({ from: "/" });
-  const renderedHtml = siteHtml.replaceAll("__LOGO__", logo).replaceAll("__PROOF__", proof).replaceAll("__PUBLIC_CSS__", publicCss).replace(
+  // Two self-contained additions join the homepage document here: the Instagram video section and the growth check
+  // (floating launcher + question funnel). A function is used so "$" in those files is never read as a replacement pattern.
+  const renderedHtml = siteHtml.replace("</body>", () => `${reelsHtml}${funnelHtml}</body>`).replaceAll("__LOGO__", logo).replaceAll("__PROOF__", proof).replaceAll("__PUBLIC_CSS__", publicCss).replace(
     "</body>",
     `<script>
       document.querySelectorAll('a[href^="#"]').forEach(function(link) {
@@ -76,8 +80,12 @@ function HomePage() {
       title="Inspirova"
       id="main-content"
       srcDoc={renderedHtml}
-      className="block h-screen w-px min-w-full max-w-full border-0"
+      className="block h-dvh w-px min-w-full max-w-full border-0"
+      // Phones: 100dvh is the part of the screen that is really visible, so the launcher at the bottom is never under the browser bar.
       sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
+      // Lets a video inside the page (the Instagram section) go full screen.
+      allow="fullscreen; picture-in-picture; encrypted-media"
+      allowFullScreen
     />
   );
 }

@@ -1,0 +1,2 @@
+- Inject public growth-check and video fragments into the existing homepage iframe document; reuse protected contact intake and immutable Pipeline request history so the original calculator remains authoritative.
+- Load Instagram videos only after a visitor presses play to avoid unsolicited third-party loading.

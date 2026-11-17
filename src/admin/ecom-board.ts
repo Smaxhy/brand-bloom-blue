@@ -8,6 +8,7 @@ import { igHandle, igUrl } from "@/lib/instagram";
 import {
   type EcomBrand,
   type EcomSource,
+  ecomAbandoned,
   ecomBrandKeys,
   ecomCursorKey,
   ecomFit,
@@ -15,6 +16,7 @@ import {
   ecomQueryPlan,
   resolveNiche,
 } from "@/lib/ecom-brands";
+import { countryName } from "@/lib/ecom-detail";
 import type { RawBusiness } from "./store";
 
 /** Brands kept in the list (and saved with the account) at most. */
@@ -34,9 +36,45 @@ export function trimEcomList(brands: EcomBrand[], max = ECOM_LIST_MAX): EcomBran
 }
 
 /** How many searches one scan may use: the choices on the screen. */
-export const ECOM_SEARCH_CHOICES = [10, 20, 40] as const;
+export const ECOM_SEARCH_CHOICES = [10, 20, 40, 80] as const;
 
 const text = (v: unknown, max = 300): string => (typeof v === "string" ? v.slice(0, max) : "");
+const amount = (v: unknown): number | null =>
+  typeof v === "number" && Number.isFinite(v) && v >= 0 && v < 10_000_000 ? v : null;
+
+/**
+ * What a scan read about where a brand is and what its shop holds. Only what
+ * is known is kept, so a brand found before this was read stays as it was and
+ * the saved list stays small.
+ */
+function shopDetail(b: Partial<EcomBrand>): Partial<EcomBrand> {
+  const out: Partial<EcomBrand> = {};
+  if (/^[a-z]{2}$/.test(text(b.market, 3))) out.market = text(b.market, 2);
+  if (/^[A-Z]{2}$/.test(text(b.country, 3))) {
+    out.country = text(b.country, 2);
+    out.countrySure = b.countrySure === true;
+    out.place = text(b.place, 80);
+    out.countryWhy = text(b.countryWhy, 160);
+  }
+  if (b.match === "strong" || b.match === "some" || b.match === "none") out.match = b.match;
+  const products = amount(b.products);
+  if (products != null) out.products = Math.round(products);
+  const from = amount(b.priceFrom);
+  const to = amount(b.priceTo);
+  if (from != null && to != null) {
+    out.priceFrom = from;
+    out.priceTo = Math.max(from, to);
+  }
+  for (const key of ["newest", "updated"] as const)
+    if (
+      /^\d{4}-\d{2}-\d{2}$/.test(text(b[key], 11)) &&
+      Number.isFinite(Date.parse(text(b[key], 11)))
+    )
+      out[key] = text(b[key], 10);
+  if (text(b.phone, 40).trim()) out.phone = text(b.phone, 40).trim();
+  if (b.slow === true) out.slow = true;
+  return out;
+}
 
 /**
  * The list as it was saved, made safe to show: only whole brands, every field
@@ -76,9 +114,10 @@ export function cleanEcomBrands(value: unknown): EcomBrand[] {
       followers: handle ? followers : null,
       tiktok: text(b.tiktok, 200),
       tools: Array.isArray(b.tools)
-        ? b.tools.filter((t): t is string => typeof t === "string").slice(0, 8)
+        ? b.tools.filter((t): t is string => typeof t === "string").slice(0, 16)
         : [],
       currency: text(b.currency, 3),
+      ...shopDetail(b),
       niche: text(b.niche, 60),
       industry: text(b.industry, 120),
       source: b.source === "instagram" ? "instagram" : "stores",
@@ -120,13 +159,20 @@ export function cleanEcomCursors(value: unknown): Record<string, number> {
  */
 export function ecomStartAt(
   cursors: Record<string, number> | undefined,
-  scan: { niche: string; market: string; sources: EcomSource[]; onlyNew: boolean },
+  scan: {
+    niche: string;
+    market: string;
+    sources: EcomSource[];
+    onlyNew: boolean;
+    strict?: boolean;
+  },
 ): { startAt: Partial<Record<EcomSource, number>>; continuing: boolean } {
   const startAt: Partial<Record<EcomSource, number>> = {};
   const niche = resolveNiche(scan.niche);
   if (!niche || !scan.onlyNew) return { startAt, continuing: false };
   for (const source of scan.sources) {
-    const at = cursors?.[ecomCursorKey(scan.niche, scan.market, source)] ?? 0;
+    const at =
+      cursors?.[ecomCursorKey(scan.niche, scan.market, source, scan.strict !== false)] ?? 0;
     const searches = ecomQueryPlan(niche, source, ecomMarket(scan.market)).length;
     if (at > 0 && at < searches) startAt[source] = at;
   }
@@ -136,12 +182,12 @@ export function ecomStartAt(
 /** The progress to save after a scan: where each source it used now stands. */
 export function ecomCursorsAfter(
   cursors: Record<string, number> | undefined,
-  scan: { niche: string; market: string; sources: EcomSource[] },
+  scan: { niche: string; market: string; sources: EcomSource[]; strict?: boolean },
   next: Partial<Record<EcomSource, number>>,
 ): Record<string, number> {
   const out = { ...cleanEcomCursors(cursors) };
   for (const source of scan.sources) {
-    const key = ecomCursorKey(scan.niche, scan.market, source);
+    const key = ecomCursorKey(scan.niche, scan.market, source, scan.strict !== false);
     const at = next[source];
     if (!key || typeof at !== "number" || !Number.isInteger(at) || at < 0) continue;
     // Re-inserted so the niche scanned last is the one kept longest.
@@ -153,26 +199,47 @@ export function ecomCursorsAfter(
 
 /* ------------------------------------------------------------- the list */
 
-export type EcomFilter = "all" | "instagram" | "email" | "both";
+export type EcomFilter = "all" | "best" | "instagram" | "email" | "both";
 
 export const ECOM_FILTERS: { id: EcomFilter; label: string; hint: string }[] = [
   { id: "all", label: "All", hint: "Every brand found" },
+  {
+    id: "best",
+    label: "Best matches",
+    hint: "Confirmed shops that sell the niche, are based in the country you asked for, are still being run, and can be reached by Instagram or email",
+  },
   { id: "instagram", label: "With Instagram", hint: "Brands you can DM" },
   { id: "email", label: "With email", hint: "Brands you can email" },
   { id: "both", label: "Instagram + email", hint: "Brands you can reach both ways" },
 ];
 
+/**
+ * The brands worth writing to first: a shop that was read and sells, whose own
+ * site confirms it is in the country the scan asked for, that speaks of the
+ * niche, is not abandoned, and has an Instagram or an email. Brands found
+ * before these things were checked count on what is known about them.
+ */
+export function ecomBest(b: EcomBrand, now = Date.now()): boolean {
+  if (b.kind !== "shop" || (!b.instagram && !b.email)) return false;
+  if (b.match === "none" || b.slow) return false;
+  if (b.market && !(b.country === b.market.toUpperCase() && b.countrySure)) return false;
+  if (b.products != null && b.products < 5) return false;
+  return !ecomAbandoned(b, now);
+}
+
 const passes = (b: EcomBrand, filter: EcomFilter): boolean =>
-  filter === "instagram"
-    ? !!b.instagram
-    : filter === "email"
-      ? !!b.email
-      : filter === "both"
-        ? !!b.instagram && !!b.email
-        : true;
+  filter === "best"
+    ? ecomBest(b)
+    : filter === "instagram"
+      ? !!b.instagram
+      : filter === "email"
+        ? !!b.email
+        : filter === "both"
+          ? !!b.instagram && !!b.email
+          : true;
 
 export function ecomCounts(brands: EcomBrand[]): Record<EcomFilter, number> {
-  const counts: Record<EcomFilter, number> = { all: 0, instagram: 0, email: 0, both: 0 };
+  const counts: Record<EcomFilter, number> = { all: 0, best: 0, instagram: 0, email: 0, both: 0 };
   for (const b of brands) for (const f of ECOM_FILTERS) if (passes(b, f.id)) counts[f.id]++;
   return counts;
 }
@@ -181,9 +248,17 @@ export function ecomCounts(brands: EcomBrand[]): Record<EcomFilter, number> {
 export function ecomMatches(b: EcomBrand, query: string): boolean {
   const q = query.trim().toLowerCase().replace(/^@/, "");
   if (!q) return true;
-  return [b.name, b.website, igHandle(b.instagram), b.about, b.email, b.platform, b.niche].some(
-    (v) => v.toLowerCase().includes(q),
-  );
+  return [
+    b.name,
+    b.website,
+    igHandle(b.instagram),
+    b.about,
+    b.email,
+    b.platform,
+    b.niche,
+    b.place ?? "",
+    b.country ? countryName(b.country) : "",
+  ].some((v) => v.toLowerCase().includes(q));
 }
 
 export type EcomSortKey = "score" | "followers" | "name" | "found";
@@ -257,9 +332,10 @@ export function ecomToRaw(b: EcomBrand, id: string, now = Date.now()): RawBusine
     id,
     business: b.name || b.website || (handle ? `@${handle}` : ""),
     email: b.email,
-    phone: "",
+    phone: b.phone || "",
     website: b.website,
-    city: "",
+    // "Austin, Texas" → "Austin": what an outreach email greets the town with.
+    city: (b.place || "").split(",")[0].trim(),
     industry: b.industry,
     status: "raw",
     scrapedAt: now,
@@ -302,6 +378,10 @@ export interface EcomScanTally {
   notBrands: number;
   seen: number;
   notShops: number;
+  /** Based in another country than the one asked for. */
+  elsewhere: number;
+  /** Do not say where they are based. */
+  unplaced: number;
 }
 
 const many = (n: number, one: string, more = `${one}s`) => `${n} ${n === 1 ? one : more}`;
@@ -322,6 +402,10 @@ export function ecomScanSummary(
       ? `${many(t.notBrands, "marketplace, big name or fan page", "marketplaces, big names and fan pages")}`
       : "",
     t.notShops ? `${many(t.notShops, "site that sells nothing", "sites that sell nothing")}` : "",
+    t.elsewhere ? `${t.elsewhere} based in another country` : "",
+    t.unplaced
+      ? `${many(t.unplaced, "brand that does not say where it is based", "brands that do not say where they are based")}`
+      : "",
   ].filter(Boolean);
   const tail =
     why === "stopped"

@@ -9,6 +9,7 @@
 
 import { cleanDomain, isCompanyDomain } from "./business-key";
 import { followersLabel, igHandle, igProfileResult, igUrl, type SearchResult } from "./instagram";
+import { countryIn } from "./ecom-detail";
 
 /* ---------------------------------------------------------------- niches */
 
@@ -20,6 +21,13 @@ export interface EcomNiche {
   noun: string;
   /** What shops in this niche sell, the most typical first. Each becomes a search. */
   terms: string[];
+  /**
+   * Words one of which a shop must use to belong to the niche. Left out when
+   * any word of the terms will do (a shop that sells candles is a household
+   * brand); set where the terms name ordinary products of a special kind (a
+   * shop that sells hoodies is not an anime brand).
+   */
+  theme?: string[];
 }
 
 export const ECOM_NICHES: EcomNiche[] = [
@@ -27,6 +35,7 @@ export const ECOM_NICHES: EcomNiche[] = [
     id: "anime",
     label: "Anime",
     noun: "anime",
+    theme: ["anime", "manga", "kawaii", "otaku", "cosplay"],
     terms: [
       "anime streetwear",
       "anime clothing",
@@ -102,6 +111,7 @@ export const ECOM_NICHES: EcomNiche[] = [
     id: "pets",
     label: "Pets",
     noun: "pet",
+    theme: ["pet", "dog", "cat", "puppy", "kitten"],
     terms: [
       "dog accessories",
       "pet supplies",
@@ -117,6 +127,19 @@ export const ECOM_NICHES: EcomNiche[] = [
     id: "fitness",
     label: "Fitness",
     noun: "fitness",
+    theme: [
+      "gym",
+      "fitness",
+      "sport",
+      "yoga",
+      "workout",
+      "training",
+      "athletic",
+      "protein",
+      "supplement",
+      "running",
+      "resistance",
+    ],
     terms: [
       "gym wear",
       "fitness equipment",
@@ -147,6 +170,18 @@ export const ECOM_NICHES: EcomNiche[] = [
     id: "kids",
     label: "Kids & baby",
     noun: "kids and baby",
+    theme: [
+      "baby",
+      "kid",
+      "child",
+      "children",
+      "toddler",
+      "newborn",
+      "infant",
+      "nursery",
+      "montessori",
+      "toy",
+    ],
     terms: [
       "baby clothes",
       "wooden toys",
@@ -260,12 +295,22 @@ export interface EcomMarket {
   label: string;
   /** The country the search engine answers for ("" = no preference). */
   gl: string;
+  /** The language it answers in ("" = no preference). */
+  hl: string;
   /** "Add to cart" as shops there write it. */
   cart: string[];
   /** How a shop there calls itself. */
   store: string;
   /** What a brand's Instagram page there says about delivery. */
   ships: string[];
+  /** How brands there say where they are from ("made in usa"). Empty for "Anywhere". */
+  home: string[];
+  /** Words only shops at home there use about delivery ("ships from the usa"). */
+  local: string[];
+  /** How an Instagram page there names its country. */
+  tags: string[];
+  /** Places brands there name themselves after, in groups that take turns: each group is a search of its own. */
+  regions: string[][];
 }
 
 export const ECOM_MARKETS: EcomMarket[] = [
@@ -273,73 +318,145 @@ export const ECOM_MARKETS: EcomMarket[] = [
     id: "",
     label: "Anywhere",
     gl: "",
+    hl: "",
     cart: ["add to cart"],
     store: "official online store",
     ships: ["worldwide shipping"],
+    home: [],
+    local: [],
+    tags: [],
+    regions: [],
   },
   {
     id: "us",
     label: "United States",
     gl: "us",
+    hl: "en",
     cart: ["add to cart"],
     store: "official online store",
     ships: ["free shipping", "worldwide shipping"],
+    home: ["made in usa", "made in the usa", "american made"],
+    local: ["ships from the usa", "free us shipping", "continental us"],
+    tags: ["USA", "made in usa", "US based"],
+    regions: [
+      ["California", "Texas", "New York", "Florida"],
+      ["Colorado", "Washington", "Oregon", "Arizona"],
+      ["Illinois", "Georgia", "North Carolina", "Ohio"],
+      ["Pennsylvania", "Michigan", "Tennessee", "Utah"],
+      ["Massachusetts", "New Jersey", "Virginia", "Minnesota"],
+    ],
   },
   {
     id: "gb",
     label: "United Kingdom",
     gl: "gb",
+    hl: "en",
     cart: ["add to basket", "add to cart"],
     store: "official online store",
     ships: ["uk shipping", "worldwide shipping"],
+    home: ["made in the uk", "made in britain", "british made"],
+    local: ["free uk delivery", "royal mail", "uk mainland"],
+    tags: ["UK", "made in the uk", "UK based"],
+    regions: [
+      ["London", "Manchester", "Birmingham", "Leeds"],
+      ["Scotland", "Wales", "Bristol", "Liverpool"],
+    ],
   },
   {
     id: "ca",
     label: "Canada",
     gl: "ca",
+    hl: "en",
     cart: ["add to cart"],
     store: "official online store",
     ships: ["ships from canada", "worldwide shipping"],
+    home: ["made in canada", "canadian made", "canadian owned"],
+    local: ["ships from canada", "canada post", "free canadian shipping"],
+    tags: ["Canada", "made in canada", "canadian"],
+    regions: [
+      ["Ontario", "British Columbia", "Quebec", "Alberta"],
+      ["Toronto", "Vancouver", "Montreal", "Calgary"],
+    ],
   },
   {
     id: "au",
     label: "Australia",
     gl: "au",
+    hl: "en",
     cart: ["add to cart"],
     store: "official online store",
     ships: ["australia wide", "worldwide shipping"],
+    home: ["made in australia", "australian made", "australian owned"],
+    local: ["australia wide shipping", "australia post", "afterpay"],
+    tags: ["Australia", "australian owned", "aussie"],
+    regions: [
+      ["Sydney", "Melbourne", "Brisbane", "Perth"],
+      ["New South Wales", "Victoria", "Queensland", "Adelaide"],
+    ],
   },
   {
     id: "be",
     label: "Belgium",
     gl: "be",
+    hl: "",
     cart: ["in winkelwagen", "ajouter au panier"],
     store: "webshop",
     ships: ["gratis verzending", "livraison"],
+    home: ["belgisch merk", "marque belge", "made in belgium"],
+    local: ["bpost", "gratis verzending in belgië", "livraison en belgique"],
+    tags: ["België", "Belgique", "Belgium"],
+    regions: [
+      ["Antwerpen", "Gent", "Brussel", "Leuven"],
+      ["Liège", "Namur", "Brugge", "Hasselt"],
+    ],
   },
   {
     id: "nl",
     label: "Netherlands",
     gl: "nl",
+    hl: "nl",
     cart: ["in winkelwagen", "in winkelmand"],
     store: "webshop",
     ships: ["gratis verzending", "webshop"],
+    home: ["nederlands merk", "hollands merk", "made in holland"],
+    local: ["postnl", "gratis verzending binnen nederland", "ideal"],
+    tags: ["Nederland", "Netherlands", "Dutch"],
+    regions: [
+      ["Amsterdam", "Rotterdam", "Utrecht", "Den Haag"],
+      ["Eindhoven", "Groningen", "Haarlem", "Arnhem"],
+    ],
   },
   {
     id: "de",
     label: "Germany",
     gl: "de",
+    hl: "de",
     cart: ["in den warenkorb"],
     store: "onlineshop",
     ships: ["versand", "onlineshop"],
+    home: ["made in germany", "deutsche marke", "aus deutschland"],
+    local: ["versandkostenfrei", "dhl versand", "impressum"],
+    tags: ["Deutschland", "Germany", "made in germany"],
+    regions: [
+      ["Berlin", "Hamburg", "München", "Köln"],
+      ["Frankfurt", "Stuttgart", "Düsseldorf", "Leipzig"],
+    ],
   },
   {
     id: "fr",
     label: "France",
     gl: "fr",
+    hl: "fr",
     cart: ["ajouter au panier"],
     store: "boutique en ligne",
     ships: ["livraison", "boutique en ligne"],
+    home: ["made in france", "fabriqué en france", "marque française"],
+    local: ["livraison gratuite", "colissimo", "mondial relay"],
+    tags: ["France", "made in france", "française"],
+    regions: [
+      ["Paris", "Lyon", "Marseille", "Bordeaux"],
+      ["Toulouse", "Nantes", "Lille", "Strasbourg"],
+    ],
   },
 ];
 
@@ -362,6 +479,31 @@ const anyOf = (phrases: string[]) =>
 /** Marketplaces answer every product search; these words keep the first results for brands' own shops. */
 const NO_MARKETPLACES = "-amazon -etsy -ebay -aliexpress -temu -walmart";
 
+/** One of a country's place groups as a search: (California OR Texas OR "New York" OR Florida). */
+const oneOf = (names: string[]) =>
+  `(${names.map((n) => (n.includes(" ") ? `"${n}"` : n)).join(" OR ")})`;
+
+/** A way of asking: the term and which pass over the plan this is (1 = the first) give one search. */
+type Ask = (term: string, pass: number) => EcomQuery;
+
+/** The same search on its next result page each pass. */
+const paged =
+  (q: (term: string) => string): Ask =>
+  (term, pass) => ({ q: q(term), page: pass });
+
+/**
+ * A search that names a group of the country's places. Each pass takes the
+ * next group, so it is a new search (first page) rather than a later page of
+ * the old one; once every group has had its turn, it moves to the next page.
+ */
+const placed =
+  (market: EcomMarket, q: (term: string, places: string) => string): Ask =>
+  (term, pass) => {
+    const groups = market.regions;
+    const group = groups[(pass - 1) % groups.length];
+    return { q: q(term, oneOf(group)), page: 1 + Math.floor((pass - 1) / groups.length) };
+  };
+
 /**
  * The ways to ask for shops that sell a thing. Each finds a different set:
  * the line Shopify prints in a shop's footer, the words on any product page,
@@ -369,42 +511,74 @@ const NO_MARKETPLACES = "-amazon -etsy -ebay -aliexpress -temu -walmart";
  * question for the brand's own store. `inurl:` is Google's (Serper, SerpApi);
  * Brave does not know it, so there the same two searches ask for the words
  * every shop's menu and footer carry instead.
+ *
+ * With a country chosen, three more ways ask for brands that are at home
+ * there: the way they say where they are from ("made in usa"), the words only
+ * shops at home use about delivery, and small brands that name one of the
+ * country's places. They take turns with the general ways, country first.
  */
-function storeSearches(market: EcomMarket, operators: boolean): ((term: string) => string)[] {
+function storeSearches(market: EcomMarket, operators: boolean): Ask[] {
+  const general: Ask[] = [
+    paged((t) => `${t} "powered by shopify"`),
+    paged((t) => `${t} ${anyOf(market.cart)} ${NO_MARKETPLACES}`),
+    paged(operators ? (t) => `${t} inurl:collections` : (t) => `${t} "shop all" "new arrivals"`),
+    paged((t) => `${t} brand ${market.store} ${NO_MARKETPLACES}`),
+    paged(
+      operators
+        ? (t) => `${t} inurl:product-category`
+        : (t) => `${t} "best sellers" "shipping policy"`,
+    ),
+  ];
+  if (!market.id) return general;
+  const atHome: Ask[] = [
+    paged((t) => `${t} brand ${anyOf(market.home)} ${NO_MARKETPLACES}`),
+    paged((t) => `${t} shop ${anyOf(market.local)} ${NO_MARKETPLACES}`),
+    placed(market, (t, places) => `${t} brand shop ${places} ${NO_MARKETPLACES}`),
+  ];
   return [
-    (t) => `${t} "powered by shopify"`,
-    (t) => `${t} ${anyOf(market.cart)} ${NO_MARKETPLACES}`,
-    operators ? (t) => `${t} inurl:collections` : (t) => `${t} "shop all" "new arrivals"`,
-    (t) => `${t} brand ${market.store} ${NO_MARKETPLACES}`,
-    operators
-      ? (t) => `${t} inurl:product-category`
-      : (t) => `${t} "best sellers" "shipping policy"`,
+    atHome[0],
+    general[0],
+    atHome[2],
+    general[1],
+    atHome[1],
+    general[2],
+    general[3],
+    general[4],
   ];
 }
 
 /**
  * The ways to ask Instagram for brand pages. "followers" is on every profile
  * page and on no post, so the first answers with accounts rather than photos.
+ * With a country chosen, two more ask for pages that name the country or one
+ * of its places.
  */
-function instagramSearches(market: EcomMarket): ((term: string) => string)[] {
-  return [
-    (t) => `site:instagram.com ${t} brand shop "followers"`,
-    (t) => `site:instagram.com ${t} ${anyOf(market.ships)}`,
-    (t) => `site:instagram.com ${t} "small business" shop`,
-    (t) => `site:instagram.com ${t} store "shop now"`,
+function instagramSearches(market: EcomMarket): Ask[] {
+  const general: Ask[] = [
+    paged((t) => `site:instagram.com ${t} brand shop "followers"`),
+    paged((t) => `site:instagram.com ${t} ${anyOf(market.ships)}`),
+    paged((t) => `site:instagram.com ${t} "small business" shop`),
+    paged((t) => `site:instagram.com ${t} store "shop now"`),
   ];
+  if (!market.id) return general;
+  const atHome: Ask[] = [
+    paged((t) => `site:instagram.com ${t} brand "followers" ${anyOf(market.tags)}`),
+    placed(market, (t, places) => `site:instagram.com ${t} shop "followers" ${places}`),
+  ];
+  return [atHome[0], general[0], atHome[1], general[2], general[1], general[3]];
 }
 
 /** The most searches one scan can plan for one source. */
-export const ECOM_MAX_STEPS = 60;
+export const ECOM_MAX_STEPS = 120;
 
 /**
  * Every search a scan may run for one source, best first. Each round gives
  * every term a different kind of search, so a few searches already cover the
- * whole niche; later pages of the same searches come last. A niche of one or
- * two terms is searched deeper (more pages), so a later scan still has
- * something new to ask. `operators: false` plans for a provider without
- * Google's `inurl:` (Brave); the plan has the same length either way.
+ * whole niche; later passes (the next result pages, the next group of places)
+ * come last. A niche of one or two terms is searched deeper (more passes), so
+ * a later scan still has something new to ask. `operators: false` plans for a
+ * provider without Google's `inurl:` (Brave); the plan has the same length
+ * either way. A search never appears twice.
  */
 export function ecomQueryPlan(
   niche: EcomNiche,
@@ -416,29 +590,40 @@ export function ecomQueryPlan(
     source === "instagram"
       ? instagramSearches(market)
       : storeSearches(market, opts.operators !== false);
-  const pages = niche.terms.length <= 2 ? 5 : niche.terms.length <= 4 ? 4 : 3;
+  const passes = niche.terms.length <= 2 ? 5 : niche.terms.length <= 4 ? 4 : 3;
   const plan: EcomQuery[] = [];
-  for (let page = 1; page <= pages; page++)
+  const asked = new Set<string>();
+  for (let pass = 1; pass <= passes; pass++)
     for (let round = 0; round < ways.length; round++)
-      for (let i = 0; i < niche.terms.length; i++)
-        plan.push({ q: ways[(i + round) % ways.length](niche.terms[i]), page });
+      for (let i = 0; i < niche.terms.length; i++) {
+        const ask = ways[(i + round) % ways.length](niche.terms[i], pass);
+        const key = `${ask.page}|${ask.q}`;
+        if (asked.has(key)) continue;
+        asked.add(key);
+        plan.push(ask);
+      }
   return plan.slice(0, ECOM_MAX_STEPS);
 }
 
 /**
  * What a scan is remembered by, so the next scan of the same niche, country
  * and source carries on with the searches that have not run yet instead of
- * paying for the same ones again. "" when there is no niche.
+ * paying for the same ones again. "" when there is no niche. The number at the
+ * end is the plan's edition: when the searches themselves change, old progress
+ * no longer points at the right place and is left behind.
  */
 export function ecomCursorKey(
   nicheText: string | undefined | null,
   marketId: string | undefined | null,
   source: EcomSource,
+  /** false for a country scan that also keeps brands that do not say where they are: it starts its own list of searches. */
+  strict = true,
 ): string {
   const niche = resolveNiche(nicheText);
   if (!niche) return "";
   const what = niche.id === "custom" ? niche.terms.join(",") : niche.id;
-  return `${what}|${ecomMarket(marketId).id}|${source}`.slice(0, 200);
+  const market = ecomMarket(marketId).id;
+  return `${what}|${market}|${source}|2${market && !strict ? "|all" : ""}`.slice(0, 200);
 }
 
 /* ---------------------------------------------------- who is not a brand */
@@ -707,11 +892,33 @@ const SELLING: RegExp[] = [
   /\b(?:free shipping|free delivery|gratis verzending|kostenloser versand|livraison gratuite)\b/i,
 ];
 
+/** Marketing tools a shop's pages give away: ad pixels first, then email and SMS, then reviews and the rest. */
 const TOOLS: [string, RegExp][] = [
   ["Meta pixel", /\bfbq\s*\(|connect\.facebook\.net\/[a-z_]+\/fbevents|facebook_pixel/i],
   ["TikTok pixel", /analytics\.tiktok\.com|\bttq\.(?:load|track|page)\b|tiktok_pixel/i],
   ["Google Ads", /\bAW-\d{6,}|googleadservices\.com/],
+  ["Pinterest tag", /\bpintrk\s*\(|s\.pinimg\.com\/ct\//i],
+  ["Snap pixel", /sc-static\.net\/scevent|\bsnaptr\s*\(/i],
   ["Klaviyo", /klaviyo/i],
+  ["Omnisend", /omnisend|omnisrc/i],
+  ["Mailchimp", /chimpstatic\.com|list-manage\.com/i],
+  ["Postscript", /sdk\.postscript\.io|postscript-sdk/i],
+  ["Attentive", /cdn\.attn\.tv|attentivemobile/i],
+  ["Judge.me", /judge\.me|\bjdgm-/i],
+  ["Loox", /loox\.io/i],
+  ["Yotpo", /staticw2\.yotpo\.com|yotpo-widget|\byotpo\b/i],
+  ["Okendo", /okendo/i],
+  ["Stamped", /stamped\.io/i],
+  ["Recharge", /rechargepayments|rechargecdn|recharge-subscriptions/i],
+];
+
+/** The tools that mean a shop already pays for ads. */
+export const AD_PIXELS = [
+  "Meta pixel",
+  "TikTok pixel",
+  "Google Ads",
+  "Pinterest tag",
+  "Snap pixel",
 ];
 
 /** The <meta> tags of a page by their name or property (lower-case). */
@@ -937,6 +1144,30 @@ export interface EcomBrand {
   tiktok: string;
   tools: string[];
   currency: string;
+  /** The country the scan asked for ("us"); "" for anywhere and for brands found before countries were checked. */
+  market?: string;
+  /** Where the brand is based ("US"); "" when its site does not say. */
+  country?: string;
+  /** The shop itself says so: its shop file, its address, its company number or its web address. */
+  countrySure?: boolean;
+  /** "Austin, Texas" when a town or region is known. */
+  place?: string;
+  /** In plain words, what the country was read from. */
+  countryWhy?: string;
+  /** How well what it sells matches the niche it was found for. */
+  match?: "strong" | "some" | "none";
+  /** Products in the shop; null when unknown. */
+  products?: number | null;
+  /** The price range most of its products sit in, in `currency`. */
+  priceFrom?: number | null;
+  priceTo?: number | null;
+  /** The day its newest product was added (YYYY-MM-DD); "" when unknown. */
+  newest?: string;
+  /** The day anything in its catalogue last changed (YYYY-MM-DD); "" when unknown. */
+  updated?: string;
+  phone?: string;
+  /** Its own pages speak of deliveries of two weeks or more. */
+  slow?: boolean;
   /** The niche it was found for ("Anime") and the trade it is saved under ("online anime brands"). */
   niche: string;
   industry: string;
@@ -958,13 +1189,52 @@ export function ecomBrandKeys(b: Pick<EcomBrand, "website" | "instagram">): stri
   return [cleanDomain(b.website), handle ? `ig:${handle}` : ""].filter(Boolean);
 }
 
+const DAY_MS = 86_400_000;
+
+/** A brand found in the country the scan asked for, by the shop's own word. */
+export const inAskedCountry = (b: Pick<EcomBrand, "market" | "country" | "countrySure">): boolean =>
+  !!b.market && b.country === b.market.toUpperCase() && b.countrySure === true;
+
+/**
+ * A shop that looks left alone: nothing among its newest products (no product,
+ * price or stock level) has changed in a year. Usually nobody runs it any
+ * more; a shop that sells the same few things for years can look like this
+ * too, so it is said as what was seen, not as a verdict. Unknown for shops
+ * whose catalogue could not be read.
+ */
+export function ecomAbandoned(b: Pick<EcomBrand, "updated">, now = Date.now()): boolean {
+  const at = b.updated ? Date.parse(b.updated) : Number.NaN;
+  return Number.isFinite(at) && now - at > 365 * DAY_MS;
+}
+
 /**
  * How ready a brand is to contact (0–100), with the reasons in plain words:
  * a confirmed shop, an Instagram to message, an email to write to, and an
- * audience that is neither empty nor a household name.
+ * audience that is neither empty nor a household name. What a scan read about
+ * the shop only takes points away: a brand that is where it should be and
+ * sells what it should scores as it always did, and one that is not confirmed
+ * in the country, does not sell the niche, sells next to nothing, is abandoned
+ * or ships from far away drops below it. New products are the one sign of life
+ * that adds.
  */
 export function ecomFit(
-  b: Pick<EcomBrand, "kind" | "platform" | "email" | "instagram" | "instagramSure" | "followers">,
+  b: Pick<EcomBrand, "kind" | "platform" | "email" | "instagram" | "instagramSure" | "followers"> &
+    Partial<
+      Pick<
+        EcomBrand,
+        | "market"
+        | "country"
+        | "countrySure"
+        | "place"
+        | "match"
+        | "products"
+        | "newest"
+        | "updated"
+        | "slow"
+        | "niche"
+      >
+    >,
+  now = Date.now(),
 ): { score: number; why: string[] } {
   let score = 20;
   const why: string[] = [];
@@ -988,6 +1258,46 @@ export function ecomFit(
     else if (f > 100_000 && f <= 500_000) score += 8;
     else if (f >= 200 && f < 1_000) score += 5;
     why.push(`${followersLabel(f)} followers`);
+  }
+  if (b.market) {
+    const home = b.market.toUpperCase();
+    if (b.country === home) {
+      if (!b.countrySure) score -= 3;
+      why.push(
+        b.place
+          ? `based in ${b.place}`
+          : b.countrySure
+            ? `based in ${countryIn(home)}`
+            : `probably in ${countryIn(home)}`,
+      );
+    } else {
+      // Listed by a scan that also keeps brands that do not say where they are.
+      score -= 10;
+      why.push(b.country ? `may be in ${countryIn(b.country)}` : "country not confirmed");
+    }
+  }
+  if (b.match === "strong") {
+    why.push(b.niche ? `sells ${b.niche.toLowerCase()}` : "sells this niche");
+  } else if (b.match === "none") {
+    score -= 20;
+    why.push("the niche is not mentioned on the shop");
+  }
+  if (b.products != null && b.products < 5) {
+    score -= 10;
+    why.push(b.products === 1 ? "only 1 product" : `only ${b.products} products`);
+  }
+  const added = b.newest ? Date.parse(b.newest) : Number.NaN;
+  if (Number.isFinite(added) && (now - added) / DAY_MS <= 90) {
+    score += 5;
+    why.push("new products in the last 3 months");
+  }
+  if (ecomAbandoned(b, now)) {
+    score -= 10;
+    why.push("nothing in the shop has changed in over a year");
+  }
+  if (b.slow) {
+    score -= 5;
+    why.push("speaks of deliveries of 2 weeks or more");
   }
   return { score: Math.max(0, Math.min(100, score)), why };
 }
@@ -1028,6 +1338,25 @@ export function mergeEcomBrand(a: EcomBrand, b: EcomBrand): EcomBrand {
     tiktok: main.tiktok || other.tiktok,
     tools: main.tools.length ? main.tools : other.tools,
     currency: main.currency || other.currency,
+    market: main.market || other.market,
+    // Where it is based comes as one piece: a country from one find never gets the other find's town.
+    // What a shop's own site confirms wins over a hint.
+    ...(!other.country || (main.country && (main.countrySure || !other.countrySure))
+      ? {}
+      : {
+          country: other.country,
+          countrySure: other.countrySure,
+          place: other.place,
+          countryWhy: other.countryWhy,
+        }),
+    match: main.match ?? other.match,
+    products: main.products ?? other.products,
+    priceFrom: main.priceFrom ?? other.priceFrom,
+    priceTo: main.priceTo ?? other.priceTo,
+    newest: main.newest || other.newest,
+    updated: main.updated || other.updated,
+    phone: main.phone || other.phone,
+    slow: main.slow || other.slow,
     foundAt: Math.min(a.foundAt, b.foundAt),
   };
   merged.key = ecomBrandKey(merged) || main.key;

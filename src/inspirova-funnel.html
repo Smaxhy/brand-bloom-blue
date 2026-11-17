@@ -1,0 +1,1996 @@
+<!--
+  Inspirova growth check: the welcome card, the floating launcher and the question funnel behind them.
+  src/routes/index.tsx adds this file to the end of the homepage document.
+  Every class starts with fx- so nothing here can restyle the rest of the site.
+  The settings an owner may want to change are at the top of the first script (CONFIG).
+-->
+<style>
+  @property --fx-a{syntax:"<angle>";inherits:false;initial-value:0deg}
+  .fx,.fx-dock{
+    --fx-void:#05030D;--fx-panel:rgba(18,11,44,.8);--fx-edge:rgba(168,139,255,.28);
+    --fx-violet:#7C5CFF;--fx-lilac:#A88BFF;--fx-ice:#8FD6FF;--fx-coral:#FF8366;--fx-alarm:#FF4D6D;
+    --fx-dim:rgba(255,255,255,.74);--fx-faint:rgba(255,255,255,.52);
+    --fx-spring:cubic-bezier(.2,1.3,.3,1);--fx-ease:cubic-bezier(.22,.61,.36,1);
+    font-family:var(--sans);color:#fff}
+  .fx [hidden],.fx[hidden],.fx-dock[hidden]{display:none!important}
+  .fx-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  @keyframes fxRot{to{transform:rotate(360deg)}}
+  @keyframes fxFade{from{opacity:0}}
+  @keyframes fxRise{from{opacity:0;transform:translateY(14px)}}
+  .fx-rise{animation:fxRise .5s var(--fx-ease) both;animation-delay:calc(var(--i,0)*80ms)}
+
+  /* ---------- launcher at the bottom of the screen ---------- */
+  body.fx-docked footer{padding-bottom:128px}
+  body.fx-open{overflow:hidden}
+  /* Set on the page itself while the check is open: the site scrolls on its html element, so that is what has to hold still. */
+  .fx-lock{overflow-y:hidden}
+  /* The site behind the check holds still meanwhile: nothing moves under the blur and nothing is animated unseen. */
+  body.fx-open>header *,body.fx-open>main *,body.fx-open>footer *{animation-play-state:paused!important}
+  .fx-dock{position:fixed;left:0;right:0;bottom:0;z-index:60;display:flex;justify-content:center;
+    padding:0 12px calc(14px + env(safe-area-inset-bottom));pointer-events:none}
+  body.contact-open .fx-dock,body.fx-open .fx-dock{display:none}
+  .fx-dock-glow{position:absolute;left:0;right:0;bottom:0;height:230px;
+    background:radial-gradient(58% 100% at 50% 100%,rgba(124,92,255,.5) 0%,rgba(124,92,255,.16) 46%,transparent 74%);
+    animation:fxBreath 5.5s ease-in-out infinite alternate}
+  .fx-dock-glow::before{content:"";position:absolute;inset:0;
+    background-image:
+      radial-gradient(1.4px 1.4px at 8% 62%,#fff 50%,transparent 51%),radial-gradient(1px 1px at 19% 84%,#fff 50%,transparent 51%),
+      radial-gradient(1.6px 1.6px at 31% 48%,#CDBDFF 50%,transparent 51%),radial-gradient(1px 1px at 44% 30%,#fff 50%,transparent 51%),
+      radial-gradient(1.4px 1.4px at 58% 44%,#8FD6FF 50%,transparent 51%),radial-gradient(1px 1px at 69% 82%,#fff 50%,transparent 51%),
+      radial-gradient(1.6px 1.6px at 81% 52%,#fff 50%,transparent 51%),radial-gradient(1px 1px at 92% 72%,#CDBDFF 50%,transparent 51%);
+    -webkit-mask-image:linear-gradient(0deg,#000 30%,transparent 95%);mask-image:linear-gradient(0deg,#000 30%,transparent 95%);
+    animation:fxTwinkle 3.2s ease-in-out infinite alternate}
+  @keyframes fxBreath{from{opacity:.72}}
+  @keyframes fxTwinkle{from{opacity:.4}}
+  .fx-dock-rise{position:relative;width:min(640px,100%);animation:fxDockIn 1s .5s var(--fx-spring) both}
+  @keyframes fxDockIn{from{opacity:0;transform:translateY(130%) scale(.92)}}
+  .fx-dock-card{position:relative;pointer-events:auto;display:flex;align-items:center;border-radius:24px;
+    background:linear-gradient(150deg,rgba(42,26,102,.97),rgba(13,8,36,.98) 62%);
+    box-shadow:0 22px 70px -20px rgba(124,92,255,.95),0 0 0 1px rgba(168,139,255,.3),inset 0 1px 0 rgba(255,255,255,.12);
+    animation:fxHover 5s 1.6s ease-in-out infinite}
+  @keyframes fxHover{50%{transform:translateY(-6px)}}
+  .fx-dock-card::before{content:"";position:absolute;inset:-1.5px;border-radius:inherit;padding:1.5px;pointer-events:none;
+    background:conic-gradient(from var(--fx-a),transparent 0 58%,#A88BFF 72%,#8FD6FF 82%,#FF8366 91%,transparent 100%);
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;
+    animation:fxSweep 4.5s linear infinite}
+  @keyframes fxSweep{to{--fx-a:360deg}}
+  .fx-dock-main{flex:1;min-width:0;display:flex;align-items:center;gap:13px;padding:11px 8px 11px 13px;background:none;border:0;
+    color:#fff;cursor:pointer;text-align:left;border-radius:24px}
+  .fx-orb{position:relative;flex:none;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;
+    background:radial-gradient(circle at 35% 30%,rgba(168,139,255,.6),rgba(124,92,255,.14) 72%);box-shadow:0 0 22px rgba(124,92,255,.8)}
+  .fx-orb img{width:31px;height:31px;object-fit:contain}
+  .fx-orb i{position:absolute;inset:-5px;border-radius:50%;border:1px dashed rgba(255,255,255,.42);animation:fxRot 9s linear infinite}
+  .fx-orb i::after{content:"";position:absolute;top:-3.5px;left:50%;width:7px;height:7px;margin-left:-3.5px;border-radius:50%;
+    background:var(--fx-ice);box-shadow:0 0 9px var(--fx-ice)}
+  .fx-dock-txt{flex:1;min-width:0;display:grid;gap:1px}
+  .fx-dock-txt b{font:700 1.02rem/1.25 var(--display);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fx-dock-txt small{font-size:.82rem;color:var(--fx-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fx-dock-cta{flex:none;display:inline-flex;align-items:center;gap:7px;min-height:44px;padding:0 20px;border-radius:999px;
+    font-weight:600;font-size:.95rem;background:linear-gradient(120deg,#7C5CFF,#A88BFF 55%,#FF8366);
+    box-shadow:0 10px 26px -10px #7C5CFF,inset 0 1px 0 rgba(255,255,255,.3);transition:filter .2s,transform .2s var(--fx-ease)}
+  .fx-dock-cta svg{width:15px;height:15px}
+  .fx-dock-main:hover .fx-dock-cta{filter:brightness(1.12);transform:translateX(2px)}
+  .fx-dock-min{flex:none;width:34px;height:34px;margin:0 9px 0 2px;border-radius:50%;border:0;background:rgba(255,255,255,.08);
+    color:rgba(255,255,255,.78);cursor:pointer;display:grid;place-items:center}
+  .fx-dock-min:hover{background:rgba(255,255,255,.18);color:#fff}
+  .fx-dock-min svg{width:14px;height:14px}
+  .fx-dock-mini{display:none;pointer-events:auto;width:62px;height:62px;border-radius:50%;border:0;cursor:pointer;place-items:center;
+    background:linear-gradient(150deg,#2A1A66,#0D0824);box-shadow:0 14px 40px -10px #7C5CFF,0 0 0 1px rgba(168,139,255,.42);
+    animation:fxRise .4s var(--fx-ease) both}
+  .fx-dock[data-state="mini"]{justify-content:flex-end}
+  .fx-dock[data-state="mini"] .fx-dock-rise,.fx-dock[data-state="mini"] .fx-dock-glow{display:none}
+  .fx-dock[data-state="mini"] .fx-dock-mini{display:grid}
+  @media (min-width:900px) and (max-height:820px){
+    /* Short laptop screens: sit bottom right, clear of the buttons at the bottom of the first screen. */
+    .fx-dock{justify-content:flex-end;padding-right:22px}
+    .fx-dock-rise{width:min(470px,100%)}
+  }
+  @media (max-width:520px){
+    .fx-dock{padding-left:8px;padding-right:8px}
+    .fx-dock-main{gap:10px;padding:9px 6px 9px 10px}
+    .fx-orb{width:40px;height:40px}.fx-orb img{width:27px;height:27px}
+    .fx-dock-txt b{font-size:.93rem}.fx-dock-txt small{font-size:.76rem}
+    .fx-dock-cta{min-height:40px;padding:0 15px;font-size:.9rem}
+    .fx-dock-cta svg{display:none}
+    .fx-dock-min{width:30px;height:30px;margin-right:7px}
+  }
+
+  /* ---------- full-screen scene ---------- */
+  .fx{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;background:var(--fx-void);overflow:hidden;overflow:clip;
+    animation:fxFade .35s ease both}
+  .fx::before{content:"";position:absolute;inset:-12%;pointer-events:none;
+    background:
+      radial-gradient(42% 36% at 18% 18%,rgba(124,92,255,.34),transparent 70%),
+      radial-gradient(38% 34% at 84% 78%,rgba(255,131,102,.13),transparent 72%),
+      radial-gradient(60% 50% at 50% 108%,rgba(99,102,241,.34),transparent 70%),
+      radial-gradient(30% 26% at 78% 14%,rgba(143,214,255,.1),transparent 70%);
+    animation:fxNebula 38s ease-in-out infinite alternate}
+  @keyframes fxNebula{to{transform:scale(1.14) rotate(5deg) translate(1.5%,-1.5%)}}
+  .fx-sky{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  .fx-flash{position:absolute;inset:0;pointer-events:none;opacity:0;z-index:4;
+    background:radial-gradient(circle at 50% 46%,#fff 0%,#CDBDFF 22%,rgba(124,92,255,.5) 46%,transparent 72%)}
+  .fx-flash.go{animation:fxFlash .95s ease-out both}
+  @keyframes fxFlash{0%{opacity:0}12%{opacity:1}100%{opacity:0}}
+  .fx.fx-alarm::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+    box-shadow:inset 0 0 170px rgba(255,77,109,.5);animation:fxAlarmTint .6s ease-in-out infinite alternate}
+  @keyframes fxAlarmTint{from{opacity:.35}}
+  .fx-spark{position:absolute;z-index:5;width:7px;height:7px;margin:-3.5px;pointer-events:none;background:#fff;opacity:0;
+    clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%);
+    animation:fxSpark .75s var(--fx-ease) both}
+  @keyframes fxSpark{0%{opacity:1;transform:translate(0,0) scale(.4)}100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(var(--s,1.6)) rotate(140deg)}}
+
+  .fx-top{position:relative;z-index:2;display:flex;align-items:center;gap:12px;
+    padding:calc(12px + env(safe-area-inset-top)) 18px 6px}
+  .fx-brand{display:flex;align-items:center;gap:9px;font:700 1.02rem var(--display)}
+  .fx-brand img{width:28px;height:28px;object-fit:contain}
+  .fx-brand em{font:500 .8rem var(--sans);color:var(--fx-faint);padding-left:10px;border-left:1px solid rgba(255,255,255,.2)}
+  .fx-count{margin-left:auto;font-size:.82rem;color:var(--fx-dim);font-variant-numeric:tabular-nums}
+  .fx-x{flex:none;width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);
+    color:#fff;cursor:pointer;display:grid;place-items:center}
+  .fx-x:hover{background:rgba(255,255,255,.16)}
+  .fx-x svg{width:15px;height:15px}
+  .fx-prog{position:relative;z-index:2;display:flex;align-items:center;list-style:none;width:100%;max-width:700px;
+    margin:0 auto;padding:10px 26px 4px}
+  .fx-prog li{flex:1;height:2px;background:rgba(255,255,255,.16);position:relative;transition:background .4s}
+  .fx-prog li:first-child{flex:0 0 0}
+  .fx-prog li::after{content:"";position:absolute;right:-4px;top:-3px;width:8px;height:8px;border-radius:50%;background:#241A4D;
+    border:1px solid rgba(255,255,255,.34);transition:transform .3s var(--fx-spring),background .3s,box-shadow .3s}
+  .fx-prog li.lit{background:linear-gradient(90deg,var(--fx-violet),var(--fx-lilac))}
+  .fx-prog li.lit::after{background:var(--fx-lilac);border-color:#fff;box-shadow:0 0 10px var(--fx-lilac)}
+  .fx-prog li.now::after{background:#fff;box-shadow:0 0 0 4px rgba(168,139,255,.3),0 0 14px #fff;transform:scale(1.3)}
+
+  .fx-view{position:relative;z-index:1;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
+    display:flex;flex-direction:column;outline:none;transition:opacity .2s ease,transform .2s ease}
+  .fx-view.fx-out{opacity:0;transform:scale(.985)}
+  .fx-view[data-screen="plan"],.fx-view[data-screen="book"],.fx-view[data-screen="scan"]{
+    -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 18px);mask-image:linear-gradient(180deg,transparent 0,#000 18px)}
+  .fx-view>section{margin:auto;width:100%;max-width:1060px;padding:16px 20px 26px}
+  .fx h2{font-family:var(--display);font-weight:700;font-size:clamp(1.45rem,2.7vw,2.05rem);line-height:1.16;letter-spacing:-.02em;
+    text-wrap:balance;outline:none}
+  .fx-help{margin-top:8px;color:var(--fx-dim);font-size:.96rem}
+  .fx-link{background:none;border:0;padding:0;font:inherit;color:#CDBDFF;cursor:pointer;text-decoration:underline;text-underline-offset:3px;white-space:nowrap}
+  .fx-link:hover{color:#fff}
+
+  .fx-btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:52px;padding:0 28px;border-radius:999px;
+    border:0;cursor:pointer;font:600 1rem var(--sans);color:#fff;text-decoration:none;
+    background:linear-gradient(120deg,#7C5CFF 0%,#A88BFF 50%,#FF8366 100%);background-size:180% 100%;background-position:0 50%;
+    box-shadow:0 14px 40px -12px rgba(124,92,255,.95),inset 0 1px 0 rgba(255,255,255,.3);
+    transition:transform .2s var(--fx-ease),background-position .5s var(--fx-ease),opacity .2s,box-shadow .3s}
+  .fx-btn:hover{transform:translateY(-2px);background-position:100% 50%}
+  .fx-btn:active{transform:none}
+  .fx-btn[disabled]{opacity:.36;cursor:not-allowed;transform:none;box-shadow:none}
+  .fx-btn.fx-ghost{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.22);box-shadow:none}
+  .fx-btn.fx-ghost:hover{background:rgba(255,255,255,.13)}
+
+  /* ---------- opening cutscene and launch pass ---------- */
+  .fx-view>section.fx-intro{position:relative;flex:1;margin:0;max-width:none;display:grid;place-items:center;padding:8px 18px 30px}
+  .fx-ign{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none}
+  .fx-ign-in{display:grid;justify-items:center;gap:24px}
+  .fx-ign-logo{width:min(46vw,230px);
+    filter:drop-shadow(0 0 30px rgba(124,92,255,.9)) drop-shadow(0 0 80px rgba(143,214,255,.5));
+    animation:fxIgnite 1.15s var(--fx-spring) both}
+  @keyframes fxIgnite{from{opacity:0;transform:scale(.25) rotate(-28deg);filter:blur(12px) brightness(4)}}
+  .fx-ign-word{font:800 clamp(1.45rem,5vw,2.5rem) var(--display);letter-spacing:.42em;padding-left:.42em;
+    animation:fxWord 1.3s .3s var(--fx-ease) both}
+  @keyframes fxWord{from{opacity:0;letter-spacing:1.1em;filter:blur(6px)}}
+  .fx-ign-ring{position:absolute;left:50%;top:50%;width:min(76vw,440px);aspect-ratio:1;border-radius:50%;opacity:0;
+    border:1.5px solid rgba(168,139,255,.6);transform:translate(-50%,-50%)}
+  [data-phase="1"] .fx-ign-ring{animation:fxCharge .95s ease-in both}
+  [data-phase="1"] .fx-ign-ring.r2{animation-delay:.22s;border-color:rgba(143,214,255,.6)}
+  @keyframes fxCharge{0%{opacity:0;transform:translate(-50%,-50%) scale(1.9)}30%{opacity:.95}100%{opacity:0;transform:translate(-50%,-50%) scale(.04)}}
+  [data-phase="1"] .fx-ign-in{animation:fxPull 1.05s ease-in both}
+  @keyframes fxPull{to{transform:scale(.5);filter:brightness(2.6) blur(2px)}}
+  [data-phase="2"] .fx-ign,[data-phase="3"] .fx-ign{display:none}
+  .fx-pass-anim{display:none;width:min(450px,100%)}
+  [data-phase="2"] .fx-pass-anim,[data-phase="3"] .fx-pass-anim{display:block;animation:fxUnfold 1s var(--fx-spring) both}
+  @keyframes fxUnfold{0%{opacity:0;transform:perspective(1000px) rotateX(80deg) scale(.35) translateY(60px);filter:blur(8px) brightness(3)}
+    55%{opacity:1;filter:blur(0) brightness(1.5)}}
+  .fx-intro .fx-pass-anim.out{animation:fxFly .4s ease-in both;pointer-events:none}
+  @keyframes fxFly{to{opacity:0;transform:scale(2.3);filter:blur(7px)}}
+  .fx-pass{position:relative;text-align:left;border-radius:26px;padding:22px 22px 20px;overflow:hidden;
+    background:linear-gradient(155deg,rgba(44,28,104,.94) 0%,rgba(16,10,44,.96) 55%,rgba(34,18,78,.96) 100%);
+    border:1px solid rgba(168,139,255,.42);
+    box-shadow:0 44px 130px -44px rgba(124,92,255,1),inset 0 0 0 1px rgba(255,255,255,.05);
+    transform:perspective(1000px) rotateX(var(--fx-rx,0deg)) rotateY(var(--fx-ry,0deg));transition:transform .18s ease-out}
+  .fx-pass::before{content:"";position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;
+    background:linear-gradient(115deg,transparent 30%,rgba(143,214,255,.2) 44%,rgba(255,255,255,.36) 50%,rgba(255,131,102,.18) 56%,transparent 70%);
+    background-size:260% 100%;background-position:-70% 0;animation:fxSheen 4.4s 1s ease-in-out infinite}
+  @keyframes fxSheen{0%{background-position:130% 0}55%,100%{background-position:-70% 0}}
+  .fx-pass::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(280px circle at var(--fx-gx,50%) var(--fx-gy,-10%),rgba(168,139,255,.3),transparent 62%)}
+  .fx-pass>*{position:relative;z-index:1}
+  .fx-pass-top{display:flex;align-items:center;gap:10px}
+  .fx-pass-top img{width:34px;height:34px;object-fit:contain}
+  .fx-pass-top b{font:700 .95rem var(--display);letter-spacing:.22em}
+  .fx-pass-top span{margin-left:auto;font:600 .66rem var(--mono);letter-spacing:.12em;color:var(--fx-ice);
+    border:1px solid rgba(143,214,255,.42);border-radius:999px;padding:4px 10px;white-space:nowrap}
+  .fx-pass h2{margin-top:18px;font-weight:800;font-size:clamp(1.7rem,6.4vw,2.3rem);line-height:1.08;letter-spacing:-.03em}
+  .fx-pass p{margin-top:10px;color:var(--fx-dim);font-size:.97rem}
+  .fx-perf{margin:18px -22px 14px;height:1px;background:repeating-linear-gradient(90deg,rgba(255,255,255,.36) 0 6px,transparent 6px 12px)}
+  .fx-perf::before,.fx-perf::after{content:"";position:absolute;top:-10px;width:20px;height:20px;border-radius:50%;
+    background:var(--fx-void);border:1px solid rgba(168,139,255,.42)}
+  .fx-perf::before{left:-11px}.fx-perf::after{right:-11px}
+  .fx-pass dl{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .fx-pass dt{font:600 .62rem var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--fx-faint)}
+  .fx-pass dd{font:700 1.05rem var(--display);margin-top:2px}
+  .fx-load{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center;margin-top:18px;min-height:52px;align-content:center}
+  .fx-load-bar{grid-column:1/-1;height:8px;border-radius:999px;background:rgba(255,255,255,.1);overflow:hidden}
+  .fx-load-bar i{display:block;height:100%;width:0;border-radius:inherit;
+    background:linear-gradient(90deg,var(--fx-violet),var(--fx-ice));box-shadow:0 0 14px rgba(143,214,255,.8);transition:width .12s linear}
+  .fx-load span{font-size:.85rem;color:var(--fx-dim)}
+  .fx-load b{font:700 .85rem var(--mono);color:#fff}
+  .fx-begin{width:100%;margin-top:18px;animation:fxBegin .5s var(--fx-spring) both,fxBeat 1.6s .5s ease-in-out infinite}
+  @keyframes fxBegin{from{opacity:0;transform:scale(.8)}}
+  @keyframes fxBeat{50%{box-shadow:0 14px 60px -6px #A88BFF,inset 0 1px 0 rgba(255,255,255,.3)}}
+  .fx-skip{position:absolute;right:18px;bottom:calc(14px + env(safe-area-inset-bottom));background:none;border:0;
+    color:var(--fx-faint);font:500 .85rem var(--sans);cursor:pointer;padding:10px;text-decoration:underline;text-underline-offset:3px}
+  .fx-skip:hover{color:#fff}
+  [data-phase="3"] .fx-skip{display:none}
+
+  /* ---------- questions ---------- */
+  .fx-q{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:40px;align-items:center}
+  .fx-stage{order:2;position:relative;border-radius:28px;border:1px solid var(--fx-edge);overflow:hidden;aspect-ratio:16/10.4;
+    background:linear-gradient(180deg,rgba(124,92,255,.12),rgba(12,8,32,.6));
+    box-shadow:inset 0 0 70px rgba(124,92,255,.16),0 34px 90px -44px rgba(124,92,255,.85)}
+  .fx-opts{display:grid;gap:10px;margin-top:20px}
+  .fx-opts.two{grid-template-columns:1fr 1fr}
+  .fx-opt{position:relative;display:flex;align-items:center;gap:12px;min-height:58px;padding:9px 12px 9px 12px;border-radius:17px;
+    text-align:left;cursor:pointer;color:#fff;overflow:hidden;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);
+    transition:border-color .2s,background .2s,transform .2s var(--fx-ease),box-shadow .3s}
+  .fx-opt:hover{border-color:rgba(168,139,255,.65);background:rgba(124,92,255,.13);transform:translateY(-1px)}
+  .fx-opt[aria-checked="true"]{border-color:var(--fx-lilac);
+    background:linear-gradient(120deg,rgba(124,92,255,.4),rgba(124,92,255,.15));
+    box-shadow:0 0 0 1px var(--fx-lilac),0 16px 38px -18px #7C5CFF}
+  .fx-opt.span{grid-column:1/-1}
+  .fx-ic{flex:none;width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:rgba(124,92,255,.24);
+    color:#CDBDFF;font:700 .72rem var(--mono);transition:background .2s,color .2s}
+  .fx-opt[aria-checked="true"] .fx-ic{background:linear-gradient(140deg,#7C5CFF,#A88BFF);color:#fff}
+  .fx-ic svg{width:19px;height:19px}
+  .fx-ol{flex:1;min-width:0}
+  .fx-ol b{display:block;font-weight:600;font-size:.97rem;line-height:1.25}
+  .fx-ol small{display:block;margin-top:2px;font-size:.8rem;color:var(--fx-faint);line-height:1.3}
+  .fx-tick{flex:none;width:22px;height:22px;border-radius:50%;border:1.5px solid rgba(255,255,255,.3);display:grid;place-items:center;
+    transition:background .2s,border-color .2s,transform .3s var(--fx-spring)}
+  .fx-opt[role="checkbox"] .fx-tick{border-radius:7px}
+  .fx-tick svg{width:12px;height:12px;opacity:0;transition:opacity .15s}
+  .fx-opt[aria-checked="true"] .fx-tick{background:#fff;border-color:#fff;color:#3B1FA8;transform:scale(1.12)}
+  .fx-opt[aria-checked="true"] .fx-tick svg{opacity:1}
+  .fx-opt.hit::after{content:"";position:absolute;left:var(--px,50%);top:var(--py,50%);width:14px;height:14px;margin:-7px;border-radius:50%;
+    background:rgba(255,255,255,.55);pointer-events:none;animation:fxRipple .6s ease-out both}
+  @keyframes fxRipple{to{transform:scale(34);opacity:0}}
+  .fx-text{width:100%;margin-top:20px;font:600 1.15rem var(--sans);color:#fff;background:rgba(8,6,15,.6);
+    border:1px solid rgba(255,255,255,.2);border-radius:16px;padding:16px 18px}
+  .fx-text:focus,.fx-form input:focus,.fx-form textarea:focus{outline:none;border-color:var(--fx-lilac);box-shadow:0 0 0 3px rgba(124,92,255,.32)}
+  .fx-text::placeholder{color:rgba(255,255,255,.36);font-weight:500}
+  .fx-say{display:flex;gap:10px;align-items:flex-start;min-height:3em;margin-top:14px;font-size:.96rem;line-height:1.45}
+  .fx-say::before{content:"";flex:none;width:8px;height:8px;margin-top:.45em;border-radius:50%;background:var(--fx-ice);box-shadow:0 0 10px var(--fx-ice)}
+  .fx-say:empty::before{display:none}
+  .fx-say.new{animation:fxRise .4s var(--fx-ease) both}
+  .fx-nav{display:flex;gap:10px;align-items:center;margin-top:14px}
+  .fx-nav .fx-btn{flex:1}
+  .fx-nav .fx-back{flex:none;padding:0 22px}
+  .fx-nav .fx-btn:not([disabled]):not(.fx-ghost){animation:fxBeat 1.8s ease-in-out infinite}
+
+  /* ---------- drawings inside the question stage ---------- */
+  .fx-svg{display:block;width:100%;height:100%}
+  .fx-svg text{font-family:var(--sans);font-size:11px;fill:rgba(255,255,255,.82)}
+  .fx-svg .s-b{font-weight:700;fill:#fff;font-size:12px}
+  .fx-svg .s-m{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;fill:var(--fx-ice)}
+  .fx-svg .s-big{font-family:var(--display);font-size:15px}
+  .fx-svg .s-q{font-size:26px;fill:rgba(255,255,255,.34)}
+  .fx-svg .s-line{fill:none;stroke:rgba(168,139,255,.5);stroke-width:1.2}
+  .fx-svg .s-dash{fill:none;stroke:rgba(255,255,255,.3);stroke-width:1;stroke-dasharray:3 5}
+  .fx-svg .s-hot{fill:none;stroke:var(--fx-ice);stroke-width:1.5}
+  .fx-svg .s-glow{fill:rgba(124,92,255,.3)}
+  .fx-svg .s-chip{fill:rgba(124,92,255,.42);stroke:var(--fx-lilac);stroke-width:1}
+  .fx-svg .s-off{opacity:.5}
+  .fx-svg .s-fillv{fill:url(#fxgBar)}
+  .fx-svg .s-fillv.best{fill:url(#fxgHot)}
+  .fx-svg .s-fillh{fill:url(#fxgAcross)}
+  .fx-svg .s-pop{transform-box:fill-box;transform-origin:center;animation:fxPop .5s var(--fx-spring) both;animation-delay:calc(var(--i,0)*90ms)}
+  @keyframes fxPop{from{opacity:0;transform:scale(.2)}}
+  .fx-svg .s-spin{animation:fxRot 14s linear infinite}
+  .fx-svg .s-draw{stroke-dasharray:1;animation:fxDraw 1.3s var(--fx-ease) both}
+  @keyframes fxDraw{from{stroke-dashoffset:1}}
+  .fx-svg .s-flow{stroke-dasharray:3 6;animation:fxFlow .7s linear infinite}
+  @keyframes fxFlow{to{stroke-dashoffset:-9}}
+  .fx-svg .s-rip{fill:none;stroke:var(--fx-ice);stroke-width:1;transform-box:fill-box;transform-origin:center;
+    animation:fxRing 1.9s ease-out infinite;animation-delay:calc(var(--i,0)*90ms)}
+  @keyframes fxRing{from{transform:scale(.3);opacity:.95}to{transform:scale(2.3);opacity:0}}
+  .fx-svg .s-grow{transform-box:fill-box;transform-origin:bottom;animation:fxGrow .9s var(--fx-ease) both;animation-delay:calc(var(--i,0)*120ms)}
+  @keyframes fxGrow{from{transform:scaleY(0)}}
+  .fx-svg .s-growx{transform-box:fill-box;transform-origin:left;animation:fxGrowX 1s var(--fx-ease) both}
+  @keyframes fxGrowX{from{transform:scaleX(0)}}
+  .fx-svg .s-ret{transform:translate(96px,112px);animation:fxSeek 5s ease-in-out infinite alternate}
+  @keyframes fxSeek{0%{transform:translate(78px,124px)}50%{transform:translate(214px,62px)}100%{transform:translate(110px,132px)}}
+  .fx-svg .s-ret.lock{transform:translate(160px,84px);animation:fxLock .7s var(--fx-spring) both}
+  @keyframes fxLock{from{transform:translate(96px,124px) scale(1.9);opacity:.3}}
+  .fx-svg .s-sig{fill:none;stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round;stroke:var(--fx-ice);
+    filter:drop-shadow(0 0 6px rgba(143,214,255,.85))}
+  .fx-svg .s-sig.weak{stroke:var(--fx-lilac)}
+  .fx-svg .s-sig.stopped,.fx-svg .s-sig.never{stroke:var(--fx-coral);filter:none}
+  .fx-svg .s-dot{animation:fxGo 2.2s ease-in-out infinite}
+  .fx-svg .s-dot.clicks{animation-name:fxGoHalf}
+  .fx-svg .s-dot.no{animation-name:fxGoNone}
+  @keyframes fxGo{0%{transform:translateX(0);opacity:0}10%,88%{opacity:1}100%{transform:translateX(216px);opacity:0}}
+  @keyframes fxGoHalf{0%{transform:translateX(0);opacity:0}10%,70%{opacity:1}100%{transform:translateX(118px);opacity:0}}
+  @keyframes fxGoNone{0%{transform:translateX(0);opacity:0}10%,40%{opacity:1}100%{transform:translateX(44px);opacity:0}}
+  .fx-svg .s-coin{fill:rgba(124,92,255,.34);stroke:var(--fx-lilac);stroke-width:1.4}
+  .fx-svg .s-eur{font-size:15px}
+  .fx-svg .s-kept .s-coin{stroke:var(--fx-ice)}
+  .fx-svg .s-gone .s-coin,.fx-svg .s-gone .s-eur{opacity:.2;animation:fxDim .8s ease both;animation-delay:calc(var(--i,0)*110ms)}
+  @keyframes fxDim{from{opacity:1}}
+
+  /* ---------- building the plan ---------- */
+  .fx-scan{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.8fr);gap:44px;align-items:center}
+  .fx-view>section.fx-scan{padding-top:20px}
+  .fx-radar{position:relative;width:112px;aspect-ratio:1;border-radius:50%;margin-bottom:18px;border:1px solid var(--fx-edge);
+    background:radial-gradient(circle,rgba(124,92,255,.3),transparent 70%)}
+  .fx-radar::before{content:"";position:absolute;inset:0;border-radius:50%;
+    background:conic-gradient(from 0deg,rgba(143,214,255,.6),transparent 30%);animation:fxRot 1.5s linear infinite}
+  .fx-radar::after{content:"";position:absolute;inset:20%;border-radius:50%;border:1px dashed rgba(255,255,255,.34)}
+  .fx-radar img{position:absolute;inset:27%;width:46%;height:46%;object-fit:contain;z-index:1}
+  .fx-pct{font:700 .6em var(--mono);color:var(--fx-ice);margin-left:8px;vertical-align:.12em}
+  .fx-log{list-style:none;display:grid;gap:11px;margin-top:20px}
+  .fx-log li{display:grid;grid-template-columns:22px 1fr;gap:11px;align-items:start;opacity:.34;transition:opacity .3s}
+  .fx-log li.on,.fx-log li.ok{opacity:1}
+  .fx-log i{width:20px;height:20px;margin-top:2px;border-radius:50%;border:2px solid rgba(255,255,255,.28);display:grid;place-items:center}
+  .fx-log li.on i{border-color:var(--fx-lilac);border-top-color:transparent;animation:fxRot .7s linear infinite}
+  .fx-log li.ok i{border-color:var(--fx-ice);background:var(--fx-ice)}
+  .fx-log li.ok i::after{content:"";width:9px;height:5px;margin-top:-2px;border-left:2px solid #0C0820;border-bottom:2px solid #0C0820;transform:rotate(-45deg)}
+  .fx-log span{font-size:.97rem;font-weight:500}
+  .fx-log code{display:block;min-height:1.35em;margin-top:1px;font:500 .8rem var(--mono);color:var(--fx-ice)}
+  .fx-ad{position:relative;width:min(300px,100%);margin:0 auto;border-radius:22px;background:#fff;color:#14102A;overflow:hidden;
+    box-shadow:0 44px 100px -44px #7C5CFF,0 0 0 1px rgba(255,255,255,.1)}
+  .fx-ad-tag{position:absolute;top:10px;right:10px;z-index:2;font:700 .6rem var(--mono);letter-spacing:.1em;text-transform:uppercase;
+    background:#14102A;color:#fff;border-radius:999px;padding:5px 9px}
+  .fx-ad-head{display:flex;align-items:center;gap:9px;padding:11px 12px}
+  .fx-ad-av{flex:none;width:32px;height:32px;border-radius:50%;background:linear-gradient(140deg,#7C5CFF,#FF8366);color:#fff;
+    display:grid;place-items:center;font:700 .85rem var(--display)}
+  .fx-ad-head b{display:block;font-size:.85rem;line-height:1.2;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fx-ad-head small{font-size:.7rem;color:#6B6880}
+  .fx-ad canvas{display:block;width:100%;aspect-ratio:16/10;background:#1B0F4A}
+  .fx-ad-body{padding:12px 12px 14px}
+  .fx-ad-body h3{font:700 1rem/1.25 var(--display);min-height:1.25em}
+  .fx-ad-body p{font-size:.82rem;color:#4A4760;margin-top:4px}
+  .fx-ad-cta{display:inline-block;margin-top:10px;background:#14102A;color:#fff;border-radius:10px;padding:8px 14px;font:600 .8rem var(--sans)}
+  .fx-ad.wait canvas{background:linear-gradient(100deg,#1B0F4A 30%,#3B1D8F 50%,#1B0F4A 70%);background-size:220% 100%;animation:fxShimmer 1.1s linear infinite}
+  .fx-ad.wait .fx-ad-body>*{visibility:hidden}
+  @keyframes fxShimmer{from{background-position:120% 0}to{background-position:-100% 0}}
+
+  /* ---------- plan, price and the error ---------- */
+  .fx-view>section.fx-plan{max-width:900px;display:grid;gap:16px;padding-top:20px}
+  .fx-plan-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,.7fr);gap:22px;align-items:center}
+  .fx-card{border-radius:22px;border:1px solid var(--fx-edge);background:var(--fx-panel)}
+  .fx-plan-card{padding:4px 18px}
+  .fx-plan-card div{display:grid;grid-template-columns:88px 1fr;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.09)}
+  .fx-plan-card div:last-child{border:0}
+  .fx-plan-card dt{font-size:.82rem;color:var(--fx-faint);padding-top:1px}
+  .fx-plan-card dd{font-size:.96rem;font-weight:500;line-height:1.4}
+  .fx-ticket{position:relative;padding:18px;border-radius:22px;border:1px solid var(--fx-edge);overflow:hidden;
+    background:linear-gradient(160deg,rgba(38,23,90,.94),rgba(14,9,38,.95));transition:border-color .3s,box-shadow .5s}
+  .fx-ticket-main{display:flex;align-items:center;gap:14px}
+  .fx-ticket-main>div:first-child{min-width:0}
+  .fx-ticket-k{display:block;font-size:.8rem;color:var(--fx-faint)}
+  .fx-ticket-main b{display:block;font:700 1.12rem/1.25 var(--display)}
+  .fx-ticket-main small+b{margin-top:1px}
+  .fx-ticket-d{display:block;margin-top:3px;font-size:.86rem;color:var(--fx-dim)}
+  .fx-price{margin-left:auto;display:flex;align-items:baseline;gap:9px;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .fx-was{display:none;font:600 1rem var(--sans);color:var(--fx-faint)}
+  .fx-now{font:800 clamp(2rem,7.4vw,2.9rem)/1 var(--display);letter-spacing:-.02em}
+  .fx-now.roll{filter:blur(1.2px);color:var(--fx-ice)}
+  .fx-disc{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;margin-top:16px;font-size:.86rem;color:var(--fx-dim)}
+  .fx-disc-bar{position:relative;height:10px;border-radius:999px;background:rgba(255,255,255,.11)}
+  .fx-disc-bar i{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:inherit;
+    background:linear-gradient(90deg,var(--fx-violet),var(--fx-ice));box-shadow:0 0 14px rgba(143,214,255,.75);transition:width .08s linear}
+  .fx-disc-bar i.over{background:linear-gradient(90deg,var(--fx-coral),var(--fx-alarm));box-shadow:0 0 20px var(--fx-alarm)}
+  .fx-disc b{font:700 .95rem var(--mono);color:#fff;min-width:4.4ch;text-align:right}
+  .fx-ticket[data-state="err"]{border-color:var(--fx-alarm);box-shadow:0 0 0 1px var(--fx-alarm),0 30px 90px -40px var(--fx-alarm);
+    animation:fxShake .45s linear 3}
+  @keyframes fxShake{0%,100%{transform:none}20%{transform:translate(-7px,2px) skewX(-2deg)}40%{transform:translate(6px,-2px)}
+    60%{transform:translate(-4px,1px) skewX(2deg)}80%{transform:translate(4px,0)}}
+  .fx-ticket[data-state="err"]::before{content:"";position:absolute;inset:0;pointer-events:none;
+    background:repeating-linear-gradient(0deg,rgba(255,77,109,.16) 0 2px,transparent 2px 5px);animation:fxLines .3s linear infinite}
+  @keyframes fxLines{to{background-position:0 5px}}
+  .fx-ticket[data-state="err"] .fx-now{animation:fxGlitch .32s steps(2) infinite}
+  @keyframes fxGlitch{0%{text-shadow:3px 0 var(--fx-alarm),-3px 0 var(--fx-ice);transform:translate(1px,-1px)}
+    50%{text-shadow:-3px 0 var(--fx-alarm),3px 0 var(--fx-ice);transform:translate(-2px,1px) skewX(7deg)}
+    100%{text-shadow:2px 1px var(--fx-alarm),-2px -1px var(--fx-ice)}}
+  .fx-ticket[data-state="err"] .fx-disc b{color:#FF9DB0}
+  .fx-err{position:relative;display:flex;align-items:center;gap:12px;width:100%;margin-top:16px;padding:13px 14px;border-radius:17px;
+    text-align:left;cursor:pointer;color:#fff;background:linear-gradient(120deg,rgba(255,77,109,.3),rgba(255,131,102,.16));
+    border:1.5px solid var(--fx-alarm);animation:fxSiren 1.1s ease-out infinite}
+  @keyframes fxSiren{from{box-shadow:0 0 0 0 rgba(255,77,109,.65)}to{box-shadow:0 0 0 16px rgba(255,77,109,0)}}
+  .fx-err-ic{flex:none;width:38px;height:38px;border-radius:11px;background:var(--fx-alarm);color:#fff;display:grid;place-items:center;
+    font:800 1.3rem var(--display)}
+  .fx-err-t{flex:1;min-width:0}
+  .fx-err-t b{display:block;font:700 .8rem var(--mono);letter-spacing:.08em;color:#FFC2CD}
+  .fx-err-t span{display:block;margin-top:2px;font-size:.9rem;line-height:1.35}
+  .fx-err em{flex:none;font:700 .88rem var(--sans);background:#fff;color:#3A0A18;border-radius:999px;padding:10px 15px;white-space:nowrap}
+  .fx-ticket[data-state="free"]{border-color:var(--fx-ice);box-shadow:0 0 0 1px var(--fx-ice),0 34px 100px -44px var(--fx-ice)}
+  .fx-ticket[data-state="free"] .fx-disc{display:none}
+  .fx-ticket[data-state="free"] .fx-was{display:inline;text-decoration:line-through}
+  .fx-ticket[data-state="free"] .fx-now{color:var(--fx-ice)}
+  .fx-free{display:flex;flex-wrap:wrap;align-items:center;gap:14px 16px;margin-top:16px;padding-top:16px;border-top:1px dashed rgba(143,214,255,.4)}
+  .fx-stamp{flex:none;font:800 1.15rem var(--display);letter-spacing:.18em;color:var(--fx-ice);border:2.5px solid var(--fx-ice);
+    border-radius:10px;padding:5px 10px 5px 13px;transform:rotate(-7deg);animation:fxStamp .5s var(--fx-spring) both}
+  @keyframes fxStamp{from{opacity:0;transform:rotate(-20deg) scale(2.8)}}
+  .fx-free p{flex:1;min-width:210px;font-size:.93rem;color:var(--fx-dim)}
+  .fx-free p b{display:block;font:700 1.15rem/1.3 var(--display);color:#fff}
+
+  /* ---------- pick a day ---------- */
+  .fx-view>section.fx-book{max-width:1000px;padding-top:20px}
+  .fx-book-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 40px;align-items:start;margin-top:6px}
+  .fx-days{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:18px}
+  .fx-day,.fx-slot{cursor:pointer;color:#fff;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);
+    transition:border-color .2s,background .2s,transform .2s var(--fx-ease),box-shadow .3s}
+  .fx-day{display:grid;justify-items:center;padding:9px 4px;border-radius:16px}
+  .fx-day small{font-size:.74rem;color:var(--fx-dim)}
+  .fx-day b{font:700 1.4rem/1.15 var(--display)}
+  .fx-slots{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+  .fx-slot{min-height:46px;border-radius:14px;font:600 .93rem var(--sans)}
+  .fx-day:hover,.fx-slot:hover{border-color:rgba(168,139,255,.65);background:rgba(124,92,255,.13);transform:translateY(-1px)}
+  .fx-day[aria-checked="true"],.fx-slot[aria-checked="true"]{border-color:var(--fx-lilac);
+    background:linear-gradient(140deg,rgba(124,92,255,.6),rgba(124,92,255,.22));box-shadow:0 14px 32px -16px #7C5CFF}
+  .fx-label{margin-top:18px;font-size:.84rem;color:var(--fx-dim)}
+  .fx-pickline{min-height:1.5em;margin-top:14px;font-size:.95rem;font-weight:500;color:var(--fx-ice)}
+  .fx-label+.fx-days,.fx-label+.fx-slots{margin-top:8px}
+  .fx-form{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px;padding:18px;border-radius:22px;border:1px solid var(--fx-edge);background:var(--fx-panel)}
+  .fx-form label{display:grid;gap:6px;font-size:.84rem;color:var(--fx-dim)}
+  .fx-form label em{font-style:normal;color:var(--fx-faint)}
+  .fx-form input:not([type="checkbox"]),.fx-form textarea{width:100%;font:500 1rem var(--sans);color:#fff;background:rgba(8,6,15,.62);
+    border:1px solid rgba(255,255,255,.2);border-radius:13px;padding:12px 14px}
+  .fx-form textarea{resize:vertical;min-height:52px}
+  .fx-form .fx-wide,.fx-form .fx-msg,.fx-form .fx-btn{grid-column:1/-1}
+  .fx-form label.fx-check{grid-column:1/-1;display:flex;gap:10px;align-items:flex-start;color:#fff;font-size:.9rem;cursor:pointer}
+  .fx-check input{flex:none;width:20px;height:20px;margin-top:1px;accent-color:var(--fx-violet)}
+  .fx-check a{color:#CDBDFF;text-decoration:underline;text-underline-offset:2px}
+  .fx-msg{min-height:1.4em;font-size:.9rem;color:#FFB3A3}
+
+  /* ---------- sent ---------- */
+  .fx-view>section.fx-done{max-width:560px;text-align:center}
+  .fx-done-orb{position:relative;width:132px;aspect-ratio:1;margin:0 auto 22px;display:grid;place-items:center}
+  .fx-done-orb img{width:128px;max-width:none;filter:drop-shadow(0 0 26px rgba(143,214,255,.9));animation:fxIgnite 1s var(--fx-spring) both}
+  .fx-done-orb i{position:absolute;inset:0;border-radius:50%;border:1.5px solid rgba(143,214,255,.6);animation:fxRing 2.2s ease-out infinite}
+  .fx-done-orb i+i{animation-delay:1.1s}
+  .fx-done h2{font-size:clamp(1.8rem,6vw,2.6rem);font-weight:800}
+  .fx-done p{margin-top:12px;font-size:1.02rem}
+  .fx-done-act{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:26px}
+
+  /* ---------- welcome card: comes up as a visitor opens the site, and when they press "Request your quote" ---------- */
+  .fx{transition:background-color .5s ease}
+  .fx.fx-hello{background:rgba(5,3,13,.78);-webkit-backdrop-filter:blur(10px) saturate(1.2);backdrop-filter:blur(10px) saturate(1.2)}
+  .fx.fx-hello .fx-top{display:none}
+  .fx.fx-hello.fx-dark{background:var(--fx-void)}
+  .fx-view>section.fx-hi{max-width:1010px;padding:calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom))}
+  /* Arrival and leaving move and fade only, with no blur, so a card this size stays smooth on a slow phone. */
+  .fx-hi-in{position:relative;animation:fxHiIn .95s var(--fx-spring) both}
+  @keyframes fxHiIn{0%{opacity:0;transform:perspective(1200px) rotateX(42deg) scale(.55) translateY(80px)}45%{opacity:1}}
+  .fx-hi-in::after{content:"";position:absolute;inset:0;border-radius:32px;pointer-events:none;opacity:0;
+    background:linear-gradient(135deg,#fff,#CDBDFF);animation:fxHiFlash .8s ease-out both}
+  @keyframes fxHiFlash{0%{opacity:.7}100%{opacity:0}}
+  .fx-hi-in.out{animation:fxHiOut .4s ease-in both;pointer-events:none}
+  .fx-hi-in.out::after{animation:none}
+  @keyframes fxHiOut{to{opacity:0;transform:scale(1.9)}}
+  .fx-hi-card{position:relative;display:grid;grid-template-columns:minmax(0,.84fr) minmax(0,1fr);min-height:clamp(450px,58vh,580px);
+    border-radius:32px;text-align:left;
+    background:linear-gradient(150deg,rgba(46,29,110,.97) 0%,rgba(15,9,42,.985) 52%,rgba(30,16,72,.985) 100%);
+    box-shadow:0 70px 170px -50px rgba(124,92,255,1),0 0 0 1px rgba(168,139,255,.34),inset 0 1px 0 rgba(255,255,255,.1);
+    transform:perspective(1400px) rotateX(var(--fx-rx,0deg)) rotateY(var(--fx-ry,0deg));transition:transform .18s ease-out}
+  .fx-hi-card::before{content:"";position:absolute;inset:-1.5px;z-index:3;border-radius:inherit;padding:1.5px;pointer-events:none;
+    background:conic-gradient(from var(--fx-a),transparent 0 52%,#A88BFF 68%,#8FD6FF 80%,#FF8366 90%,transparent 100%);
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;
+    animation:fxSweep 5s linear infinite}
+  .fx-hi-card::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+    background:radial-gradient(440px circle at var(--fx-gx,72%) var(--fx-gy,-6%),rgba(168,139,255,.2),transparent 62%)}
+  /* The drawing: from where the business is now, past the three steps, up to the star. */
+  .fx-hi-art{position:relative;overflow:hidden;border-radius:31px 0 0 31px;
+    background:radial-gradient(90% 70% at 8% 100%,rgba(124,92,255,.6),transparent 66%),
+      radial-gradient(60% 50% at 96% 4%,rgba(143,214,255,.22),transparent 70%),linear-gradient(180deg,#160D3C,#080419)}
+  .fx-hi-art::before{content:"";position:absolute;left:-30%;top:88%;width:160%;aspect-ratio:1;border-radius:50%;
+    background:radial-gradient(circle at 50% 0,#6B4DE6 0,#2A1670 16%,#0C0626 44%);
+    box-shadow:0 0 70px rgba(124,92,255,.75),inset 0 2px 1px rgba(205,189,255,.7)}
+  .fx-hi-sky{position:absolute;inset:0;animation:fxTwinkle 3.4s ease-in-out infinite alternate;background-image:
+    radial-gradient(1.4px 1.4px at 9% 14%,#fff 50%,transparent 51%),radial-gradient(1px 1px at 24% 30%,#fff 50%,transparent 51%),
+    radial-gradient(1.6px 1.6px at 41% 9%,#CDBDFF 50%,transparent 51%),radial-gradient(1px 1px at 58% 22%,#fff 50%,transparent 51%),
+    radial-gradient(1.2px 1.2px at 93% 44%,#8FD6FF 50%,transparent 51%),radial-gradient(1px 1px at 12% 47%,#fff 50%,transparent 51%),
+    radial-gradient(1.6px 1.6px at 30% 58%,#fff 50%,transparent 51%),radial-gradient(1px 1px at 70% 66%,#CDBDFF 50%,transparent 51%),
+    radial-gradient(1.2px 1.2px at 88% 78%,#fff 50%,transparent 51%),radial-gradient(1px 1px at 50% 84%,#8FD6FF 50%,transparent 51%),
+    radial-gradient(1.4px 1.4px at 66% 6%,#fff 50%,transparent 51%),radial-gradient(1px 1px at 82% 28%,#fff 50%,transparent 51%)}
+  .fx-hi-map{position:absolute;inset:0}
+  .fx-hi-line{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+  .fx-hi-line path{fill:none;vector-effect:non-scaling-stroke;stroke-linecap:round}
+  .fx-hi-ghost{stroke:rgba(255,255,255,.3);stroke-width:1.2;stroke-dasharray:2 7}
+  .fx-hi-trail{stroke:url(#fxgAcross);stroke-width:3.2}
+  .fx-hi-wipe{position:absolute;inset:0;filter:drop-shadow(0 0 6px rgba(143,214,255,.8));animation:fxWipe 1.2s .5s var(--fx-ease) both}
+  @keyframes fxWipe{from{clip-path:inset(-20% 86% -20% 0)}to{clip-path:inset(-20% 0 -20% 0)}}
+  .fx-hi-orb{position:absolute;left:16%;top:72%;width:96px;height:96px;margin:-48px;animation:fxPop .8s .25s var(--fx-spring) both}
+  .fx-hi-orb img{width:64px;height:64px}
+  .fx-hi-orb i{inset:-9px}
+  .fx-hi-orb::after{content:"";position:absolute;inset:-22px;border-radius:50%;border:1px solid rgba(168,139,255,.3)}
+  .fx-hi-stop{position:absolute;left:var(--x);top:var(--y)}
+  .fx-hi-stop::before{content:"";position:absolute;left:-5px;top:-5px;width:10px;height:10px;border-radius:50%;background:#fff;
+    box-shadow:0 0 0 4px rgba(143,214,255,.24),0 0 14px 2px var(--fx-ice);
+    animation:fxPop .5s var(--fx-spring) both;animation-delay:calc(.82s + var(--i)*.24s)}
+  .fx-hi-stop b{position:absolute;left:9px;top:9px;white-space:nowrap;padding:5px 11px;border-radius:999px;font:600 .78rem/1.2 var(--sans);
+    background:rgba(10,6,30,.84);border:1px solid rgba(168,139,255,.55);box-shadow:0 8px 20px -10px #000;
+    animation:fxRise .45s var(--fx-ease) both;animation-delay:calc(.92s + var(--i)*.24s)}
+  .fx-hi-stop.up b{left:auto;top:auto;right:9px;bottom:9px}
+  .fx-hi-star{position:absolute;left:80%;top:20%;width:0;height:0;border-radius:50%;box-shadow:0 0 30px 13px rgba(143,214,255,.5);
+    animation:fxFade .6s 1.5s ease both}
+  .fx-hi-star::before{content:"";position:absolute;left:-18px;top:-18px;width:36px;height:36px;background:#fff;
+    clip-path:polygon(50% 0,59% 41%,100% 50%,59% 59%,50% 100%,41% 59%,0 50%,41% 41%);
+    animation:fxPop .7s 1.5s var(--fx-spring) both,fxStar 2.8s 2.3s ease-in-out infinite}
+  @keyframes fxStar{50%{transform:scale(.72) rotate(45deg)}}
+  .fx-hi-star::after{content:"";position:absolute;left:-20px;top:-20px;width:40px;height:40px;border-radius:50%;opacity:0;
+    border:1.5px solid rgba(143,214,255,.75);animation:fxHalo 2.4s 1.8s ease-out infinite}
+  @keyframes fxHalo{0%{transform:scale(.4);opacity:0}18%{opacity:.9}100%{transform:scale(2.5);opacity:0}}
+  .fx-hi-comet{position:absolute;left:16%;top:72%;width:8px;height:8px;margin:-4px;border-radius:50%;background:#fff;opacity:0;
+    box-shadow:0 0 12px 4px rgba(143,214,255,.9);animation:fxComet 3.8s 2.3s linear infinite}
+  @keyframes fxComet{0%{left:16%;top:72%;opacity:0}5%{opacity:1}7%{left:25.8%;top:70.1%}14%{left:34.4%;top:66.1%}21%{left:42.2%;top:60.5%}
+    28%{left:49.5%;top:53.5%}35%{left:56.6%;top:45.6%}42%{left:63.8%;top:37.1%}49%{left:71.5%;top:28.5%}53%{opacity:1}
+    56%,100%{left:80%;top:20%;opacity:0}}
+  .fx-hi-body{position:relative;z-index:1;display:flex;flex-direction:column;justify-content:center;padding:52px 48px 46px 44px}
+  .fx-hi-body h2{font-weight:800;font-size:clamp(2.1rem,3.6vw,3.1rem);line-height:1.03;letter-spacing:-.035em}
+  .fx-hi-body p{margin-top:18px;max-width:31em;color:var(--fx-dim);font-size:1.06rem;line-height:1.55}
+  .fx-hi-act{display:grid;gap:11px;margin-top:30px}
+  .fx-hi-act .fx-btn{width:100%;min-height:60px;font-size:1.08rem}
+  .fx-hi-go{animation:fxBeat 1.6s 1.3s ease-in-out infinite}
+  .fx-hi-x{position:absolute;top:14px;right:14px;z-index:4;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.2);
+    background:rgba(10,6,30,.5);color:#fff;cursor:pointer;display:grid;place-items:center}
+  .fx-hi-x:hover{background:rgba(255,255,255,.18)}
+  .fx-hi-x svg{width:15px;height:15px}
+  @media (max-width:860px){
+    .fx-view>section.fx-hi{max-width:540px;padding-left:12px;padding-right:12px}
+    .fx-hi-card{grid-template-columns:minmax(0,1fr);min-height:0;border-radius:28px}
+    .fx-hi-in::after{border-radius:28px}
+    .fx-hi-art{height:clamp(150px,27vh,236px);border-radius:27px 27px 0 0}
+    .fx-hi-map{right:12%}
+    .fx-hi-orb{width:72px;height:72px;margin:-36px}
+    .fx-hi-orb img{width:48px;height:48px}
+    .fx-hi-orb::after{inset:-14px}
+    .fx-hi-stop b{font-size:.72rem;padding:4px 9px}
+    .fx-hi-star::before{left:-14px;top:-14px;width:28px;height:28px}
+    .fx-hi-body{padding:22px 20px 20px}
+    .fx-hi-body h2{font-size:clamp(1.62rem,7.4vw,2.3rem)}
+    .fx-hi-body p{margin-top:10px;font-size:.97rem;line-height:1.5}
+    .fx-hi-act{gap:9px;margin-top:18px}
+    .fx-hi-act .fx-btn{min-height:54px;font-size:1rem}
+    .fx-hi-x{top:10px;right:10px}
+  }
+  @media (max-width:360px){
+    .fx-hi-art{height:clamp(124px,23vh,170px)}
+    .fx-hi-orb{width:56px;height:56px;margin:-28px}
+    .fx-hi-orb img{width:38px;height:38px}
+    .fx-hi-orb i{inset:-6px}
+    .fx-hi-orb::after{inset:-11px}
+    .fx-hi-body{padding:18px 16px 16px}
+    .fx-hi-body p{font-size:.92rem}
+    .fx-hi-act .fx-btn{min-height:50px}
+  }
+  /* A phone held sideways: drawing on the left, words on the right, the two buttons side by side. */
+  @media (max-width:960px) and (max-height:520px) and (orientation:landscape){
+    .fx-view>section.fx-hi{max-width:780px;padding-top:8px;padding-bottom:8px}
+    .fx-hi-card{grid-template-columns:minmax(0,.6fr) minmax(0,1fr)}
+    .fx-hi-art{height:auto;border-radius:27px 0 0 27px}
+    .fx-hi-map{right:0}
+    .fx-hi-body{padding:22px 24px}
+    .fx-hi-body h2{font-size:1.62rem}
+    .fx-hi-body p{margin-top:8px;font-size:.92rem;line-height:1.45}
+    .fx-hi-act{grid-template-columns:1fr 1fr;margin-top:16px}
+    .fx-hi-act .fx-btn{min-height:50px;padding:0 12px;font-size:.94rem}
+  }
+
+  @media (max-width:860px){
+    .fx-brand em{display:none}
+    .fx-q{grid-template-columns:minmax(0,1fr);gap:14px}
+    /* The drawing stays in view while the options scroll under it. */
+    .fx-stage{order:0;aspect-ratio:auto;height:clamp(150px,27vh,300px);position:sticky;top:0;z-index:2;
+      background:linear-gradient(180deg,#1B1146,#0B0722);box-shadow:inset 0 0 60px rgba(124,92,255,.2),0 14px 30px -12px var(--fx-void)}
+    .fx-view>section{padding:10px 16px 0}
+    .fx-view>section.fx-plan,.fx-view>section.fx-book,.fx-view>section.fx-done,.fx-view>section.fx-scan{padding-bottom:26px}
+    .fx-opts{margin-top:16px}
+    /* Before an answer the options come first; once there is one, the reaction and Continue stay in reach. */
+    .fx-foot{margin:8px -16px 0;padding:12px 16px calc(14px + env(safe-area-inset-bottom))}
+    .fx-q.has .fx-foot{position:sticky;bottom:0;z-index:3;background:var(--fx-void);animation:fxRise .35s var(--fx-ease) both}
+    .fx-q.has .fx-foot::before{content:"";position:absolute;left:0;right:0;bottom:100%;height:26px;pointer-events:none;
+      background:linear-gradient(0deg,var(--fx-void),transparent)}
+    .fx-foot .fx-say{min-height:0;margin-top:0}
+    .fx-foot .fx-say:not(:empty){margin-bottom:10px}
+    .fx-foot .fx-nav{margin-top:0}
+    .fx-scan,.fx-plan-grid,.fx-book-grid{grid-template-columns:minmax(0,1fr);gap:22px}
+    .fx-book-grid{gap:0}
+    .fx-form{padding:16px}
+    .fx-plan-grid .fx-ad{display:none}
+    .fx-radar{width:84px;margin-bottom:12px}
+  }
+  @media (max-width:520px){
+    .fx-ask h2,.fx-plan h2,.fx-book h2,.fx-scan h2{font-size:1.36rem}
+    .fx-help{font-size:.9rem}
+    .fx-plan-card div{grid-template-columns:76px 1fr;padding:10px 0}
+    .fx-plan-card dd{font-size:.92rem}
+    .fx-opts.two .fx-ic{display:none}
+    .fx-opts.two .fx-opt{padding-left:14px}
+    .fx-ol b{font-size:.93rem}
+    .fx-say{font-size:.92rem}
+    .fx-ticket{padding:15px}
+    .fx-ticket-main{align-items:flex-start}
+    .fx-err{flex-wrap:wrap}
+    .fx-err em{width:100%;text-align:center}
+    .fx-disc{grid-template-columns:1fr auto}.fx-disc span{grid-column:1/-1}
+    .fx-form{grid-template-columns:1fr}
+    .fx-day b{font-size:1.25rem}
+    .fx-free .fx-btn{width:100%}
+  }
+  @media (max-width:360px){
+    .fx-dock-txt b{white-space:normal;font-size:.86rem;line-height:1.15}
+    .fx-dock-txt small,.fx-pass-top span,.fx-count span{display:none}
+    .fx-pass{padding:20px 18px 18px}
+    .fx-perf{margin-left:-18px;margin-right:-18px}
+  }
+  /* Less motion asked for on the device: the site's own rule stops every element, this one stops the drawn-on layers as well. */
+  @media (prefers-reduced-motion:reduce){
+    .fx::before,.fx::after,.fx *::before,.fx *::after,.fx-dock *::before,.fx-dock *::after{animation:none!important;transition:none!important}
+    .fx-opt.hit::after{display:none}
+  }
+  /* A phone held sideways: question on the left, drawing on the right, as on a computer. */
+  @media (max-width:960px) and (max-height:520px) and (orientation:landscape){
+    .fx-top{padding-top:calc(6px + env(safe-area-inset-top));padding-bottom:0}
+    .fx-prog{padding-top:4px}
+    .fx-q{grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:18px;align-items:start}
+    .fx-stage{order:2;top:4px;height:auto;aspect-ratio:16/10.4;max-height:calc(100vh - 96px)}
+    .fx-pass{padding:16px 18px}
+    .fx-pass h2{margin-top:10px;font-size:1.5rem}
+    .fx-pass p{font-size:.88rem;margin-top:6px}
+    .fx-perf{margin-top:12px;margin-bottom:10px}
+    .fx-load,.fx-begin{margin-top:12px}
+    .fx-ign-logo{width:min(26vh,150px)}
+    .fx-scan{grid-template-columns:minmax(0,1fr) minmax(0,.8fr)}
+    .fx-radar{display:none}
+  }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <radialGradient id="fxgPlanet" cx="36%" cy="30%" r="80%"><stop offset="0" stop-color="#E4DAFF"/><stop offset=".45" stop-color="#8E6CFF"/><stop offset="1" stop-color="#2B1670"/></radialGradient>
+    <linearGradient id="fxgBar" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C4B0FF"/><stop offset="1" stop-color="#7C5CFF"/></linearGradient>
+    <linearGradient id="fxgHot" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8FD6FF"/><stop offset="1" stop-color="#7C5CFF"/></linearGradient>
+    <linearGradient id="fxgAcross" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#8FD6FF"/></linearGradient>
+  </defs>
+</svg>
+
+<div class="fx-dock" id="fxDock" data-state="open" hidden>
+  <div class="fx-dock-glow" aria-hidden="true"></div>
+  <div class="fx-dock-rise">
+    <div class="fx-dock-card">
+      <button type="button" class="fx-dock-main" data-fx-open>
+        <span class="fx-orb" aria-hidden="true"><img src="__LOGO__" alt=""><i></i></span>
+        <span class="fx-dock-txt"><b id="fxDockTitle">Get your free growth plan</b><small id="fxDockSub">10 questions, 2 minutes</small></span>
+        <span class="fx-dock-cta"><span id="fxDockCta">Start</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+      </button>
+      <button type="button" class="fx-dock-min" data-fx-min aria-label="Make the growth check smaller">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+    </div>
+  </div>
+  <button type="button" class="fx-dock-mini" data-fx-open aria-label="Open the free growth check">
+    <span class="fx-orb" aria-hidden="true"><img src="__LOGO__" alt=""><i></i></span>
+  </button>
+</div>
+
+<div class="fx" id="fx" role="dialog" aria-modal="true" aria-labelledby="fxTitle" hidden
+     data-logo="__LOGO__">
+  <canvas class="fx-sky" aria-hidden="true"></canvas>
+  <div class="fx-top">
+    <div class="fx-brand"><img src="__LOGO__" alt="">Inspirova<em>Growth check</em></div>
+    <div class="fx-count" aria-live="polite"></div>
+    <button type="button" class="fx-x" data-fx="close" aria-label="Close the growth check">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg>
+    </button>
+  </div>
+  <ol class="fx-prog" aria-hidden="true" hidden></ol>
+  <div class="fx-view" tabindex="-1"></div>
+  <div class="fx-flash" aria-hidden="true"></div>
+</div>
+
+<script>
+/*<fx-logic>*/
+/* The questions and everything worked out from the answers. No page access in this block, so it can be tested on its own. */
+(function (w) {
+  "use strict";
+
+  /* ---- settings ---- */
+  var CONFIG = {
+    host: "Max",
+    /* Normal price of the strategy call in euro. It is shown first and then drops to 0.
+       Only keep a price you really charge for this call. Set it to 0 to show the call as free straight away. */
+    callPrice: 0,
+    daysAhead: 14,              /* how far ahead a visitor can ask for a call */
+    weekdays: [1, 2, 3, 4, 5],  /* days on offer: 0 = Sunday, 1 = Monday ... 6 = Saturday */
+    slots: [
+      { id: "morning", label: "Morning" },
+      { id: "afternoon", label: "Afternoon" },
+      { id: "evening", label: "Evening" }
+    ],
+    fallbackEmail: "Management@inspirovamarketing.com",
+    /* How the check greets someone who opens the site.
+       "big": a large card in the middle of the screen, once per visit. "bar": only the bar at the bottom. */
+    entry: "big",
+    entryPhones: "big",         /* the same choice for phones on their own */
+    entryDelay: 1.2,            /* seconds between the page opening and the card */
+    /* true: the site's "Request your quote" button opens the card first; its second button leads on to the price calculator.
+       false: that button goes straight to the calculator, as it did before. */
+    quoteOpensCard: true
+  };
+
+  var QUESTIONS = [
+    { id: "type", kind: "single", label: "Business type",
+      title: "What kind of business do you run?",
+      help: "So the plan fits how you win customers.",
+      options: [
+        { id: "service", label: "Service business", sub: "Trades, clinics, salons, coaches", ic: "wrench",
+          say: "Service business: the plan aims for enquiries and booked jobs." },
+        { id: "ecom", label: "Online store", sub: "You sell products online", ic: "bag",
+          say: "Online store: the plan aims for orders and repeat buyers." },
+        { id: "both", label: "A bit of both", sub: "Services and products", ic: "layers",
+          say: "Both: the plan covers enquiries and online orders." },
+        { id: "other", label: "Something else", sub: "You can explain it on the call", ic: "spark",
+          say: "Noted. {host} will ask about it on the call." }
+      ] },
+    { id: "name", kind: "text", label: "Business name", max: 60,
+      title: "What is your business called?",
+      help: "Optional. It puts your name on the plan.",
+      placeholder: "Business name" },
+    { id: "goal", kind: "single", label: "Wants more",
+      title: "What do you want more of?",
+      help: "Pick the one that matters most right now.",
+      options: [
+        { id: "leads", label: "Enquiries and leads", ic: "inbox", say: "Target locked. We count leads and what each one costs." },
+        { id: "sales", label: "Sales and orders", ic: "tag", say: "Target locked. We count orders and what the ads earn back." },
+        { id: "repeat", label: "Repeat customers", ic: "loop", say: "Target locked. This is where email and SMS do the work." },
+        { id: "known", label: "People knowing my name", ic: "horn", say: "Target locked. Video and broad audiences come first." }
+      ] },
+    { id: "channels", kind: "multi", label: "Channels",
+      title: "Where do you want to reach your customers?",
+      help: "Pick every place that fits.",
+      sayOnly: "No stress. {host} picks the channels with you.",
+      sayOne: "1 channel in orbit. Focus is a strength.",
+      sayMany: "{n} channels in orbit. Each one gets its own job in the plan.",
+      options: [
+        { id: "instagram", label: "Instagram", mono: "IG" },
+        { id: "facebook", label: "Facebook", mono: "FB" },
+        { id: "tiktok", label: "TikTok", mono: "TT" },
+        { id: "google", label: "Google Search", mono: "G" },
+        { id: "youtube", label: "YouTube", mono: "YT" },
+        { id: "email", label: "Email and SMS", mono: "@" },
+        { id: "unsure", label: "Not sure yet", mono: "?", only: true }
+      ] },
+    { id: "ads", kind: "single", label: "Ads right now",
+      title: "Are you running ads right now?",
+      help: "Any platform counts.",
+      options: [
+        { id: "working", label: "Yes, and they work", ic: "up", say: "Good. Then the job is to scale what already works." },
+        { id: "weak", label: "Yes, but results are weak", ic: "pulse",
+          say: "Weak results usually trace back to creative, targeting or tracking. The plan checks all three." },
+        { id: "stopped", label: "I tried, then stopped", ic: "pause", say: "Then we find out what stalled before you spend again." },
+        { id: "never", label: "Never run ads", ic: "spark", say: "A clean start. Nothing to undo." }
+      ] },
+    { id: "abo", kind: "single", label: "Knows ABO vs CBO",
+      title: "Do you know the difference between an ABO and a CBO campaign?",
+      help: "No wrong answer. You will see it in five seconds either way.",
+      options: [
+        { id: "yes", label: "Yes, I use them", ic: "check",
+          say: "Then you know the trade: ABO gives you control, CBO lets the platform decide. Meta now calls CBO “Advantage campaign budget”." },
+        { id: "heard", label: "I have heard the terms", ic: "ear",
+          say: "ABO: each ad set gets its own budget. CBO: one budget for the campaign, and the platform moves it to the ad set that performs best." },
+        { id: "no", label: "No idea", ic: "question",
+          say: "ABO: each ad set gets its own budget. CBO: one budget for the campaign, and the platform moves it to the ad set that performs best." }
+      ] },
+    { id: "tracking", kind: "single", label: "Tracking",
+      title: "Can you see which ad brought in which customer?",
+      help: "That is what tracking does.",
+      options: [
+        { id: "yes", label: "Yes, tracking is set up", ic: "check", say: "Good. Every euro can be traced to a result." },
+        { id: "clicks", label: "I see clicks, not customers", ic: "cursor", say: "Clicks are not customers. The plan connects the two." },
+        { id: "no", label: "No tracking yet", ic: "eyeoff", say: "Then tracking comes first. Without it you are flying blind." },
+        { id: "what", label: "What is a pixel?", ic: "question",
+          say: "A pixel is a small piece of code on your site. It tells the ad platform which clicks became customers." }
+      ] },
+    { id: "blind", kind: "single", label: "“Paid for marketing without knowing what it brought in”",
+      title: "“I have paid for marketing without knowing what it brought in.”",
+      help: "How true is that for you?",
+      options: [
+        { id: "very", label: "Very true", ic: "n4", say: "Then the plan starts with tracking, so every euro shows what it brought in." },
+        { id: "some", label: "Somewhat true", ic: "n3", say: "Then the plan starts with tracking, so every euro shows what it brought in." },
+        { id: "little", label: "Not really", ic: "n2", say: "Good. Then the plan can go straight to growth." },
+        { id: "none", label: "Not at all", ic: "n1", say: "Good. Then the plan can go straight to growth." }
+      ] },
+    { id: "budget", kind: "single", label: "Monthly ad budget",
+      title: "What can you put into ads each month?",
+      help: "Ad spend only, not our fee. A rough number is fine.",
+      options: [
+        { id: "u500", label: "Under €500", ic: "f1", say: "Enough for one focused campaign. We would keep it simple." },
+        { id: "u1500", label: "€500 to €1,500", ic: "f2", say: "Room to test two or three angles side by side." },
+        { id: "u5000", label: "€1,500 to €5,000", ic: "f3", say: "Room for testing plus retargeting." },
+        { id: "o5000", label: "Over €5,000", ic: "f4", say: "Room for a full funnel and for scaling the winners." },
+        { id: "unsure", label: "Not sure yet", ic: "question", say: "No problem. {host} will suggest a starting budget on the call." }
+      ] },
+    { id: "help", kind: "multi", label: "Wants help with",
+      title: "What do you want help with?",
+      help: "Pick everything you would hand over.",
+      sayOnly: "Fine. {host} will suggest where to start.",
+      sayOne: "1 module on board.",
+      sayMany: "{n} modules on board.",
+      options: [
+        { id: "ads", label: "Running my ads", mono: "AD", tag: "Ads", svc: ["ads_management"] },
+        { id: "video", label: "Videos and creative", mono: "VI", tag: "Video", svc: ["video_creation"] },
+        { id: "website", label: "A better website", mono: "WB", tag: "Website", svc: ["website"] },
+        { id: "email", label: "Email and SMS", mono: "@", tag: "Email / SMS", svc: ["email_sms"] },
+        { id: "seo", label: "SEO on Google", mono: "SE", tag: "SEO", svc: ["seo"] },
+        { id: "sea", label: "Google search ads", mono: "G", tag: "Search ads", svc: ["sea"] },
+        { id: "tracking", label: "Tracking set-up", mono: "PX", tag: "Tracking", svc: [] },
+        { id: "unsure", label: "Not sure, advise me", mono: "?", only: true, svc: [] }
+      ] }
+  ];
+
+  function question(id) { for (var i = 0; i < QUESTIONS.length; i++) if (QUESTIONS[i].id === id) return QUESTIONS[i]; return null; }
+  function opt(qid, id) {
+    var x = question(qid), o = (x && x.options) || [];
+    for (var i = 0; i < o.length; i++) if (o[i].id === id) return o[i];
+    return null;
+  }
+  /* One line of plain text: no control characters, no runs of spaces, never longer than max. */
+  function text(s, max) {
+    return String(s == null ? "" : s).replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
+  }
+
+  /* Keeps only answers that match a real option, so saved progress can never carry anything else. */
+  function clean(a) {
+    var out = {};
+    a = a && typeof a === "object" ? a : {};
+    QUESTIONS.forEach(function (x) {
+      var v = a[x.id];
+      if (x.kind === "text") { v = text(v, x.max); if (v) out[x.id] = v; return; }
+      if (x.kind === "multi") {
+        if (!Array.isArray(v)) return;
+        v = v.filter(function (id, i) { return typeof id === "string" && !!opt(x.id, id) && v.indexOf(id) === i; });
+        var only = v.filter(function (id) { return opt(x.id, id).only; });
+        if (only.length) v = [only[0]];
+        if (v.length) out[x.id] = v;
+        return;
+      }
+      if (typeof v === "string" && opt(x.id, v)) out[x.id] = v;
+    });
+    return out;
+  }
+  function answered(a) { return Object.keys(clean(a)).length; }
+
+  /* The answer as words, for the message Max reads. */
+  function said(x, v) {
+    if (v == null || v === "" || (Array.isArray(v) && !v.length)) return "";
+    if (x.kind === "text") return v;
+    if (x.kind === "multi") return v.map(function (id) { return opt(x.id, id).label; }).join(", ");
+    return opt(x.id, v).label;
+  }
+  /* The line shown under the options after a tap. */
+  function reaction(x, v) {
+    var s = "";
+    if (x.kind === "single") { var o = v ? opt(x.id, v) : null; s = o ? o.say : ""; }
+    else if (x.kind === "multi" && v && v.length) s = opt(x.id, v[0]).only ? x.sayOnly : v.length === 1 ? x.sayOne : x.sayMany.replace("{n}", v.length);
+    return s.replace("{host}", CONFIG.host);
+  }
+  /* Tapping an option: one choice replaces the old one, a list toggles, "not sure" stands alone. */
+  function toggle(x, cur, id) {
+    if (x.kind !== "multi") return id;
+    var arr = Array.isArray(cur) ? cur.slice() : [], k = arr.indexOf(id);
+    if (k >= 0) { arr.splice(k, 1); return arr; }
+    if (opt(x.id, id).only) return [id];
+    arr = arr.filter(function (v) { return !opt(x.id, v).only; });
+    arr.push(id);
+    return arr;
+  }
+
+  function channelNames(a) {
+    return (a.channels || []).filter(function (id) { return id !== "unsure"; }).map(function (id) { return opt("channels", id).label; });
+  }
+  function helpTags(a) {
+    return (a.help || []).filter(function (id) { return id !== "unsure"; }).map(function (id) { return opt("help", id).tag; });
+  }
+  function list(items) {
+    if (items.length < 2) return items.join("");
+    return items.slice(0, -1).join(", ") + " and " + items[items.length - 1];
+  }
+
+  /* The first plan, row by row. Every row follows from an answer; nothing is measured or looked up. */
+  function plan(a) {
+    a = clean(a);
+    var t = a.type, ch = channelNames(a), tags = helpTags(a);
+    var goal = {
+      leads: t === "ecom" ? "More leads for your store" : "More enquiries and booked jobs",
+      sales: "More orders, and more back from every euro of ad spend",
+      repeat: "More repeat customers through email and SMS",
+      known: "More people in your market who know your name"
+    }[a.goal] || "More customers";
+    var channels = ch.length ? list(ch)
+      : t === "ecom" ? "Instagram, Facebook and TikTok to start"
+      : t === "service" ? "Facebook, Instagram and Google Search to start"
+      : "Chosen together on the call";
+    var setup = a.budget === "u500" ? "One simple campaign, so the budget is not spread thin" : "Test in ABO, then move the winners into CBO";
+    var counted = t === "ecom" ? "order" : t === "service" ? "enquiry" : "result";
+    var first = a.tracking && a.tracking !== "yes" ? "Set up tracking so every " + counted + " is counted"
+      : a.ads === "working" ? "Scale the campaigns that already work"
+      : a.ads === "weak" || a.ads === "stopped" ? "Find what held the old campaigns back"
+      : "Launch the first test campaign";
+    return [
+      { k: "Goal", v: goal },
+      { k: "Channels", v: channels },
+      { k: "Set-up", v: setup },
+      { k: "First step", v: first },
+      { k: "On board", v: tags.length ? list(tags) : CONFIG.host + " advises where to start" }
+    ];
+  }
+
+  /* An example ad written around the answers. It is shown with an "Example ad" label. */
+  function exampleAd(a) {
+    a = clean(a);
+    var social = (a.channels || []).filter(function (id) { return ["instagram", "facebook", "tiktok", "youtube"].indexOf(id) >= 0; })[0];
+    var place = "Sponsored · " + (social ? opt("channels", social).label : a.type === "service" ? "Facebook" : "Instagram");
+    var n = a.name;
+    if (a.type === "ecom") return { place: place, head: n ? "Just landed at " + n : "Just landed. See what is new.",
+      body: "Browse the new arrivals and order in a few taps.", cta: "Shop now" };
+    if (a.type === "service") return { place: place, head: "Need it done right the first time?",
+      body: n ? "Tell " + n + " what you need and get a quote." : "Tell us what you need and get a quote.", cta: "Get a quote" };
+    return { place: place, head: n ? "Meet " + n : "Meet the team behind it",
+      body: "See what we do and how to get started.", cta: "Learn more" };
+  }
+
+  /* The help they picked, as ids from the site price list (src/lib/quote-services.ts). */
+  function services(a) {
+    a = clean(a);
+    var out = [];
+    (a.help || []).forEach(function (id) {
+      var o = opt("help", id);
+      (o.svc || []).forEach(function (s) { if (out.indexOf(s) < 0) out.push(s); });
+      if (id === "tracking") {
+        if (a.type === "ecom" || a.type === "both") out.push("pixel_ecom");
+        if (a.type === "service" || a.type === "both") out.push("pixel_leadgen");
+      }
+    });
+    return out;
+  }
+
+  var DOW = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  var MON = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function dayOf(x) {
+    return { iso: x.getFullYear() + "-" + pad(x.getMonth() + 1) + "-" + pad(x.getDate()),
+      dow: DOW[x.getDay()].slice(0, 3), day: x.getDate(), mon: MON[x.getMonth()].slice(0, 3),
+      long: DOW[x.getDay()] + " " + x.getDate() + " " + MON[x.getMonth()] + " " + x.getFullYear(),
+      short: DOW[x.getDay()] + " " + x.getDate() + " " + MON[x.getMonth()] };
+  }
+  /* The days a visitor can pick, starting tomorrow, in the visitor's own calendar. */
+  function callDays(now, cfg) {
+    cfg = cfg || CONFIG;
+    var out = [], all = [];
+    for (var i = 1; i <= Math.max(1, cfg.daysAhead); i++) {
+      var x = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+      all.push(dayOf(x));
+      if (cfg.weekdays.indexOf(x.getDay()) >= 0) out.push(dayOf(x));
+    }
+    return out.length ? out : all;
+  }
+  function parseDay(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+    if (!m) return null;
+    var x = new Date(+m[1], +m[2] - 1, +m[3]);
+    return x.getFullYear() === +m[1] && x.getMonth() === +m[2] - 1 && x.getDate() === +m[3] ? dayOf(x) : null;
+  }
+  function slotLabel(id) {
+    for (var i = 0; i < CONFIG.slots.length; i++) if (CONFIG.slots[i].id === id) return CONFIG.slots[i].label;
+    return "";
+  }
+  /* "Thursday 19 November, afternoon", for the visitor. */
+  function whenShort(day, slot) {
+    var d = parseDay(day), s = slotLabel(slot);
+    return d && s ? d.short + ", " + s.toLowerCase() : "";
+  }
+
+  /* ---- the welcome card ---- */
+  function begun(s) { return !!s.seen && ((s.i || 0) > 0 || answered(s.a) > 0); }
+  /* How a visitor is greeted when the page opens: "big" for the large card, "bar" for only the bar at the bottom.
+     where.hash: the part of the page a link sent them to. where.phone: a narrow screen. */
+  function welcome(s, where, cfg) {
+    cfg = cfg || CONFIG; s = s || {}; where = where || {};
+    if (cfg.entry !== "big" || s.hi || s.seen || s.done) return "bar";
+    if (where.hash) return "bar";
+    if (where.phone && cfg.entryPhones !== "big") return "bar";
+    return "big";
+  }
+  /* The words on the card. how: "enter" when the page has just opened, "quote" when the visitor pressed "Request your quote".
+     to: the part of the homepage the second button leads to. */
+  function hello(how, s) {
+    s = s || {};
+    var n = QUESTIONS.length, quote = how === "quote", calc = " Or go straight to the price calculator.";
+    var o = { stops: [n + " questions", "Your plan", "Call with " + CONFIG.host],
+              alt: quote ? "Go to the price calculator" : "Just show me prices", to: quote ? "quoteForm" : "pricing" };
+    if (begun(s)) {
+      o.title = "Pick up where you left off.";
+      o.text = ((s.i || 0) >= n ? "Your plan is ready." : "You are at question " + ((s.i || 0) + 1) + " of " + n + ".") + (quote ? calc : "");
+      o.go = "Continue the growth check";
+    } else {
+      o.title = quote ? "Get your free growth plan first." : "Get your free growth plan.";
+      o.text = "Answer " + n + " quick questions about your business. You get a first marketing plan on the spot and can pick a day to go through it with " +
+        CONFIG.host + "." + (quote ? calc : " It takes 2 minutes.");
+      o.go = "Start the growth check";
+    }
+    return o;
+  }
+
+  var EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  /* The first thing still missing on the booking form, or null when it can be sent. */
+  function check(f) {
+    if (!parseDay(f.day)) return { field: "day", error: "Pick a day for your call." };
+    if (!slotLabel(f.slot)) return { field: "slot", error: "Pick a time of day." };
+    if (!text(f.first, 50)) return { field: "first", error: "Fill in your first name." };
+    if (!text(f.company, 120)) return { field: "company", error: "Fill in your business name." };
+    if (!EMAIL.test(text(f.email, 255))) return { field: "email", error: "Fill in a valid e-mail address." };
+    if (f.consent !== true) return { field: "consent", error: "Tick the box so " + CONFIG.host + " may contact you." };
+    return null;
+  }
+
+  /* What is sent to /api/public/contact. The first line of the message is what the admin Pipeline reads. */
+  function payload(s) {
+    var a = clean(s.a), d = parseDay(s.day), slot = slotLabel(s.slot);
+    var tz = text(s.tz, 40).replace(/[^A-Za-z0-9_+\-\/]/g, "");
+    var when = (d ? d.long : "day not chosen") + ", " + (slot ? slot.toLowerCase() : "any time") + (tz ? " (visitor's time zone: " + tz + ")" : "");
+    var note = text(s.note, 500), phone = text(s.phone, 40), utm = s.utm || {};
+    var lines = ["Call requested: " + when, "Growth check answers:"];
+    QUESTIONS.forEach(function (x) { var v = said(x, a[x.id]); if (v) lines.push(x.label + ": " + v); });
+    if (phone) lines.push("Phone: " + phone);
+    if (note) lines.push("Note: " + note);
+    return {
+      kind: "quote",
+      name: text(s.first, 50),
+      company: text(s.company, 120),
+      email: text(s.email, 255),
+      phone: phone,
+      services: services(a),
+      personalMessage: ("Free strategy call requested for " + when + "." + (note ? "\nNote: " + note : "")).slice(0, 1000),
+      message: lines.join("\n").slice(0, 2000),
+      attribution: { source: text(utm.source, 200) || "growth-check", medium: text(utm.medium, 200), campaign: text(utm.campaign, 200) },
+      consent: s.consent === true,
+      website: String(s.hp || "")
+    };
+  }
+
+  w.InspFunnel = { CONFIG: CONFIG, QUESTIONS: QUESTIONS, opt: opt, text: text, clean: clean, answered: answered, said: said,
+    reaction: reaction, toggle: toggle, plan: plan, exampleAd: exampleAd, services: services, callDays: callDays,
+    parseDay: parseDay, slotLabel: slotLabel, whenShort: whenShort, check: check, payload: payload,
+    begun: begun, welcome: welcome, hello: hello };
+})(window);
+/*</fx-logic>*/
+</script>
+
+<script>
+/* The screens: launcher, welcome card, cutscene, questions, plan, price reveal, day picker. */
+(function () {
+  "use strict";
+  var F = window.InspFunnel, dock = document.getElementById("fxDock"), root = document.getElementById("fx");
+  if (!F || !dock || !root) return;
+  var Q = F.QUESTIONS, CFG = F.CONFIG, LOGO = root.getAttribute("data-logo") || "";
+  var view = root.querySelector(".fx-view"), prog = root.querySelector(".fx-prog"), count = root.querySelector(".fx-count"),
+      flash = root.querySelector(".fx-flash");
+  var reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  var fine = !!(window.matchMedia && window.matchMedia("(pointer: fine)").matches);
+  var KEY = "inspfx1", timers = [], token = 0, screen = "", lastFocus = null, busy = false, just = "", yielding = 0, how = "enter";
+  var TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+
+  /* ---- progress, kept for this visit only ---- */
+  var st = (function () {
+    /* hi: the welcome card has been shown this visit. asked: "Request your quote" has opened it once, or prices were chosen. */
+    var s = { a: {}, i: 0, seen: false, won: false, mini: false, hi: false, asked: false, day: "", slot: "", f: {}, done: null };
+    try {
+      var r = JSON.parse(window.sessionStorage.getItem(KEY) || "null");
+      if (r && typeof r === "object") {
+        s.a = F.clean(r.a);
+        s.i = Math.max(0, Math.min(Q.length, parseInt(r.i, 10) || 0));
+        s.seen = !!r.seen; s.won = !!r.won; s.mini = !!r.mini; s.hi = !!r.hi; s.asked = !!r.asked;
+        s.day = F.parseDay(r.day) ? r.day : "";
+        s.slot = F.slotLabel(r.slot) ? r.slot : "";
+        if (r.f && typeof r.f === "object") ["first", "company", "email", "phone", "note"].forEach(function (k) { s.f[k] = F.text(r.f[k], 500); });
+        if (r.done && typeof r.done === "object") s.done = { first: F.text(r.done.first, 50), email: F.text(r.done.email, 255), when: F.text(r.done.when, 80) };
+      }
+    } catch (e) {}
+    return s;
+  })();
+  function save() { try { window.sessionStorage.setItem(KEY, JSON.stringify(st)); } catch (e) {} }
+  function has(x) { var v = st.a[x.id]; return x.kind === "multi" ? !!(v && v.length) : !!v; }
+  /* Saved progress never points past a question that still needs an answer. */
+  for (var g = 0; g < Q.length; g++) if (Q[g].kind !== "text" && !has(Q[g])) { st.i = Math.min(st.i, g); break; }
+  if (st.i < Q.length) st.won = false;
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; });
+  }
+  function later(fn, ms) { var id = window.setTimeout(fn, ms); timers.push(id); return id; }
+  function clearTimers() { timers.forEach(function (id) { window.clearTimeout(id); }); timers = []; }
+  function focus(el) { if (el) { try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); } } }
+  function buzz(p) { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} }
+
+  /* ---- option icons: plain line drawings, no brand marks ---- */
+  var IC = {
+    wrench: '<path d="M14.5 5.5a4.5 4.5 0 0 0-5.6 5.6l-5.4 5.4a2 2 0 0 0 2.8 2.8l5.4-5.4a4.5 4.5 0 0 0 5.6-5.6l-2.6 2.6-2.3-.5-.5-2.3z"/>',
+    bag: '<path d="M5.5 8h13l1 12h-15z"/><path d="M9 8V7a3 3 0 0 1 6 0v1"/>',
+    layers: '<path d="M12 4l8.5 4.5L12 13 3.5 8.5z"/><path d="M3.5 13L12 17.5 20.5 13"/>',
+    spark: '<path d="M12 3l1.9 6.1L20 11l-6.1 1.9L12 19l-1.9-6.1L4 11l6.1-1.9z"/>',
+    inbox: '<path d="M4 13l2.2-7.5h11.6L20 13v5.5H4z"/><path d="M4 13h4.5l1.2 2.2h4.6l1.2-2.2H20"/>',
+    tag: '<path d="M4 12.5V5h7.5l8.5 8.5-7.5 7.5z"/><circle cx="8.3" cy="9.3" r="1.3"/>',
+    loop: '<path d="M4.5 11a7.5 7.5 0 0 1 13-4.5L20 9M19.5 13a7.5 7.5 0 0 1-13 4.5L4 15"/><path d="M20 4.5V9h-4.5M4 19.5V15h4.5"/>',
+    horn: '<path d="M4 10.5l14-4.5v12L4 13.5z"/><path d="M8 14.8V17a2 2 0 0 0 4 0v-1"/>',
+    up: '<path d="M4 17l5.5-5.5 3.5 3.5L20 8"/><path d="M15 8h5v5"/>',
+    pulse: '<path d="M3 12h4l2.2-6 4 12 2.2-6H21"/>',
+    pause: '<circle cx="12" cy="12" r="8.5"/><path d="M10 9v6M14 9v6"/>',
+    check: '<circle cx="12" cy="12" r="8.5"/><path d="M8.2 12.3l2.6 2.6 5-5.4"/>',
+    ear: '<path d="M7 10a5 5 0 0 1 10 0c0 3-3 3.6-3 6.2A2.8 2.8 0 0 1 8.6 17"/><path d="M10 10.5a2 2 0 0 1 4 0"/>',
+    question: '<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.6a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2.9-1.2 1.8"/><path d="M12 16.6v.1"/>',
+    cursor: '<path d="M6 4l12 6.5-5 1.6L10.8 18z"/>',
+    eyeoff: '<path d="M3 12s3.3-6 9-6 9 6 9 6-3.3 6-9 6-9-6-9-6z"/><path d="M4 4l16 16"/>'
+  };
+  function bars(n) {
+    var s = "";
+    for (var k = 0; k < 4; k++) {
+      var h = 5 + k * 4;
+      s += '<rect x="' + (4.6 + k * 4) + '" y="' + (19 - h) + '" width="2.6" height="' + h + '" rx="1"' + (k < n ? ' fill="currentColor"' : "") + "/>";
+    }
+    return s;
+  }
+  function glyph(o) {
+    if (o.mono) return esc(o.mono);
+    var m = /^[nf](\d)$/.exec(o.ic || "");
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      (m ? bars(+m[1]) : IC[o.ic] || IC.spark) + "</svg>";
+  }
+
+  /* ---- the sky: stars that drift, streak into warp and throw a nova ring ---- */
+  var sky = (function () {
+    var c = root.querySelector(".fx-sky"), x = c && c.getContext ? c.getContext("2d") : null;
+    var W = 0, H = 0, S = [], raf = 0, last = 0, speed = .035, goal = .035, novaAt = 0, mx = 0, my = 0, shoot = null, nextShoot = 0;
+    function mk(z) {
+      return { x: Math.random() * 2 - 1, y: Math.random() * 2 - 1, z: z, o: Math.random() * 6.283,
+        c: Math.random() < .16 ? "143,214,255" : Math.random() < .22 ? "205,189,255" : "255,255,255" };
+    }
+    function still() {
+      var f = Math.max(W, H) * .62;
+      x.clearRect(0, 0, W, H);
+      S.forEach(function (s) {
+        var k = 1 - s.z;
+        x.fillStyle = "rgba(" + s.c + "," + (k * .9 + .15) + ")";
+        x.beginPath(); x.arc(W / 2 + s.x / s.z * f, H * .46 + s.y / s.z * f, k * 1.6 + .35, 0, 6.283); x.fill();
+      });
+    }
+    function fit() {
+      if (!x) return;
+      var d = Math.min(2, window.devicePixelRatio || 1);
+      W = c.clientWidth || window.innerWidth; H = c.clientHeight || window.innerHeight;
+      c.width = Math.round(W * d); c.height = Math.round(H * d); x.setTransform(d, 0, 0, d, 0, 0);
+      var n = Math.max(150, Math.min(440, Math.round(W * H / 3400)));
+      while (S.length < n) S.push(mk(Math.random() * .97 + .03));
+      S.length = n;
+      if (reduce) still();
+    }
+    function draw(now) {
+      raf = window.requestAnimationFrame(draw);
+      var dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now;
+      speed += (goal - speed) * Math.min(1, dt * 3);
+      x.clearRect(0, 0, W, H);
+      var cx = W / 2 + mx * 26, cy = H * .46 + my * 18, f = Math.max(W, H) * .62, streak = speed > .16, i, s;
+      x.lineCap = "round";
+      for (i = 0; i < S.length; i++) {
+        s = S[i];
+        var pz = s.z;
+        s.z -= speed * dt;
+        if (s.z < .03) { S[i] = mk(1); continue; }
+        var px = cx + s.x / s.z * f, py = cy + s.y / s.z * f;
+        if (px < -60 || px > W + 60 || py < -60 || py > H + 60) { S[i] = mk(1); continue; }
+        var k = 1 - s.z, r = k * 1.7 + .35, a = Math.min(1, k * 1.2 + .14);
+        if (streak) {
+          var qx = cx + s.x / pz * f, qy = cy + s.y / pz * f, len = 1 + Math.min(9, speed * 2.4);
+          x.strokeStyle = "rgba(" + s.c + "," + a + ")"; x.lineWidth = r;
+          x.beginPath(); x.moveTo(qx, qy); x.lineTo(px + (px - qx) * len, py + (py - qy) * len); x.stroke();
+        } else {
+          a *= .7 + .3 * Math.sin(now / 520 + s.o);
+          x.fillStyle = "rgba(" + s.c + "," + a + ")";
+          x.beginPath(); x.arc(px, py, r, 0, 6.283); x.fill();
+        }
+      }
+      if (novaAt) {
+        var np = Math.max(0, (now - novaAt) / 950);
+        if (np >= 1) novaAt = 0;
+        else {
+          var R = np * Math.max(W, H) * .95;
+          x.lineWidth = (1 - np) * 46 + 2; x.strokeStyle = "rgba(196,176,255," + (1 - np) * .85 + ")";
+          x.beginPath(); x.arc(W / 2, H * .46, R, 0, 6.283); x.stroke();
+          x.lineWidth = 2; x.strokeStyle = "rgba(255,255,255," + (1 - np) + ")";
+          x.beginPath(); x.arc(W / 2, H * .46, R * .8, 0, 6.283); x.stroke();
+        }
+      }
+      if (!shoot && now > nextShoot && !streak) shoot = { x: Math.random() * W * .7, y: Math.random() * H * .35, t: now };
+      if (shoot) {
+        var u = Math.max(0, (now - shoot.t) / 700);
+        if (u >= 1) { shoot = null; nextShoot = now + 3500 + Math.random() * 5000; }
+        else {
+          var sx = shoot.x + u * 260, sy = shoot.y + u * 110, gr = x.createLinearGradient(sx - 90, sy - 38, sx, sy);
+          gr.addColorStop(0, "rgba(255,255,255,0)"); gr.addColorStop(1, "rgba(255,255,255," + (1 - u) + ")");
+          x.strokeStyle = gr; x.lineWidth = 1.6; x.beginPath(); x.moveTo(sx - 90, sy - 38); x.lineTo(sx, sy); x.stroke();
+        }
+      }
+    }
+    return {
+      start: function () {
+        if (!x) return;
+        fit();
+        if (reduce || raf) return;
+        last = window.performance.now(); nextShoot = last + 2500; raf = window.requestAnimationFrame(draw);
+      },
+      stop: function () { if (raf) window.cancelAnimationFrame(raf); raf = 0; goal = speed = .035; novaAt = 0; shoot = null; },
+      fit: fit,
+      pulse: function (v) { if (!reduce) speed = Math.max(speed, v); },
+      warp: function (on) { goal = on ? 2.6 : .035; },
+      nova: function () {
+        if (reduce) return;
+        novaAt = window.performance.now();
+        flash.classList.remove("go"); void flash.offsetWidth; flash.classList.add("go");
+      },
+      aim: function (ax, ay) { mx = ax; my = ay; }
+    };
+  })();
+
+  function sparks(el, n, far) {
+    if (reduce || !el) return;
+    var r = el.getBoundingClientRect(), R = root.getBoundingClientRect(), cols = ["#fff", "#CDBDFF", "#8FD6FF", "#FF8366"];
+    for (var k = 0; k < n; k++) {
+      var s = document.createElement("i"), ang = Math.random() * 6.283, d = (far || 70) * (.45 + Math.random());
+      s.className = "fx-spark";
+      s.style.left = r.left - R.left + r.width * (.2 + Math.random() * .6) + "px";
+      s.style.top = r.top - R.top + r.height / 2 + "px";
+      s.style.setProperty("--dx", (Math.cos(ang) * d).toFixed(1) + "px");
+      s.style.setProperty("--dy", (Math.sin(ang) * d).toFixed(1) + "px");
+      s.style.setProperty("--s", (1 + Math.random() * 1.6).toFixed(2));
+      s.style.background = cols[k % 4];
+      s.style.animationDelay = Math.round(Math.random() * 120) + "ms";
+      root.appendChild(s);
+      window.setTimeout(function (node) { if (node.parentNode) node.parentNode.removeChild(node); }, 1000, s);
+    }
+  }
+  function typeInto(el, s, ms) {
+    if (!el) return;
+    if (reduce || !s) { el.textContent = s; return; }
+    var n = 0, step = Math.max(14, ms / s.length);
+    el.textContent = "";
+    (function tick() {
+      n++;
+      el.textContent = s.slice(0, n) + (n < s.length ? "▍" : "");
+      if (n < s.length) later(tick, step);
+    })();
+  }
+
+  /* ---- drawings for the question stage (320 x 200 units) ---- */
+  function wrap(s) { return '<svg class="fx-svg" viewBox="0 0 320 200" preserveAspectRatio="xMidYMid meet" focusable="false">' + s + "</svg>"; }
+  function t(x, y, s, cls, anchor) {
+    return '<text x="' + x + '" y="' + y + '" class="' + (cls || "") + '" text-anchor="' + (anchor || "middle") + '">' + esc(s) + "</text>";
+  }
+  function dots() {
+    var P = [[22, 30], [58, 160], [96, 20], [130, 176], [188, 14], [226, 170], [262, 36], [300, 120], [14, 104], [306, 64], [70, 96], [248, 108]], s = "";
+    P.forEach(function (p, i) { s += '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="' + (i % 3 ? .9 : 1.5) + '" fill="#fff" opacity="' + (i % 2 ? .35 : .7) + '"/>'; });
+    return s;
+  }
+  function tagAt(x, y, s) {
+    var w = s.length * 6.4 + 16;
+    return '<g class="s-pop"><rect class="s-chip" x="' + (x - w / 2) + '" y="' + (y - 10) + '" width="' + w + '" height="17" rx="8.5"/>' + t(x, y + 2, s, "s-m") + "</g>";
+  }
+  function core(cx, cy, r) {
+    return '<circle class="s-glow" cx="' + cx + '" cy="' + cy + '" r="' + (r * 1.7) + '"/><circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="url(#fxgPlanet)"/>';
+  }
+  var SCENES = {
+    type: function (v, a) {
+      var P = [[86, 52], [240, 60], [70, 120], [246, 128], [146, 22], [178, 164]], name = a.name || "Your business";
+      var s = dots() + '<circle class="s-dash" cx="160" cy="92" r="78"/><circle class="s-dash" cx="160" cy="92" r="50"/>' + core(160, 92, 23) +
+        '<ellipse class="s-hot" cx="160" cy="92" rx="36" ry="9" transform="rotate(-18 160 92)" opacity=".8"/>' +
+        t(160, 190, name.length > 28 ? name.slice(0, 27) + "…" : name, "s-b s-name");
+      function pin(p, i) {
+        return '<circle class="s-rip" style="--i:' + i + '" cx="' + p[0] + '" cy="' + p[1] + '" r="9"/><g class="s-pop" style="--i:' + i + '">' +
+          '<path fill="#FF8366" d="M' + p[0] + " " + (p[1] + 9) + 'c-5-6-8-9-8-13a8 8 0 0 1 16 0c0 4-3 7-8 13z"/><circle cx="' + p[0] + '" cy="' + (p[1] - 4) + '" r="2.6" fill="#fff"/></g>';
+      }
+      function box(p, i) {
+        return '<g class="s-pop" style="--i:' + i + '"><rect x="' + (p[0] - 9) + '" y="' + (p[1] - 8) + '" width="18" height="16" rx="3" fill="#8FD6FF"/>' +
+          '<path d="M' + (p[0] - 9) + " " + (p[1] - 3) + "h18M" + p[0] + " " + (p[1] - 8) + 'v5" stroke="#0C0820" stroke-width="1.4" fill="none"/></g>';
+      }
+      if (v === "service") s += P.map(pin).join("");
+      else if (v === "ecom") s += P.map(box).join("");
+      else if (v === "both") s += P.map(function (p, i) { return i % 2 ? box(p, i) : pin(p, i); }).join("");
+      else if (v === "other") s += '<g class="s-spin" style="transform-origin:160px 92px"><circle class="s-chip" cx="238" cy="92" r="11"/>' + t(238, 96, "?", "s-b") + "</g>";
+      return wrap(s);
+    },
+    name: function (v, a) { return SCENES.type(a.type, a); },
+    goal: function (v) {
+      var L = { leads: "Enquiries", sales: "Orders", repeat: "Repeat buyers", known: "Reach" };
+      var s = dots() + '<circle class="s-glow" cx="160" cy="84" r="' + (v ? 24 : 9) + '"/><circle cx="160" cy="84" r="' + (v ? 6.5 : 3) + '" fill="#fff"/>' +
+        '<g class="s-ret' + (v ? " lock" : "") + '"><circle class="s-hot" r="24"/><circle class="s-dash" r="36"/><path class="s-hot" d="M-46 0h-12M46 0h12M0-46v-12M0 46v12"/></g>';
+      if (v) s += '<g class="s-pop" style="--i:4">' + t(160, 160, "TARGET LOCKED", "s-m") + t(160, 176, L[v], "s-b") + "</g>";
+      return wrap(s);
+    },
+    channels: function (v, a, fresh) {
+      v = v || [];
+      var slots = { instagram: [62, 48, "Instagram"], youtube: [160, 26, "YouTube"], facebook: [258, 48, "Facebook"],
+        tiktok: [62, 142, "TikTok"], email: [160, 168, "Email / SMS"], google: [258, 142, "Google"] }, beams = "", chips = "";
+      Object.keys(slots).forEach(function (k) {
+        var p = slots[k];
+        if (v.indexOf(k) < 0) { chips += '<circle class="s-dash" cx="' + p[0] + '" cy="' + p[1] + '" r="5"/>'; return; }
+        beams += '<line class="s-hot s-flow" x1="' + p[0] + '" y1="' + p[1] + '" x2="160" y2="96"/>';
+        chips += '<g' + (k === fresh ? ' class="s-pop"' : "") + '><rect class="s-chip" x="' + (p[0] - 35) + '" y="' + (p[1] - 11) + '" width="70" height="22" rx="11"/>' + t(p[0], p[1] + 4, p[2], "s-b") + "</g>";
+      });
+      var s = dots() + '<ellipse class="s-dash" cx="160" cy="96" rx="118" ry="66"/>' + beams + core(160, 96, 17) + chips;
+      if (v.indexOf("unsure") >= 0) s += '<circle class="s-rip" cx="160" cy="96" r="24"/>' + t(160, 100, "?", "s-b");
+      return wrap(s);
+    },
+    ads: function (v) {
+      var d = { working: "M24 104H58L70 52 86 150 100 104H134L146 52 162 150 176 104H210L222 52 238 150 252 104H296",
+        weak: "M24 104H58L70 88 86 120 100 104H134L146 90 162 118 176 104H210L222 92 238 116 252 104H296",
+        stopped: "M24 104H58L70 52 86 150 100 104H134L146 80 162 124 176 104H296", never: "M24 104H296" };
+      var lab = { working: "Strong", weak: "Weak", stopped: "Lost", never: "None yet" };
+      var s = '<rect class="s-line" x="14" y="30" width="292" height="142" rx="14"/><path class="s-dash" d="M88 30V172M160 30V172M232 30V172"/>' +
+        t(24, 22, "AD ACCOUNT SIGNAL", "s-m", "start");
+      if (!v) return wrap(s + '<path class="s-dash" d="M24 104H296"/>');
+      s += '<path class="s-sig s-draw ' + v + '" pathLength="1" d="' + d[v] + '"/>' + t(296, 22, lab[v], "s-b", "end");
+      if (v === "never") s += '<g class="s-pop" style="--i:6"><circle class="s-rip" cx="52" cy="104" r="10"/><circle cx="52" cy="104" r="4" fill="#fff"/>' + t(52, 134, "Ready to launch") + "</g>";
+      if (v === "stopped") s += '<g class="s-pop" style="--i:8">' + t(238, 94, "Signal lost") + "</g>";
+      return wrap(s);
+    },
+    abo: function (v) {
+      var on = !!v, s = '<path class="s-dash" d="M160 12V188"/>' + t(82, 24, "ABO", "s-b s-big") + t(82, 38, "A budget per ad set") +
+        t(238, 24, "CBO", "s-b s-big") + t(238, 38, "One campaign budget") +
+        '<rect class="s-chip" x="212" y="46" width="52" height="18" rx="9"/>' + t(238, 59, "€30", "s-b");
+      [42, 82, 122].forEach(function (x, i) {
+        s += t(x, 58, "€10", "s-m") + '<rect class="s-line" x="' + (x - 11) + '" y="64" width="22" height="100" rx="7"/>' +
+          (on ? '<rect class="s-fillv s-grow" style="--i:' + i + '" x="' + (x - 8) + '" y="103" width="16" height="58" rx="5"/>' : "") + t(x, 180, "Set " + (i + 1));
+      });
+      var H = [62, 31, 10], E = ["€18", "€9", "€3"];
+      [198, 238, 278].forEach(function (x, i) {
+        s += '<path class="' + (on ? "s-hot s-flow" : "s-line") + '" d="M238 64V73H' + x + 'V84"/><rect class="s-line" x="' + (x - 11) + '" y="84" width="22" height="80" rx="7"/>' +
+          (on ? '<rect class="s-fillv s-grow' + (i ? "" : " best") + '" style="--i:' + (i + 3) + '" x="' + (x - 8) + '" y="' + (161 - H[i]) + '" width="16" height="' + H[i] + '" rx="5"/>' +
+            '<g class="s-pop" style="--i:' + (i + 9) + '">' + t(x + 14, 158 - H[i] + 12, E[i], "s-m", "start") + "</g>" : "") + t(x, 180, "Set " + (i + 1));
+      });
+      s += on ? '<g class="s-pop" style="--i:13">' + t(198, 194, "BEST", "s-m") + "</g>" : t(82, 124, "?", "s-b s-q") + t(238, 134, "?", "s-b s-q");
+      return wrap(s);
+    },
+    tracking: function (v) {
+      var N = [[52, "Ad"], [160, "Your site"], [268, "Customer"]], a = !!v && v !== "no", b = v === "yes" || v === "what", s = dots();
+      s += '<line class="' + (a ? "s-hot s-flow" : "s-dash") + '" x1="74" y1="92" x2="138" y2="92"/><line class="' + (b ? "s-hot s-flow" : "s-dash") + '" x1="182" y1="92" x2="246" y2="92"/>';
+      N.forEach(function (n, i) {
+        var lit = !!v && (i === 0 || (i === 1 ? a : b));
+        s += '<circle class="' + (lit ? "s-chip" : "s-dash") + '" cx="' + n[0] + '" cy="92" r="22"/>' + t(n[0], 132, n[1], lit || !v ? "s-b" : "");
+      });
+      s += '<path class="s-hot" d="M44 92l12-5v10z"/><rect class="s-hot" x="150" y="85" width="20" height="14" rx="2"/><circle class="s-hot" cx="268" cy="88" r="4"/><path class="s-hot" d="M260 100a8 8 0 0 1 16 0"/>';
+      if (v === "yes") s += tagAt(268, 52, "COUNTED");
+      if (v === "clicks") s += tagAt(160, 52, "CLICKS ONLY");
+      if (v === "no") s += tagAt(160, 52, "NO DATA");
+      if (v === "what") s += tagAt(160, 52, "PIXEL");
+      if (v) s += '<circle class="s-dot ' + v + '" cx="52" cy="92" r="4.5" fill="#fff"/>';
+      return wrap(s);
+    },
+    blind: function (v) {
+      var lost = { very: 4, some: 3, little: 1, none: 0 }[v], s = t(160, 36, "WHERE EACH EURO WENT", "s-m");
+      [64, 112, 160, 208, 256].forEach(function (x, i) {
+        var gone = !!v && i >= 5 - lost;
+        s += '<g class="' + (v ? (gone ? "s-gone" : "s-kept") : "") + '" style="--i:' + i + '"><circle class="s-coin" cx="' + x + '" cy="98" r="19"/>' + t(x, 103.5, "€", "s-b s-eur") + "</g>" +
+          (v ? '<g class="s-pop" style="--i:' + (i + 3) + '">' + (gone ? t(x, 150, "?", "s-b s-q") : t(x, 140, "TRACKED", "s-m")) + "</g>" : "");
+      });
+      return wrap(s);
+    },
+    budget: function (v) {
+      var w = { u500: .18, u1500: .42, u5000: .7, o5000: 1 }[v], s = dots() + t(40, 66, "MONTHLY AD SPEND", "s-m", "start") +
+        '<rect class="s-line" x="40" y="80" width="240" height="30" rx="15"/>';
+      if (w) s += '<rect class="s-fillh s-growx" x="44" y="84" width="' + (232 * w) + '" height="22" rx="11"/><g class="s-pop" style="--i:7"><circle cx="' + (40 + 232 * w - 7) + '" cy="95" r="7" fill="#fff"/></g>';
+      if (v === "unsure") s += t(160, 105, "?", "s-b s-q");
+      [["€500", .25], ["€1,500", .5], ["€5,000", .75]].forEach(function (m) {
+        var x = 44 + 232 * m[1];
+        s += '<path class="s-dash" d="M' + x + ' 114v8"/>' + t(x, 136, m[0]);
+      });
+      return wrap(s);
+    },
+    help: function (v, a, fresh) {
+      v = v || [];
+      var M = F.QUESTIONS[F.QUESTIONS.length - 1].options.filter(function (o) { return !o.only; }), lines = "", mods = "";
+      M.forEach(function (m, i) {
+        var ang = (-90 + i * 360 / M.length) * Math.PI / 180, x = Math.round(160 + Math.cos(ang) * 112), y = Math.round(98 + Math.sin(ang) * 70), on = v.indexOf(m.id) >= 0;
+        if (on) lines += '<line class="s-hot s-flow" x1="' + x + '" y1="' + y + '" x2="160" y2="98"/>';
+        mods += '<g class="' + (on ? (m.id === fresh ? "s-pop" : "") : "s-off") + '"><rect class="' + (on ? "s-chip" : "s-dash") + '" x="' + (x - 34) + '" y="' + (y - 11) + '" width="68" height="22" rx="8"/>' +
+          t(x, y + 4, m.tag, on ? "s-b" : "") + "</g>";
+      });
+      var s = dots() + lines + core(160, 98, 18) + mods;
+      if (v.indexOf("unsure") >= 0) s += '<circle class="s-rip" cx="160" cy="98" r="26"/>' + t(160, 102, "?", "s-b");
+      return wrap(s);
+    }
+  };
+
+  /* ---- the frame around every screen ---- */
+  function chrome() {
+    var n = Q.length, at = screen === "q" ? st.i : n, h = "";
+    count.textContent = screen === "scan" ? "Building your plan" : screen === "plan" ? "Your plan" : screen === "book" ? "Your call" : "";
+    if (screen === "q") count.innerHTML = "<span>Question </span>" + (st.i + 1) + " of " + n;
+    prog.hidden = screen === "intro" || screen === "done" || screen === "hello";
+    for (var k = 0; k < n; k++) h += '<li class="' + (k < at ? "lit" : k === at ? "lit now" : "") + '"></li>';
+    prog.innerHTML = h;
+  }
+  function go(name, quick) {
+    clearTimers(); busy = false; screen = name; root.classList.remove("fx-alarm");
+    var mine = ++token;
+    function paint() {
+      if (mine !== token) return;
+      SCREENS[name]();
+      view.setAttribute("data-screen", name);
+      view.scrollTop = 0; view.classList.remove("fx-out"); chrome();
+      var h = view.querySelector("[data-fx-focus]") || view.querySelector("h2");
+      if (h && !h.hasAttribute("tabindex") && h.tagName === "H2") h.setAttribute("tabindex", "-1");
+      focus(h);
+      if (!root.contains(document.activeElement)) focus(view);
+    }
+    if (reduce || quick || !view.firstChild) { paint(); return; }
+    view.classList.add("fx-out"); sky.pulse(1.1);
+    window.setTimeout(paint, 210);
+  }
+
+  /* ---- welcome card ---- */
+  function renderHello() {
+    var c = F.hello(how, st), X = [[37.6, 64], [54, 48.5], [68, 32.3]], d = "M16 72C44 70 56 42 80 20";
+    view.innerHTML =
+      '<section class="fx-hi"><div class="fx-hi-in"><article class="fx-hi-card">' +
+        '<div class="fx-hi-art" aria-hidden="true"><i class="fx-hi-sky"></i><div class="fx-hi-map">' +
+          '<svg class="fx-hi-line" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false"><path class="fx-hi-ghost" d="' + d + '"/></svg>' +
+          '<span class="fx-hi-wipe"><svg class="fx-hi-line" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">' +
+            '<path class="fx-hi-trail" d="' + d + '"/></svg></span>' +
+          '<span class="fx-orb fx-hi-orb"><img src="' + esc(LOGO) + '" alt=""><i></i></span>' +
+          c.stops.map(function (s, k) {
+            return '<span class="fx-hi-stop' + (k === 2 ? " up" : "") + '" style="--x:' + X[k][0] + "%;--y:" + X[k][1] + "%;--i:" + k + '"><b>' + esc(s) + "</b></span>";
+          }).join("") +
+          '<i class="fx-hi-comet"></i><i class="fx-hi-star"></i></div></div>' +
+        '<div class="fx-hi-body"><h2 id="fxTitle">' + esc(c.title) + "</h2><p>" + esc(c.text) + "</p>" +
+          '<div class="fx-hi-act"><button type="button" class="fx-btn fx-hi-go" data-fx="start"' + (how === "quote" ? " data-fx-focus" : "") + ">" + esc(c.go) + "</button>" +
+          '<button type="button" class="fx-btn fx-ghost" data-fx="quote">' + esc(c.alt) + "</button></div></div>" +
+        '<button type="button" class="fx-hi-x" data-fx="close" aria-label="Close">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button>' +
+      "</article></div></section>";
+    sky.pulse(1.5);
+    later(function () { sparks(view.querySelector(".fx-hi-star"), 14, 90); }, 1500);
+  }
+  /* Start: the card flies past the visitor, the page behind it goes dark and the check begins. */
+  function start() {
+    var card = view.querySelector(".fx-hi-in"), to = resume();
+    if (busy) return;
+    function on() { root.classList.remove("fx-hello", "fx-dark"); go(to, true); }
+    busy = true;
+    if (reduce || !card) { on(); return; }
+    root.classList.add("fx-dark"); card.classList.add("out"); sky.pulse(2.2); buzz(12);
+    later(on, 330);
+  }
+  /* The second button: on to the price calculator, which is part of the homepage itself. */
+  function toPrices() {
+    var el = document.getElementById(F.hello(how, st).to) || document.getElementById("quoteForm");
+    var head = document.querySelector("header");
+    st.asked = true; save(); close();
+    if (!el) return;
+    /* Land just under the site's menu bar, whatever its height on this screen. */
+    window.scrollTo(0, Math.max(0, el.getBoundingClientRect().top + window.pageYOffset - (head ? head.getBoundingClientRect().bottom : 0) - 18));
+    if (!el.hasAttribute("tabindex")) { el.setAttribute("tabindex", "-1"); el.style.outline = "none"; }
+    focus(el);
+  }
+
+  /* ---- opening cutscene ---- */
+  function renderIntro() {
+    view.innerHTML =
+      '<section class="fx-intro" data-phase="0">' +
+        '<div class="fx-ign" aria-hidden="true"><i class="fx-ign-ring"></i><i class="fx-ign-ring r2"></i>' +
+          '<div class="fx-ign-in"><img class="fx-ign-logo" src="' + esc(LOGO) + '" alt=""><div class="fx-ign-word">INSPIROVA</div></div></div>' +
+        '<div class="fx-pass-anim"><article class="fx-pass">' +
+          '<div class="fx-pass-top"><img src="' + esc(LOGO) + '" alt=""><b>INSPIROVA</b><span>GROWTH CHECK</span></div>' +
+          '<h2 id="fxTitle">You are cleared for launch.</h2>' +
+          "<p>Answer " + Q.length + " quick questions about your business. We turn your answers into a first marketing plan.</p>" +
+          '<div class="fx-perf"></div>' +
+          "<dl><div><dt>Questions</dt><dd>" + Q.length + "</dd></div><div><dt>Time</dt><dd>2 min</dd></div><div><dt>Cost</dt><dd>Free</dd></div></dl>" +
+          '<div class="fx-load"><div class="fx-load-bar"><i></i></div><span>Fuelling up</span><b>0%</b></div>' +
+          '<button type="button" class="fx-btn fx-begin" data-fx="begin" hidden>Begin</button>' +
+        "</article></div>" +
+        '<button type="button" class="fx-skip" data-fx="skip" data-fx-focus>Skip intro</button>' +
+      "</section>";
+    var sec = view.firstChild, load = sec.querySelector(".fx-load"), bar = load.querySelector("i"), word = load.querySelector("span"),
+        pct = load.querySelector("b"), begin = sec.querySelector(".fx-begin");
+    function ready() { sec.setAttribute("data-phase", "3"); load.hidden = true; begin.hidden = false; focus(begin); }
+    function fill(ms) {
+      var t0 = window.performance.now(), words = ["Fuelling up", "Checking instruments", "Ready for launch"];
+      (function tick() {
+        var p = Math.min(1, (window.performance.now() - t0) / ms);
+        bar.style.width = p * 100 + "%"; pct.textContent = Math.round(p * 100) + "%"; word.textContent = words[Math.min(2, Math.floor(p * 3))];
+        if (p < 1) later(tick, 40); else later(ready, 280);
+      })();
+    }
+    sec.fxReveal = function (fast) {
+      if (+sec.getAttribute("data-phase") >= 2) return;
+      clearTimers(); sec.setAttribute("data-phase", "2"); sky.warp(false);
+      if (!fast) { sky.nova(); buzz(16); }
+      fill(fast ? 450 : 1500);
+    };
+    if (reduce) { sec.setAttribute("data-phase", "2"); ready(); return; }
+    later(function () { sec.setAttribute("data-phase", "1"); sky.warp(true); }, 1550);
+    later(function () { sec.fxReveal(false); }, 2600);
+  }
+  /* Begin: the pass flies past the visitor and the first question arrives. */
+  function begin() {
+    var pass = view.querySelector(".fx-pass-anim");
+    st.seen = true; save();
+    if (reduce || !pass) { go("q"); return; }
+    pass.classList.add("out"); sky.pulse(2.4); buzz(12);
+    later(function () { go("q", true); }, 360);
+  }
+  function skipIntro() {
+    var sec = view.querySelector(".fx-intro");
+    if (sec && sec.fxReveal) sec.fxReveal(true);
+  }
+
+  /* ---- questions ---- */
+  function renderQ() {
+    var x = Q[st.i], multi = x.kind === "multi", h;
+    h = '<section class="fx-q" data-q="' + x.id + '"><div class="fx-stage" aria-hidden="true"></div><div class="fx-ask">' +
+      '<h2 id="fxTitle">' + esc(x.title) + '</h2><p class="fx-help">' + esc(x.help || "") + "</p>";
+    if (x.kind === "text") {
+      h += '<input class="fx-text" type="text" maxlength="' + x.max + '" autocomplete="organization" enterkeyhint="next" aria-labelledby="fxTitle" placeholder="' +
+        esc(x.placeholder) + '" value="' + esc(st.a[x.id] || "") + '"' + (fine ? " data-fx-focus" : "") + ">";
+    } else {
+      var two = multi || x.options.length > 4, odd = x.options.length % 2 === 1;
+      h += '<div class="fx-opts' + (two ? " two" : "") + '" role="' + (multi ? "group" : "radiogroup") + '" aria-labelledby="fxTitle">' +
+        x.options.map(function (o, k) {
+          return '<button type="button" class="fx-opt' + (two && odd && k === x.options.length - 1 ? " span" : "") + '" role="' + (multi ? "checkbox" : "radio") +
+            '" aria-checked="false" data-v="' + o.id + '"><span class="fx-ic">' + glyph(o) + '</span><span class="fx-ol"><b>' + esc(o.label) + "</b>" +
+            (o.sub ? "<small>" + esc(o.sub) + "</small>" : "") + '</span><span class="fx-tick">' + TICK + "</span></button>";
+        }).join("") + "</div>";
+    }
+    h += '<div class="fx-foot"><p class="fx-say" role="status"></p><div class="fx-nav">' +
+      (st.i > 0 ? '<button type="button" class="fx-btn fx-ghost fx-back" data-fx="back">Back</button>' : "") +
+      '<button type="button" class="fx-btn" data-fx="next">' + (st.i === Q.length - 1 ? "Build my plan" : "Continue") + "</button></div></div></div></section>";
+    view.innerHTML = h;
+    just = "";
+    paintQ(false);
+  }
+  function paintQ(fresh) {
+    var x = Q[st.i], v = st.a[x.id], sec = view.firstChild;
+    if (!sec || sec.getAttribute("data-q") !== x.id) return;
+    var opts = sec.querySelectorAll(".fx-opt");
+    for (var k = 0; k < opts.length; k++) {
+      var id = opts[k].getAttribute("data-v");
+      opts[k].setAttribute("aria-checked", String(x.kind === "multi" ? !!v && v.indexOf(id) >= 0 : v === id));
+    }
+    sec.querySelector(".fx-stage").innerHTML = SCENES[x.id](v, st.a, just);
+    var say = sec.querySelector(".fx-say"), words = F.reaction(x, v);
+    if (say.textContent !== words) {
+      say.textContent = words; say.classList.remove("new");
+      if (fresh && words) { void say.offsetWidth; say.classList.add("new"); }
+    }
+    var next = sec.querySelector('[data-fx="next"]');
+    sec.classList.toggle("has", x.kind === "text" || has(x));
+    if (x.kind === "text") next.textContent = v ? "Continue" : "Skip";
+    else next.disabled = !has(x);
+  }
+  function pick(btn, e) {
+    var x = Q[st.i], id = btn.getAttribute("data-v");
+    if (screen !== "q" || x.kind === "text" || !F.opt(x.id, id)) return;
+    var next = F.toggle(x, st.a[x.id], id);
+    if (x.kind === "multi" && !next.length) delete st.a[x.id]; else st.a[x.id] = next;
+    just = id; save(); paintQ(true);
+    if (reduce) return;
+    var r = btn.getBoundingClientRect();
+    btn.style.setProperty("--px", (e && e.clientX ? e.clientX - r.left : r.width / 2) + "px");
+    btn.style.setProperty("--py", (e && e.clientY ? e.clientY - r.top : r.height / 2) + "px");
+    btn.classList.remove("hit"); void btn.offsetWidth; btn.classList.add("hit");
+    if (btn.getAttribute("aria-checked") === "true") { sparks(btn, 7); sky.pulse(.55); buzz(8); }
+  }
+  function next() {
+    var x = Q[st.i];
+    if (x.kind === "text") {
+      var el = view.querySelector(".fx-text"), v = F.text(el ? el.value : "", x.max);
+      if (v) st.a[x.id] = v; else delete st.a[x.id];
+    } else if (!has(x)) return;
+    st.i++; save();
+    go(st.i >= Q.length ? "scan" : "q");
+  }
+  function back() { if (st.i > 0) { st.i--; save(); go("q"); } }
+
+  /* ---- "building your plan" ---- */
+  function adHtml(ad) {
+    var n = st.a.name || "Your business";
+    return '<figure class="fx-ad"><span class="fx-ad-tag">Example ad</span><div class="fx-ad-head"><span class="fx-ad-av">' + esc(n.charAt(0).toUpperCase()) +
+      "</span><span><b>" + esc(n) + "</b><small>" + esc(ad.place) + '</small></span></div><canvas width="480" height="300"></canvas>' +
+      '<div class="fx-ad-body"><h3>' + esc(ad.head) + "</h3><p>" + esc(ad.body) + '</p><span class="fx-ad-cta">' + esc(ad.cta) + "</span></div></figure>";
+  }
+  /* A poster drawn from the answers: the same answers always give the same picture. */
+  function poster(cv, animate) {
+    if (!cv || !cv.getContext) return;
+    var W = cv.width, H = cv.height, off = document.createElement("canvas"), g, i;
+    off.width = W; off.height = H; g = off.getContext("2d");
+    var seed = (st.a.name || "inspirova") + "|" + (st.a.type || "") + "|" + (st.a.goal || ""), h = 2166136261;
+    for (i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
+    function r() { h += 0x6D2B79F5; var z = Math.imul(h ^ (h >>> 15), 1 | h); z ^= z + Math.imul(z ^ (z >>> 7), 61 | z); return ((z ^ (z >>> 14)) >>> 0) / 4294967296; }
+    var bg = g.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, ["#1B0F4A", "#24105E", "#141A52"][Math.floor(r() * 3)]);
+    bg.addColorStop(1, ["#3B1D8F", "#5B2BB8", "#2A2F9C"][Math.floor(r() * 3)]);
+    g.fillStyle = bg; g.fillRect(0, 0, W, H);
+    g.globalCompositeOperation = "lighter";
+    var cols = ["124,92,255", "255,131,102", "143,214,255", "168,139,255"];
+    for (i = 0; i < 5; i++) {
+      var bx = r() * W, by = r() * H, rad = 90 + r() * 170, col = cols[Math.floor(r() * cols.length)], rg = g.createRadialGradient(bx, by, 0, bx, by, rad);
+      rg.addColorStop(0, "rgba(" + col + ",.5)"); rg.addColorStop(1, "rgba(" + col + ",0)");
+      g.fillStyle = rg; g.fillRect(0, 0, W, H);
+    }
+    g.globalCompositeOperation = "source-over";
+    g.strokeStyle = "rgba(255,255,255,.3)"; g.lineWidth = 1.5;
+    for (i = 0; i < 3; i++) { g.beginPath(); g.ellipse(W * .68, H * .5, 74 + i * 46, 27 + i * 18, -.35, 0, 6.283); g.stroke(); }
+    for (i = 0; i < 70; i++) { g.fillStyle = "rgba(255,255,255," + (.3 + r() * .7) + ")"; g.beginPath(); g.arc(r() * W, r() * H, r() * 1.8 + .4, 0, 6.283); g.fill(); }
+    var pg = g.createRadialGradient(W * .64, H * .43, 4, W * .68, H * .5, 46);
+    pg.addColorStop(0, "#fff"); pg.addColorStop(.35, "#C4B0FF"); pg.addColorStop(1, "#5B3BE0");
+    g.fillStyle = pg; g.beginPath(); g.arc(W * .68, H * .5, 40, 0, 6.283); g.fill();
+    var L = (st.a.name || "").charAt(0).toUpperCase();
+    if (L) {
+      g.font = "800 190px Poppins, Inter, sans-serif"; g.textBaseline = "middle"; g.fillStyle = "rgba(255,255,255,.95)";
+      g.shadowColor = "rgba(0,0,0,.35)"; g.shadowBlur = 24; g.fillText(L, W * .07, H * .54); g.shadowBlur = 0;
+    }
+    var x = cv.getContext("2d");
+    if (!animate) { x.drawImage(off, 0, 0); return; }
+    var steps = [40, 26, 16, 9, 5, 2, 1], k = 0;
+    (function tick() {
+      var b = steps[k], w = Math.max(1, Math.round(W / b)), hh = Math.max(1, Math.round(H / b));
+      x.imageSmoothingEnabled = b === 1;
+      x.clearRect(0, 0, W, H); x.drawImage(off, 0, 0, w, hh); x.drawImage(cv, 0, 0, w, hh, 0, 0, W, H);
+      if (++k < steps.length) later(tick, 130);
+    })();
+  }
+  function renderScan() {
+    var p = F.plan(st.a), ad = F.exampleAd(st.a), per = reduce ? 130 : 1150, i = 0;
+    var rows = [["Reading your answers", F.answered(st.a) + " answers"], ["Matching your channels", p[1].v], ["Choosing a campaign set-up", p[2].v],
+      ["Sketching an example ad", ad.place.replace(/^Sponsored · /, "For ")], ["Writing your first step", p[3].v]];
+    view.innerHTML = '<section class="fx-scan"><div><div class="fx-radar" aria-hidden="true"><img src="' + esc(LOGO) + '" alt=""></div>' +
+      '<h2 id="fxTitle">Plotting your course<b class="fx-pct">0%</b></h2><p class="fx-help">Turning your answers into a first plan.</p><ol class="fx-log">' +
+      rows.map(function (rw) { return "<li><i></i><span>" + esc(rw[0]) + "<code></code></span></li>"; }).join("") + "</ol></div>" +
+      "<div>" + adHtml(ad) + "</div></section>";
+    var lis = view.querySelectorAll(".fx-log li"), pct = view.querySelector(".fx-pct"), card = view.querySelector(".fx-ad");
+    card.classList.add("wait");
+    (function step() {
+      var li = lis[i];
+      li.classList.add("on"); typeInto(li.querySelector("code"), rows[i][1], per * .55);
+      if (i === 3) {
+        card.classList.remove("wait"); poster(card.querySelector("canvas"), !reduce); typeInto(card.querySelector("h3"), ad.head, per * .8);
+        if (card.getBoundingClientRect().bottom > view.getBoundingClientRect().bottom) card.scrollIntoView({ block: "end", behavior: reduce ? "auto" : "smooth" });
+      }
+      later(function () {
+        li.classList.remove("on"); li.classList.add("ok"); i++;
+        pct.textContent = Math.round(i / rows.length * 100) + "%";
+        if (i < rows.length) step(); else later(function () { go("plan"); }, reduce ? 300 : 900);
+      }, per);
+    })();
+  }
+
+  /* ---- plan, price, error, free ---- */
+  function renderPlan() {
+    var p = F.plan(st.a), nm = st.a.name, price = +CFG.callPrice || 0;
+    view.innerHTML =
+      '<section class="fx-plan"><div><h2 id="fxTitle">' + (nm ? "Flight plan for " + esc(nm) : "Your flight plan") + "</h2>" +
+      '<p class="fx-help">A first draft from your answers. ' + esc(CFG.host) + ' sharpens it with you on a call. <button type="button" class="fx-link" data-fx="edit">Change my answers</button></p></div>' +
+      '<div class="fx-plan-grid"><dl class="fx-card fx-plan-card">' +
+      p.map(function (rw, k) { return '<div class="fx-rise" style="--i:' + k + '"><dt>' + esc(rw.k) + "</dt><dd>" + esc(rw.v) + "</dd></div>"; }).join("") + "</dl>" +
+      adHtml(F.exampleAd(st.a)) + "</div>" +
+      '<div class="fx-ticket" data-state="calc"><div class="fx-ticket-main"><div><small class="fx-ticket-k">Next step</small><b>Strategy call with ' + esc(CFG.host) +
+      '</b><span class="fx-ticket-d">One to one, online. You go through this plan together.</span></div>' +
+      '<div class="fx-price"><s class="fx-was">€' + price + '</s><span class="fx-now">€' + price + "</span></div></div>" +
+      '<div class="fx-disc"><span>Growth check discount</span><div class="fx-disc-bar"><i></i></div><b>0%</b></div>' +
+      '<button type="button" class="fx-err" data-fx="fix" hidden><span class="fx-err-ic" aria-hidden="true">!</span><span class="fx-err-t"><b>ERROR: DISCOUNT TOO HIGH</b>' +
+      "<span>Your discount went past 100%. The price cannot drop below zero.</span></span><em>Tap to fix</em></button>" +
+      '<div class="fx-free" hidden><span class="fx-stamp" aria-hidden="true">FREE</span><p><b>Your strategy call is free.</b>You finished the growth check, so this one is on us.</p>' +
+      '<button type="button" class="fx-btn" data-fx="book">Pick a day</button></div><p class="fx-sr" role="status"></p></div></section>';
+    poster(view.querySelector(".fx-ad canvas"), false);
+    if (st.won || !price) free(true); else runPrice();
+  }
+  function runPrice() {
+    var tk = view.querySelector(".fx-ticket"), bar = tk.querySelector(".fx-disc-bar i"), pct = tk.querySelector(".fx-disc b"), p = 0;
+    function fail() {
+      var err = tk.querySelector(".fx-err");
+      tk.setAttribute("data-state", "err"); root.classList.add("fx-alarm"); err.hidden = false;
+      tk.querySelector(".fx-sr").textContent = "Error: discount too high. Use the button to fix it.";
+      sky.pulse(2.2); buzz([40, 50, 40]); focus(err);
+      if (err.getBoundingClientRect().bottom > view.getBoundingClientRect().bottom) err.scrollIntoView({ block: "end", behavior: reduce ? "auto" : "smooth" });
+    }
+    if (reduce) { later(function () { bar.style.width = "100%"; bar.classList.add("over"); pct.textContent = "180%"; fail(); }, 500); return; }
+    later(function () {
+      if (tk.getBoundingClientRect().bottom > view.getBoundingClientRect().bottom) tk.scrollIntoView({ block: "end", behavior: "smooth" });
+    }, 1000);
+    later(function tick() {
+      p += p < 100 ? 3 : 5;
+      bar.style.width = Math.min(100, p) + "%"; pct.textContent = p + "%";
+      if (p > 100) bar.classList.add("over");
+      if (p < 180) later(tick, p < 100 ? 45 : 60); else fail();
+    }, 1900);
+  }
+  function free(instant) {
+    var tk = view.querySelector(".fx-ticket");
+    if (!tk) return;
+    var now = tk.querySelector(".fx-now"), box = tk.querySelector(".fx-free"), price = +CFG.callPrice || 0;
+    root.classList.remove("fx-alarm"); tk.setAttribute("data-state", "free"); tk.querySelector(".fx-err").hidden = true;
+    if (!price) tk.querySelector(".fx-was").hidden = true;
+    function done() {
+      now.classList.remove("roll"); now.textContent = "€0"; box.hidden = false;
+      tk.querySelector(".fx-sr").textContent = "Your strategy call is free.";
+      if (instant) return;
+      sparks(tk, 26, 190); buzz(20); focus(box.querySelector(".fx-btn"));
+      if (box.getBoundingClientRect().bottom > view.getBoundingClientRect().bottom) box.scrollIntoView({ block: "end", behavior: reduce ? "auto" : "smooth" });
+    }
+    if (instant || reduce) { done(); return; }
+    sky.nova(); now.classList.add("roll");
+    var t0 = window.performance.now();
+    (function tick() {
+      var k = Math.min(1, (window.performance.now() - t0) / 1500), e = 1 - Math.pow(1 - k, 3);
+      now.textContent = "€" + Math.round(price * (1 - e));
+      if (k < 1) later(tick, 30); else done();
+    })();
+  }
+  function fix() {
+    var tk = view.querySelector(".fx-ticket");
+    if (!tk || tk.getAttribute("data-state") !== "err") return;
+    clearTimers(); st.won = true; save(); free(false);
+  }
+
+  /* ---- pick a day ---- */
+  function field(name, label, auto, max, type) {
+    return "<label><span>" + label + '</span><input name="' + name + '" type="' + type + '" maxlength="' + max + '" autocomplete="' + auto + '" value="' + esc(st.f[name] || "") + '"></label>';
+  }
+  function renderBook() {
+    var days = F.callDays(new Date());
+    if (!days.some(function (d) { return d.iso === st.day; })) st.day = "";
+    if (!st.f.company) st.f.company = st.a.name || "";
+    view.innerHTML = '<section class="fx-book"><h2 id="fxTitle">Pick a day for your free call</h2><p class="fx-help">Choose what suits you. ' + esc(CFG.host) +
+      ' confirms the exact time by e-mail.</p><div class="fx-book-grid"><div><p class="fx-label" id="fxDayL">Day</p><div class="fx-days" role="radiogroup" aria-labelledby="fxDayL">' +
+      days.map(function (d) {
+        return '<button type="button" class="fx-day" role="radio" aria-checked="' + (d.iso === st.day) + '" data-fx="day" data-d="' + d.iso + '" aria-label="' + esc(d.long) +
+          '"><small>' + d.dow + "</small><b>" + d.day + "</b><small>" + d.mon + "</small></button>";
+      }).join("") + '</div><p class="fx-label" id="fxSlotL">Time of day</p><div class="fx-slots" role="radiogroup" aria-labelledby="fxSlotL">' +
+      CFG.slots.map(function (s) {
+        return '<button type="button" class="fx-slot" role="radio" aria-checked="' + (s.id === st.slot) + '" data-fx="slot" data-s="' + esc(s.id) + '">' + esc(s.label) + "</button>";
+      }).join("") + '</div><p class="fx-pickline" role="status">' + esc(pickLine()) + '</p></div><form class="fx-form" novalidate>' +
+      field("first", "First name", "given-name", 50, "text") + field("company", "Business name", "organization", 120, "text") +
+      field("email", "E-mail", "email", 255, "email") + field("phone", "Phone or WhatsApp <em>(optional)</em>", "tel", 40, "tel") +
+      '<label class="fx-wide"><span>Anything ' + esc(CFG.host) + ' should know? <em>(optional)</em></span><textarea name="note" maxlength="500" rows="2">' + esc(st.f.note || "") + "</textarea></label>" +
+      '<input type="hidden" name="website" value=""><label class="fx-check"><input type="checkbox" name="consent"><span>Yes, contact me about this call. I agree to the ' +
+      '<a href="/privacy" target="_blank" rel="noopener">privacy policy</a>.</span></label>' +
+      '<p class="fx-msg" role="alert"></p><button type="submit" class="fx-btn">Request my free call</button></form></div></section>';
+  }
+  function pickLine() {
+    var when = F.whenShort(st.day, st.slot);
+    return when ? "You are asking for " + when + "." : st.day ? "Now pick a time of day." : "";
+  }
+  function choose(btn, key, attr) {
+    var all = btn.parentNode.children;
+    for (var k = 0; k < all.length; k++) all[k].setAttribute("aria-checked", String(all[k] === btn));
+    st[key] = btn.getAttribute(attr); save(); sparks(btn, 5, 46); buzz(8);
+    var msg = view.querySelector(".fx-msg"), line = view.querySelector(".fx-pickline");
+    if (msg) msg.textContent = "";
+    if (line) line.textContent = pickLine();
+  }
+  function formValues(form) {
+    var v = {};
+    ["first", "company", "email", "phone", "note", "website"].forEach(function (k) { v[k] = form.elements[k] ? form.elements[k].value : ""; });
+    v.consent = !!(form.elements.consent && form.elements.consent.checked);
+    return v;
+  }
+  function submit(form) {
+    if (busy) return;
+    var v = formValues(form), msg = form.querySelector(".fx-msg"), btn = form.querySelector('[type="submit"]'), utm = {}, tz = "";
+    var bad = F.check({ day: st.day, slot: st.slot, first: v.first, company: v.company, email: v.email, consent: v.consent });
+    if (bad) {
+      msg.textContent = bad.error;
+      focus(bad.field === "day" ? view.querySelector(".fx-day") : bad.field === "slot" ? view.querySelector(".fx-slot") : form.elements[bad.field]);
+      return;
+    }
+    try {
+      var qs = new URLSearchParams(window.parent.location.search);
+      utm = { source: qs.get("utm_source") || "", medium: qs.get("utm_medium") || "", campaign: qs.get("utm_campaign") || "" };
+    } catch (e) {}
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e2) {}
+    var data = F.payload({ a: st.a, day: st.day, slot: st.slot, first: v.first, company: v.company, email: v.email, phone: v.phone, note: v.note,
+      consent: v.consent, hp: v.website, tz: tz, utm: utm });
+    busy = true; btn.disabled = true; btn.textContent = "Sending…"; msg.textContent = "";
+    var mine = token;
+    window.fetch("/api/public/contact", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(data), signal: AbortSignal.timeout(20000) })
+      .then(function (res) { return res.json().catch(function () { return {}; }).then(function (j) { return { ok: res.ok, j: j || {} }; }); })
+      .then(function (res) {
+        if (mine !== token) return;
+        if (!res.ok) { msg.textContent = res.j.error || "Your request could not be sent. Please try again."; return; }
+        st.done = { first: data.name, email: data.email, when: F.whenShort(st.day, st.slot) };
+        st.f = {}; save(); go("done");
+      })
+      .catch(function () { if (mine === token) msg.textContent = "Network error. Please e-mail " + CFG.fallbackEmail + "."; })
+      .then(function () {
+        busy = false;
+        if (mine === token && btn.parentNode) { btn.disabled = false; btn.textContent = "Request my free call"; }
+      });
+  }
+  function renderDone() {
+    var d = st.done || {};
+    view.innerHTML = '<section class="fx-done"><div class="fx-done-orb" aria-hidden="true"><i></i><i></i><img src="' + esc(LOGO) + '" alt=""></div>' +
+      '<h2 id="fxTitle">We have lift-off' + (d.first ? ", " + esc(d.first) : "") + ".</h2>" +
+      "<p>Your call request is in" + (d.when ? ": <b>" + esc(d.when) + "</b>" : "") + ".</p>" +
+      '<p class="fx-help">' + esc(CFG.host) + " will e-mail " + (d.email ? "<b>" + esc(d.email) + "</b>" : "you") + " to confirm the exact time.</p>" +
+      '<div class="fx-done-act"><button type="button" class="fx-btn" data-fx="close">Back to the site</button>' +
+      '<a class="fx-btn fx-ghost" href="/results" target="_top">See client results</a></div></section>';
+    sky.nova(); sparks(view.querySelector(".fx-done-orb"), 30, 230); buzz([20, 40, 20]);
+  }
+  var SCREENS = { hello: renderHello, intro: renderIntro, q: renderQ, scan: renderScan, plan: renderPlan, book: renderBook, done: renderDone };
+
+  /* ---- open, close, launcher ---- */
+  function paintDock() {
+    var started = F.begun(st), title, sub, cta;
+    if (st.done) { title = "Call requested"; sub = CFG.host + " confirms by e-mail."; cta = "View"; }
+    else if (started) { title = "Continue your growth check"; sub = st.i >= Q.length ? "Your plan is ready" : "Question " + (st.i + 1) + " of " + Q.length; cta = "Continue"; }
+    else { title = "Get your free growth plan"; sub = Q.length + " questions, 2 minutes"; cta = "Start"; }
+    document.getElementById("fxDockTitle").textContent = title;
+    document.getElementById("fxDockSub").textContent = sub;
+    document.getElementById("fxDockCta").textContent = cta;
+    dock.setAttribute("data-state", st.mini || yielding > 0 ? "mini" : "open");
+  }
+  function resume() { return st.done ? "done" : !st.seen ? "intro" : st.i >= Q.length ? (st.won ? "book" : "plan") : "q"; }
+  /* by "enter" (the page has just opened) or "quote" (the site's quote button): the welcome card comes first.
+     Anything else, such as the launcher's own button, goes straight into the check. */
+  function open(by) {
+    if (!root.hidden) return;
+    var card = (by === "enter" || by === "quote") && !st.done;
+    lastFocus = document.activeElement;
+    dock.hidden = false; root.hidden = false; document.body.classList.add("fx-open"); document.documentElement.classList.add("fx-lock");
+    root.classList.toggle("fx-hello", card);
+    sky.start();
+    if (!card) { go(resume(), true); return; }
+    how = by; st.hi = true; if (by === "quote") st.asked = true; save();
+    go("hello", true);
+  }
+  function close() {
+    if (root.hidden) return;
+    clearTimers(); token++; busy = false;
+    root.hidden = true; root.classList.remove("fx-alarm", "fx-hello", "fx-dark"); document.body.classList.remove("fx-open"); document.documentElement.classList.remove("fx-lock");
+    sky.stop(); view.innerHTML = ""; paintDock();
+    if (lastFocus && lastFocus !== document.body && lastFocus.focus && document.body.contains(lastFocus)) focus(lastFocus);
+    else focus(dock.querySelector(dock.getAttribute("data-state") === "mini" ? ".fx-dock-mini" : ".fx-dock-main"));
+  }
+
+  root.addEventListener("click", function (e) {
+    var el = e.target instanceof Element ? e.target : null, hit;
+    if (!el) return;
+    if ((hit = el.closest("[data-v]"))) { pick(hit, e); return; }
+    hit = el.closest("[data-fx]");
+    if (!hit) {
+      if (screen === "intro") skipIntro();
+      else if (screen === "hello" && !el.closest(".fx-hi-card")) close();   /* a tap beside the card closes it */
+      return;
+    }
+    switch (hit.getAttribute("data-fx")) {
+      case "close": close(); break;
+      case "start": start(); break;
+      case "quote": toPrices(); break;
+      case "skip": skipIntro(); break;
+      case "begin": begin(); break;
+      case "next": next(); break;
+      case "back": back(); break;
+      case "fix": fix(); break;
+      case "book": go("book"); break;
+      case "edit": st.i = Q.length - 1; save(); go("q"); break;
+      case "day": choose(hit, "day", "data-d"); break;
+      case "slot": choose(hit, "slot", "data-s"); break;
+    }
+  });
+  view.addEventListener("submit", function (e) { e.preventDefault(); if (screen === "book") submit(e.target); });
+  view.addEventListener("input", function (e) {
+    var el = e.target;
+    if (screen === "q" && el.classList && el.classList.contains("fx-text")) {
+      var x = Q[st.i], v = F.text(el.value, x.max), label = view.querySelector(".s-name");
+      if (v) st.a[x.id] = v; else delete st.a[x.id];
+      if (label) label.textContent = v ? (v.length > 28 ? v.slice(0, 27) + "…" : v) : "Your business";
+      var btn = view.querySelector('[data-fx="next"]');
+      if (btn) btn.textContent = v ? "Continue" : "Skip";
+      save();
+    } else if (screen === "book" && el.form && el.name && el.name !== "website" && el.type !== "checkbox") {
+      st.f[el.name] = F.text(el.value, 500); save();
+    }
+  });
+  view.addEventListener("pointermove", function (e) {
+    if (reduce || e.pointerType === "touch") return;
+    var R = root.getBoundingClientRect();
+    sky.aim((e.clientX - R.left) / R.width - .5, (e.clientY - R.top) / R.height - .5);
+    var card = screen === "intro" ? ".fx-pass" : screen === "hello" ? ".fx-hi-card" : "", p = card ? view.querySelector(card) : null, lean = screen === "hello" ? .3 : 1;
+    if (!p) return;
+    var r = p.getBoundingClientRect(), px = Math.max(-.3, Math.min(1.3, (e.clientX - r.left) / r.width)), py = Math.max(-.3, Math.min(1.3, (e.clientY - r.top) / r.height));
+    p.style.setProperty("--fx-ry", ((px - .5) * 12 * lean).toFixed(2) + "deg"); p.style.setProperty("--fx-rx", ((.5 - py) * 10 * lean).toFixed(2) + "deg");
+    p.style.setProperty("--fx-gx", (px * 100).toFixed(1) + "%"); p.style.setProperty("--fx-gy", (py * 100).toFixed(1) + "%");
+  });
+  document.addEventListener("keydown", function (e) {
+    if (root.hidden) return;
+    var el = e.target, tag = (el && el.tagName) || "", k = e.key;
+    if (k === "Escape") { e.preventDefault(); close(); return; }
+    if (k === "Tab") {
+      var f = [].slice.call(root.querySelectorAll('button:not([disabled]),a[href],input:not([type="hidden"]),textarea')).filter(function (n) { return n.offsetParent !== null; });
+      if (!f.length) return;
+      var a = document.activeElement;
+      if (e.shiftKey && (a === f[0] || !root.contains(a) || a === view)) { e.preventDefault(); f[f.length - 1].focus(); }
+      else if (!e.shiftKey && (a === f[f.length - 1] || !root.contains(a))) { e.preventDefault(); f[0].focus(); }
+      return;
+    }
+    if (/^Arrow/.test(k) && el.getAttribute && /^(radio|checkbox)$/.test(el.getAttribute("role") || "")) {
+      var sib = [].slice.call(el.parentNode.children), to = sib[sib.indexOf(el) + (k === "ArrowDown" || k === "ArrowRight" ? 1 : -1)];
+      if (to) { e.preventDefault(); to.focus(); }
+      return;
+    }
+    if (screen === "intro" && (k === "Enter" || k === " ") && tag !== "BUTTON") { skipIntro(); return; }
+    if (screen !== "q" || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (tag === "INPUT") { if (k === "Enter") { e.preventDefault(); next(); } return; }
+    if (/^[1-9]$/.test(k)) { var o = view.querySelectorAll(".fx-opt")[+k - 1]; if (o) { o.focus(); pick(o); } return; }
+    if (k === "Enter" && tag !== "BUTTON" && tag !== "A") { e.preventDefault(); next(); }
+  });
+  window.addEventListener("resize", function () { if (!root.hidden) sky.fit(); });
+  /* One finger on the screen moves the check when it has more to show, and never the site behind it. */
+  root.addEventListener("touchmove", function (e) {
+    if (e.touches.length === 1 && e.cancelable && view.scrollHeight <= view.clientHeight + 1) e.preventDefault();
+  }, { passive: false });
+  /* Only the middle part scrolls. If a browser nudges the frame itself (keyboard, focus), put it back. */
+  root.addEventListener("scroll", function () { if (root.scrollTop || root.scrollLeft) { root.scrollTop = 0; root.scrollLeft = 0; } });
+
+  dock.addEventListener("click", function (e) {
+    var el = e.target instanceof Element ? e.target : null;
+    if (!el) return;
+    if (el.closest("[data-fx-min]")) { st.mini = true; save(); paintDock(); focus(dock.querySelector(".fx-dock-mini")); return; }
+    if (el.closest("[data-fx-open]")) { if (st.mini) { st.mini = false; save(); } open(); }
+  });
+  /* Any other button on the page can open the check by carrying data-fx-open. */
+  document.addEventListener("click", function (e) {
+    var el = e.target instanceof Element ? e.target.closest("[data-fx-open]") : null;
+    if (el && !dock.contains(el)) { e.preventDefault(); open(); }
+  });
+  /* Step aside while someone is filling in the quote calculator or watching the videos. */
+  if ("IntersectionObserver" in window) {
+    var seen = [], io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) { var k = seen.indexOf(en.target); if (en.isIntersecting && k < 0) seen.push(en.target); if (!en.isIntersecting && k >= 0) seen.splice(k, 1); });
+      yielding = seen.length; paintDock();
+    }, { rootMargin: "0px 0px -18% 0px" });
+    [document.getElementById("quoteForm"), document.querySelector(".calc-footer"), document.getElementById("rlRow")].forEach(function (n) { if (n) io.observe(n); });
+  }
+  /* The site's own "Request your quote" button opens the card, once per visit. After that it goes to the calculator as before. */
+  document.addEventListener("click", function (e) {
+    if (!CFG.quoteOpensCard || st.done || st.asked || !root.hidden || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    var a = e.target instanceof Element ? e.target.closest('a[href="#quoteForm"]') : null;
+    if (!a) return;
+    e.preventDefault(); e.stopPropagation();
+    open("quote");
+  }, true);
+
+  /* Arriving: the big card once per visit, unless a link sent the visitor to one part of the page. */
+  var where = { hash: "", phone: !!(window.matchMedia && window.matchMedia("(max-width: 760px)").matches) };
+  try { where.hash = String(window.parent.location.hash || window.location.hash || "").slice(1); } catch (e) {}
+  var greet = F.welcome(st, where) === "big";
+  function greetNow() {
+    var a = document.activeElement, typing = !!a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
+    if (!root.hidden) return;
+    if (st.hi || typing || document.body.classList.contains("contact-open")) { dock.hidden = false; return; }
+    open("enter");
+  }
+  paintDock(); dock.hidden = greet; document.body.classList.add("fx-docked");
+  if (greet) {
+    var wait = Math.max(0, +CFG.entryDelay || 0) * 1000;
+    if (document.visibilityState !== "hidden") window.setTimeout(greetNow, wait);
+    else document.addEventListener("visibilitychange", function shown() {
+      if (document.visibilityState === "hidden") return;
+      document.removeEventListener("visibilitychange", shown);
+      window.setTimeout(greetNow, wait);
+    });
+  }
+})();
+</script>

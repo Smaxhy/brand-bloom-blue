@@ -8,6 +8,16 @@ export interface WebsiteRequest {
   attribution: { source?: string; medium?: string; campaign?: string };
 }
 
+/** The growth check on the public site starts its message with "Call requested: <day>, <time of day> (visitor's time zone: …)". */
+export function requestedCall(r: Pick<WebsiteRequest, "message">): string {
+  return /^Call requested: (.{1,200})$/m.exec(r.message ?? "")?.[1].trim() ?? "";
+}
+/** The newest call asked for through the website, without the time-zone note, for a Pipeline card. */
+export function latestCall(requests: WebsiteRequest[] = []): string {
+  const calls = requests.filter((r) => requestedCall(r)).sort((a, b) => b.created_at.localeCompare(a.created_at));
+  return calls.length ? requestedCall(calls[0]).replace(/\s*\([^)]*\)\s*$/, "") : "";
+}
+
 const emailKey = (email: string) => email.trim().replace(/^mailto:/i, "").toLowerCase();
 const textKey = (text: string) => text.trim().toLowerCase().replace(/\s+/g, " ");
 export function sameDeal(a: Deal, b: Deal) {
@@ -51,7 +61,7 @@ export function mergeWebsiteRequests(deals: Deal[], requests: WebsiteRequest[], 
   for (const r of requests.filter((r) => !dismissed.has(r.id)).sort((a, b) => a.created_at.localeCompare(b.created_at))) {
     const requestDeal: Deal = { id: `website_${r.id}`, name: r.company || r.name, contact: r.name,
       email: r.email, phone: r.phone, value: r.estimates?.total ?? 0, stage: "new",
-      source: r.kind === "quote" ? "Website quote" : "Website contact", notes: "",
+      source: requestedCall(r) ? "Website call request" : r.kind === "quote" ? "Website quote" : "Website contact", notes: "",
       requests: [r], createdAt: Date.parse(r.created_at), updatedAt: Date.parse(r.created_at) };
     const existing = result.find((d) => sameDeal(d, requestDeal));
     if (!existing) { result.push(requestDeal); continue; }

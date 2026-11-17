@@ -75,3 +75,45 @@ export async function fetchPublicSite(value: string, timeoutMs: number, headers:
   }
   return null;
 }
+
+/**
+ * A small public JSON file from a website (a shop's own catalogue file), behind the same
+ * destination checks as a page. Null when it is not there, is not JSON, or is larger than `maxBytes`.
+ */
+export async function fetchPublicJson(value: string, timeoutMs: number, headers: HeadersInit, maxBytes = 400000): Promise<unknown> {
+  const signal = AbortSignal.timeout(timeoutMs);
+  let destination = value;
+  for (let hop = 0; hop < 4; hop++) {
+    const url = publicSiteUrl(destination);
+    if (!url || !(await publicHost(url.hostname, signal))) return null;
+    const res = await fetch(url, { headers, redirect: 'manual', signal });
+    if ([301, 302, 303, 307, 308].includes(res.status)) {
+      await res.body?.cancel();
+      const location = res.headers.get('location');
+      if (!location) return null;
+      destination = new URL(location, url).href;
+      continue;
+    }
+    if (!res.ok || !/json/i.test(res.headers.get('content-type') ?? '')) {
+      await res.body?.cancel();
+      return null;
+    }
+    const reader = res.body?.getReader();
+    if (!reader) return null;
+    const decoder = new TextDecoder();
+    let text = '', size = 0, whole = false;
+    try {
+      for (;;) {
+        const chunk = await reader.read();
+        if (chunk.done) { whole = true; break; }
+        size += chunk.value.length;
+        if (size > maxBytes) break;
+        text += decoder.decode(chunk.value, { stream: true });
+      }
+      text += decoder.decode();
+    } finally { await reader.cancel(); }
+    if (!whole) return null;
+    try { return JSON.parse(text) as unknown; } catch { return null; }
+  }
+  return null;
+}

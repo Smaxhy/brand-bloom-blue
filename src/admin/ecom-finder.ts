@@ -24,6 +24,8 @@ export interface EcomScanOptions {
   hideSeen: boolean;
   /** Where each source's list of searches is picked up (0 = the first search). */
   startAt?: Partial<Record<EcomSource, number>>;
+  /** With a country: only brands whose own site confirms they are based there (the default). */
+  strict?: boolean;
 }
 
 export type EcomStepReply = EcomStepResult & { warnings?: string[]; noProvider?: boolean };
@@ -80,6 +82,11 @@ export const ECOM_GAP_MS = 2_200;
  * on, and the scan ends by itself when both have run dry.
  */
 export const ECOM_DRY_LIMIT = 3;
+/**
+ * The same, for a scan that only keeps brands confirmed in one country: there
+ * a search often finds shops and still adds nothing, so it gets more patience.
+ */
+export const ECOM_DRY_LIMIT_STRICT = 5;
 const SOURCES: EcomSource[] = ["stores", "instagram"];
 const SOURCE_NAME: Record<EcomSource, string> = { stores: "Online shops", instagram: "Instagram" };
 
@@ -93,7 +100,11 @@ export async function runEcomScan(o: EcomScanOptions, io: EcomScanIo): Promise<E
     notBrands: 0,
     seen: 0,
     notShops: 0,
+    elsewhere: 0,
+    unplaced: 0,
   };
+  const strict = !!o.market && o.strict !== false;
+  const dryLimit = strict ? ECOM_DRY_LIMIT_STRICT : ECOM_DRY_LIMIT;
   const warnings = new Set<string>();
   const sources = SOURCES.filter((s) => o.sources.includes(s));
   const startAt = (source: EcomSource) => {
@@ -115,7 +126,7 @@ export async function runEcomScan(o: EcomScanOptions, io: EcomScanIo): Promise<E
     return outcome("failed", "Choose where to look: online shops, Instagram, or both.");
   if (!o.niche.trim()) return outcome("failed", "Type what the brands sell.");
 
-  const max = Math.max(1, Math.min(60, Math.floor(o.maxSearches) || 1));
+  const max = Math.max(1, Math.min(120, Math.floor(o.maxSearches) || 1));
   const since = new Date(now()).toISOString();
   const before = new Set(io.list.flatMap(ecomBrandKeys));
   let list = io.list.slice();
@@ -155,6 +166,7 @@ export async function runEcomScan(o: EcomScanOptions, io: EcomScanIo): Promise<E
       source,
       step: next[source],
       hideSeen: o.hideSeen,
+      strict,
       since,
       have: list.flatMap(ecomBrandKeys).slice(-800),
     });
@@ -216,6 +228,8 @@ export async function runEcomScan(o: EcomScanOptions, io: EcomScanIo): Promise<E
     tally.notBrands += r.skipped?.notBrands ?? 0;
     tally.seen += r.skipped?.seen ?? 0;
     tally.notShops += r.skipped?.notShops ?? 0;
+    tally.elsewhere += r.skipped?.elsewhere ?? 0;
+    tally.unplaced += r.skipped?.unplaced ?? 0;
     if (r.done) open.delete(source);
     const merged = mergeEcomBrands(list, r.brands ?? []);
     list = merged.brands;
@@ -224,7 +238,7 @@ export async function runEcomScan(o: EcomScanOptions, io: EcomScanIo): Promise<E
     io.onProgress({ searches: tally.searches, max, found: tally.found, query: r.query });
     // A step past the end of a plan ran no search: it says nothing about the niche.
     if (r.searches) dry[source] = merged.added ? 0 : dry[source] + 1;
-    if (dry[source] >= ECOM_DRY_LIMIT && open.has(source)) {
+    if (dry[source] >= dryLimit && open.has(source)) {
       open.delete(source);
       driedUp.push(source);
     }
@@ -252,8 +266,7 @@ export async function runEcomScan(o: EcomScanOptions, io: EcomScanIo): Promise<E
       ? ""
       : driedUp
           .map(
-            (s) =>
-              ` ${SOURCE_NAME[s]} was left after ${ECOM_DRY_LIMIT} searches that found nothing new.`,
+            (s) => ` ${SOURCE_NAME[s]} was left after ${dryLimit} searches that found nothing new.`,
           )
           .join("");
   return outcome(end, `${summary}${left}`);
@@ -354,6 +367,8 @@ export function useEcomScan(update: Update) {
             notBrands: 0,
             seen: 0,
             notShops: 0,
+            elsewhere: 0,
+            unplaced: 0,
           },
           message: `The scan could not continue: ${(error as Error).message}. What was found so far is kept.`,
           warnings: [],

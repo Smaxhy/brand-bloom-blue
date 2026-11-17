@@ -1,3 +1,8 @@
+# November 17 combined update
+- [x] Add country-verified ecommerce details, homepage growth check/videos and Pipeline call requests; retain protections, original homepage and free strategy calls without a reference-price discount.
+- [x] Verify 684 regression tests, clean preview build and desktop/393px/320px question-to-booking flow; one real temporary request stored full answers, consent, email, Video Creation and €250/month estimate.
+- [ ] Signed-in Pipeline/scanner and live search/video playback checks: own-account session unavailable; no paid searches or outbound messages performed.
+
 # November 16 ecommerce scanner update
 - [x] Install ecommerce brand discovery, saved results and manual Instagram workflow; preserve sending limits, private credentials and crash protections.
 - [x] Passed 534 regression tests and checked desktop/phone filters, Save and Undo using isolated data; no paid searches or outbound messages.

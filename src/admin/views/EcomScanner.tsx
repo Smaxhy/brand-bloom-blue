@@ -6,6 +6,8 @@ import {
   Instagram,
   Loader2,
   Mail,
+  MapPin,
+  Phone,
   Save,
   Search,
   ShoppingBag,
@@ -13,11 +15,14 @@ import {
   X,
 } from "lucide-react";
 import { followersLabel, igHandle } from "@/lib/instagram";
+import { agoLabel, countryIn, countryName, priceLabel } from "@/lib/ecom-detail";
 import {
+  AD_PIXELS,
   ECOM_MARKETS,
   ECOM_NICHES,
   type EcomBrand,
   type EcomSource,
+  ecomAbandoned,
   mergeEcomBrands,
   resolveNiche,
 } from "@/lib/ecom-brands";
@@ -62,7 +67,7 @@ function FitChip({ brand }: { brand: EcomBrand }) {
   return (
     <span
       title={brand.why.length ? brand.why.join(" · ") : "How ready this brand is to contact"}
-      className={`inline-grid h-6 min-w-6 place-items-center rounded-md px-1 text-[.68rem] font-bold tabular-nums ${
+      className={`inline-grid h-6 min-w-6 shrink-0 place-items-center whitespace-nowrap rounded-md px-1 text-[.68rem] font-bold tabular-nums ${
         brand.score >= 70
           ? "bg-success/15 text-success-foreground"
           : brand.score >= 45
@@ -73,6 +78,19 @@ function FitChip({ brand }: { brand: EcomBrand }) {
       {brand.score}
     </span>
   );
+}
+
+/**
+ * Meta's public Ad Library, searched for a brand's name: the ads it is running
+ * now. A link to look for yourself; nothing is read from it.
+ */
+function adLibraryUrl(b: EcomBrand): string {
+  const country = /^[A-Z]{2}$/.test(b.country || "")
+    ? b.country
+    : b.market
+      ? b.market.toUpperCase()
+      : "ALL";
+  return `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=${country}&q=${encodeURIComponent(b.name)}&search_type=keyword_unordered&media_type=all`;
 }
 
 /** What we know about the shop itself, in a word. */
@@ -117,6 +135,9 @@ export function EcomScanner({
   });
   const [maxSearches, setMaxSearches] = useState<number>(20);
   const [onlyNew, setOnlyNew] = useState(true);
+  const [strict, setStrict] = useState(true);
+  /** The country rule the last scan ran with, for what its summary may suggest. */
+  const [ran, setRan] = useState<{ market: string; strict: boolean } | null>(null);
   const [filter, setFilter] = useState<EcomFilter>("all");
   const [q, setQ] = useState("");
   const [nicheFilter, setNicheFilter] = useState("");
@@ -149,15 +170,16 @@ export function EcomScanner({
   const canScan = !!chosen && picked.length > 0 && !scan.busy;
   // With "Only new", a niche that was scanned before is picked up after the searches that already ran.
   const { startAt, continuing } = useMemo(
-    () => ecomStartAt(data.ecom?.cursors, { niche, market, sources: picked, onlyNew }),
+    () => ecomStartAt(data.ecom?.cursors, { niche, market, sources: picked, onlyNew, strict }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data.ecom?.cursors, niche, market, sources, onlyNew],
+    [data.ecom?.cursors, niche, market, sources, onlyNew, strict],
   );
 
   function start() {
     if (!canScan) return;
+    setRan({ market, strict: !!market && strict });
     void scan.run(
-      { niche, market, sources: picked, maxSearches, hideSeen: onlyNew, startAt },
+      { niche, market, sources: picked, maxSearches, hideSeen: onlyNew, startAt, strict },
       brands,
     );
   }
@@ -257,6 +279,91 @@ export function EcomScanner({
     });
 
   // Plain functions, not components: a component declared here would be rebuilt on every render.
+  /** Where the brand is based, and what that was read from. */
+  const placeLine = (b: EcomBrand) => {
+    const warn = (text: string, title: string) => (
+      <span className="mt-0.5 flex items-start gap-1 text-xs text-warning-foreground" title={title}>
+        <CircleAlert className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+        <span>{text}</span>
+      </span>
+    );
+    if (!b.country)
+      return b.market
+        ? warn(
+            "Country not confirmed",
+            `Nothing on their site says where they are based, so they may not be in ${countryIn(b.market)}.`,
+          )
+        : null;
+    const going = b.countryWhy ? `, going by ${b.countryWhy}` : "";
+    // A hint at another country than the one the scan asked for: listed, but flagged.
+    if (b.market && b.country !== b.market.toUpperCase())
+      return warn(
+        `May be in ${countryIn(b.country)}${going}`,
+        `Nothing on their site confirms where they are based. Have a look before you save it.`,
+      );
+    const there = [b.place, countryName(b.country)].filter(Boolean).join(" · ");
+    return (
+      <span
+        className="mt-0.5 flex items-start gap-1 text-xs text-muted-foreground"
+        title={
+          b.countrySure
+            ? `Based in ${countryIn(b.country)}: ${b.countryWhy || "their own site says so"}.`
+            : "Their own word. No address or shop registration confirms it."
+        }
+      >
+        <MapPin className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+        <span>
+          {there}
+          {!b.countrySure && going}
+        </span>
+      </span>
+    );
+  };
+  /** What the shop's catalogue holds: how much, at what prices, and how fresh. */
+  const catalogLine = (b: EcomBrand) => {
+    const prices = priceLabel(b.priceFrom, b.priceTo, b.currency);
+    const fresh = agoLabel(b.newest);
+    const parts = [
+      b.products != null
+        ? `${b.products.toLocaleString("en-US")} ${b.products === 1 ? "product" : "products"}`
+        : "",
+      prices,
+      fresh ? `newest product ${fresh}` : "",
+    ].filter(Boolean);
+    const abandoned = ecomAbandoned(b);
+    if (!parts.length && b.match !== "none" && !b.slow && !abandoned) return null;
+    const flag =
+      "inline-block whitespace-nowrap rounded bg-warning/20 px-1 font-semibold text-warning-foreground";
+    return (
+      <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
+        {parts.length > 0 && <span>{parts.join(" · ")}</span>}
+        {abandoned && (
+          <span
+            className={flag}
+            title={`The last change in the shop's catalogue (a product, a price or a stock level) was ${agoLabel(b.updated)}. Often a sign that nobody runs it any more; a shop that has sold the same things for years can look like this too.`}
+          >
+            No change in over a year
+          </span>
+        )}
+        {b.match === "none" && (
+          <span
+            className={flag}
+            title={`Nothing on the shop mentions ${b.niche.toLowerCase()}: the search probably matched something else. Have a look before you save it.`}
+          >
+            Niche not mentioned
+          </span>
+        )}
+        {b.slow && (
+          <span
+            className={flag}
+            title="Their own pages speak of deliveries of two weeks or more. Common with shops that have their products shipped from abroad, and with some made-to-order brands."
+          >
+            Long delivery times
+          </span>
+        )}
+      </span>
+    );
+  };
   const brandCell = (b: EcomBrand) => {
     const kind = kindLabel(b);
     return (
@@ -284,18 +391,30 @@ export function EcomScanner({
             </span>
           )}
         </div>
-        {b.website && (
+        <span className="mt-0.5 flex max-w-full flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
+          {b.website && (
+            <a
+              href={`https://${b.website}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-w-0 max-w-full items-center gap-1 text-primary hover:underline"
+              title={`Open ${b.website}`}
+            >
+              <span className="truncate">{b.website}</span>
+              <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+            </a>
+          )}
           <a
-            href={`https://${b.website}`}
+            href={adLibraryUrl(b)}
             target="_blank"
             rel="noreferrer"
-            className="mt-0.5 inline-flex max-w-full items-center gap-1 text-xs text-primary hover:underline"
-            title={`Open ${b.website}`}
+            className="inline-flex items-center gap-1 whitespace-nowrap text-muted-foreground hover:text-primary hover:underline"
+            title={`Opens Meta's Ad Library, searched for "${b.name}": the ads they are running on Facebook and Instagram now`}
           >
-            <span className="truncate">{b.website}</span>
+            Their ads on Meta
             <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
           </a>
-        )}
+        </span>
         {b.about && (
           <span
             className="mt-0.5 block text-xs text-muted-foreground md:line-clamp-2"
@@ -304,13 +423,20 @@ export function EcomScanner({
             {b.about}
           </span>
         )}
+        {placeLine(b)}
+        {catalogLine(b)}
         {b.kind === "shop" && (
           <span
             className="mt-0.5 block text-xs text-muted-foreground"
-            title="Marketing tools seen in the shop's pages. A shop without an ad pixel is usually not advertising yet."
+            title={`Marketing tools seen in the shop's pages${b.tools.length ? `: ${b.tools.join(", ")}` : ""}. A shop without an ad pixel is usually not advertising yet.`}
           >
-            {b.tools.length ? b.tools.join(" · ") : "No ad pixel seen"}
-            {b.currency ? ` · sells in ${b.currency}` : ""}
+            {[
+              // A shop can mail its customers and collect reviews without ever having run an ad.
+              ...(b.tools.some((t) => AD_PIXELS.includes(t)) ? [] : ["No ad pixel seen"]),
+              ...b.tools.slice(0, 5),
+              ...(b.tools.length > 5 ? [`+${b.tools.length - 5}`] : []),
+              ...(b.currency ? [`sells in ${b.currency}`] : []),
+            ].join(" · ")}
           </span>
         )}
       </>
@@ -351,11 +477,24 @@ export function EcomScanner({
   };
 
   const emailCell = (b: EcomBrand) =>
-    b.email ? (
-      <span className="inline-flex max-w-full items-center gap-1.5" title={b.email}>
-        <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="truncate">{b.email}</span>
-      </span>
+    b.email || b.phone ? (
+      <>
+        {b.email && (
+          <span className="flex max-w-full items-center gap-1.5" title={b.email}>
+            <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span className="truncate">{b.email}</span>
+          </span>
+        )}
+        {b.phone && (
+          <span
+            className={`flex max-w-full items-center gap-1.5 text-xs tabular-nums text-muted-foreground ${b.email ? "mt-1" : ""}`}
+            title="The phone number on their site"
+          >
+            <Phone className="h-3 w-3 shrink-0" aria-hidden="true" />
+            <span className="truncate">{b.phone}</span>
+          </span>
+        )}
+      </>
     ) : (
       <span className="text-muted-foreground/60">–</span>
     );
@@ -392,9 +531,9 @@ export function EcomScanner({
     <div className="min-w-0 space-y-5 [overflow-wrap:anywhere]">
       <p className="max-w-3xl text-sm text-muted-foreground">
         Finds online brands in a niche, with their shop, their Instagram and their email where the
-        shop gives one. <strong className="text-foreground">Save</strong> puts a brand in Raw Data:
-        from there it shows up in Instagram DMs and can be added to outreach. Nothing is sent from
-        here.
+        shop gives one. Choose a country to list only brands based there.{" "}
+        <strong className="text-foreground">Save</strong> puts a brand in Raw Data: from there it
+        shows up in Instagram DMs and can be added to outreach. Nothing is sent from here.
       </p>
 
       <Panel>
@@ -512,6 +651,19 @@ export function EcomScanner({
                 >
                   Only new
                 </Button>
+                {market && (
+                  <Button
+                    variant="ghost"
+                    type="button"
+                    disabled={scan.busy}
+                    aria-pressed={strict}
+                    onClick={() => setStrict((v) => !v)}
+                    className={pill(strict)}
+                    title={`On: a shop is only listed when its own site shows it is based in ${countryIn(market)} (where the shop is registered, an address, a company number, or its own word), and an Instagram page only when the page names the country. Off: brands that do not say where they are based are listed too, marked "Country not confirmed". Brands that name another country are always left out.`}
+                  >
+                    Only brands in {countryIn(market)}
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -557,7 +709,7 @@ export function EcomScanner({
                     ? "Pick a niche or type one to start."
                     : !picked.length
                       ? "Choose where to look: online shops, Instagram, or both."
-                      : `Uses ${maxSearches} searches of your search provider at most, one credit each, and stops early when they find nothing new. Opening the shops to read them is free.${continuing ? " Carries on with the searches the last scan of this niche did not get to." : ""}`}
+                      : `Uses ${maxSearches} searches of your search provider at most, one credit each, and stops early when they find nothing new. Opening the shops to read them is free.${market && strict ? ` Only brands based in ${countryIn(market)} are listed, so a search adds fewer brands than a scan of anywhere.` : ""}${continuing ? " Carries on with the searches the last scan of this niche did not get to." : ""}`}
                 </p>
               </>
             )}
@@ -585,6 +737,15 @@ export function EcomScanner({
             role="status"
           >
             {outcome.message}
+          </p>
+        )}
+        {outcome && ran?.strict && outcome.tally.unplaced > 0 && !scan.busy && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {outcome.tally.unplaced === 1 ? "1 brand was" : `${outcome.tally.unplaced} brands were`}{" "}
+            left out because nothing on {outcome.tally.unplaced === 1 ? "its" : "their"} site says
+            where {outcome.tally.unplaced === 1 ? "it is" : "they are"} based. To list those too,
+            marked “Country not confirmed”, switch off “Only brands in {countryIn(ran.market)}” and
+            scan again.
           </p>
         )}
         {outcome && outcome.warnings.length > 0 && (
@@ -808,10 +969,10 @@ export function EcomScanner({
                       <div className="min-w-0">{brandCell(b)}</div>
                       <FitChip brand={b} />
                     </div>
-                    {(b.instagram || b.email) && (
+                    {(b.instagram || b.email || b.phone) && (
                       <div className="mt-2.5 space-y-1.5">
                         {b.instagram && <div>{instagramCell(b)}</div>}
-                        {b.email && <div>{emailCell(b)}</div>}
+                        {(b.email || b.phone) && <div>{emailCell(b)}</div>}
                       </div>
                     )}
                     <div className="mt-3">{actions(b)}</div>

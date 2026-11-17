@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { type EcomBrand, ecomFit } from "@/lib/ecom-brands";
 import {
   ECOM_DRY_LIMIT,
+  ECOM_DRY_LIMIT_STRICT,
   ECOM_GAP_MS,
   type EcomAsk,
   type EcomScanIo,
@@ -45,7 +46,7 @@ const ok = (over: Partial<EcomStepReply> = {}): EcomAsk => ({
     done: false,
     stopped: false,
     retry: false,
-    skipped: { notBrands: 0, seen: 0, notShops: 0 },
+    skipped: { notBrands: 0, seen: 0, notShops: 0, elsewhere: 0, unplaced: 0 },
     ...over,
   },
 });
@@ -148,9 +149,82 @@ describe("an ecom scan", () => {
   });
 
   it("adds up what the searches left out", async () => {
-    const s = scan(() => ok({ skipped: { notBrands: 2, seen: 1, notShops: 3 } }));
+    const s = scan(() =>
+      ok({ skipped: { notBrands: 2, seen: 1, notShops: 3, elsewhere: 4, unplaced: 5 } }),
+    );
     const out = await runEcomScan({ ...options, maxSearches: 2 }, s.io);
-    expect(out.tally).toMatchObject({ notBrands: 4, seen: 2, notShops: 6 });
+    expect(out.tally).toMatchObject({
+      notBrands: 4,
+      seen: 2,
+      notShops: 6,
+      elsewhere: 8,
+      unplaced: 10,
+    });
+    expect(out.message).toContain(
+      "8 based in another country, 10 brands that do not say where they are based",
+    );
+  });
+
+  it("copes with an answer from before the country check, which counts neither", async () => {
+    const old = { notBrands: 1, seen: 0, notShops: 0 } as EcomStepReply["skipped"];
+    const s = scan(() => ok({ skipped: old, brands: [brand(`s${Math.random()}.com`)] }));
+    const out = await runEcomScan({ ...options, maxSearches: 2 }, s.io);
+    expect(out.tally).toMatchObject({ notBrands: 2, elsewhere: 0, unplaced: 0 });
+  });
+
+  it("asks for confirmed brands only when a country is chosen, unless told otherwise", async () => {
+    const asks = async (over: Partial<typeof options> & { strict?: boolean }) => {
+      const s = scan(() => ok({ brands: [brand(`s${Math.random()}.com`)] }));
+      await runEcomScan({ ...options, maxSearches: 1, ...over }, s.io);
+      return s.asked[0];
+    };
+    expect(await asks({ market: "us" })).toMatchObject({ market: "us", strict: true });
+    expect(await asks({ market: "us", strict: true })).toMatchObject({ strict: true });
+    expect(await asks({ market: "us", strict: false })).toMatchObject({ strict: false });
+    // Anywhere: there is no country to confirm.
+    expect(await asks({ market: "" })).toMatchObject({ strict: false });
+    expect(await asks({ market: "", strict: true })).toMatchObject({ strict: false });
+  });
+
+  it("is more patient when it only keeps confirmed brands of one country", async () => {
+    const s = scan(() =>
+      ok({ skipped: { notBrands: 0, seen: 0, notShops: 0, elsewhere: 3, unplaced: 2 } }),
+    );
+    const out = await runEcomScan(
+      { ...options, market: "us", sources: ["stores"], maxSearches: 40 },
+      s.io,
+    );
+    expect(out.end).toBe("dry");
+    expect(out.tally.searches).toBe(ECOM_DRY_LIMIT_STRICT);
+    expect(ECOM_DRY_LIMIT_STRICT).toBeGreaterThan(ECOM_DRY_LIMIT);
+    expect(out.message).toBe(
+      "No new brands in 5 searches. Left out: 15 based in another country, 10 brands that do not say where they are based. Stopped early: the last searches found nothing new.",
+    );
+    // The same scan that also keeps unconfirmed brands gives up as soon as any other.
+    const loose = scan(() => ok());
+    expect(
+      (
+        await runEcomScan(
+          { ...options, market: "us", strict: false, sources: ["stores"], maxSearches: 40 },
+          loose.io,
+        )
+      ).tally.searches,
+    ).toBe(ECOM_DRY_LIMIT);
+  });
+
+  it("says after how many searches a place was left, by the patience it had", async () => {
+    const s = scan((body, n) =>
+      body.source === "instagram" ? ok() : ok({ brands: [brand(`s${n}.com`)] }),
+    );
+    const out = await runEcomScan({ ...options, market: "us", maxSearches: 14 }, s.io);
+    expect(out.message).toContain("Instagram was left after 5 searches that found nothing new.");
+    expect(out.next).toEqual({ stores: 9, instagram: 5 });
+  });
+
+  it("never uses more than 120 searches, whatever it is given", async () => {
+    const s = scan((_b, n) => ok({ brands: [brand(`s${n}.com`)] }));
+    const out = await runEcomScan({ ...options, maxSearches: 5000 }, s.io);
+    expect(out.tally.searches).toBe(120);
   });
 
   it("stops by itself when searches keep finding nothing new", async () => {

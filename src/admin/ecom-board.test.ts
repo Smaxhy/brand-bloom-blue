@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type EcomBrand, ecomFit } from "@/lib/ecom-brands";
+import { type EcomBrand, ecomFit, ecomQueryPlan, resolveNiche } from "@/lib/ecom-brands";
 import { igDmText, IG_DM_VARIANTS, type RawBusiness } from "./store";
 import { addToRaw } from "./raw-merge";
 import { igAccounts } from "./ig-board";
@@ -7,6 +7,7 @@ import {
   ECOM_FILTERS,
   cleanEcomBrands,
   cleanEcomCursors,
+  ecomBest,
   ecomCounts,
   ecomCursorsAfter,
   ecomIsSaved,
@@ -87,9 +88,136 @@ const candle = brand({
   about: "Soy candles",
 });
 
+/** A brand as a scan for one country finds it: where it is, what its shop holds. */
+const NOW = Date.parse("2026-11-16T12:00:00Z");
+const read = (over: Partial<EcomBrand>): EcomBrand => {
+  const b = brand({
+    email: "hello@kaijuclothing.com",
+    market: "us",
+    country: "US",
+    countrySure: true,
+    place: "Austin, Texas",
+    countryWhy: "their shop is registered in Austin, Texas",
+    currency: "USD",
+    match: "strong",
+    products: 148,
+    priceFrom: 28,
+    priceTo: 85,
+    newest: "2026-10-20",
+    updated: "2026-11-10",
+    phone: "+1 512 555 0100",
+    ...over,
+  });
+  return { ...b, ...ecomFit(b, NOW) };
+};
+
 describe("the saved list of the Ecom scanner", () => {
   it("comes back as it was saved", () => {
     expect(cleanEcomBrands(JSON.parse(JSON.stringify([kaiju, otaku])))).toEqual([kaiju, otaku]);
+  });
+
+  it("keeps what a scan read about a brand: where it is and what its shop holds", () => {
+    const saved = read({ slow: true });
+    const [back] = cleanEcomBrands(JSON.parse(JSON.stringify([saved])));
+    expect(back).toMatchObject({
+      market: "us",
+      country: "US",
+      countrySure: true,
+      place: "Austin, Texas",
+      countryWhy: "their shop is registered in Austin, Texas",
+      match: "strong",
+      products: 148,
+      priceFrom: 28,
+      priceTo: 85,
+      newest: "2026-10-20",
+      updated: "2026-11-10",
+      phone: "+1 512 555 0100",
+      slow: true,
+    });
+    // Loading it twice changes nothing.
+    expect(cleanEcomBrands(JSON.parse(JSON.stringify([back])))).toEqual([back]);
+  });
+
+  it("keeps only what is known, so a brand found before all this was read stays as it was", () => {
+    const [old] = cleanEcomBrands(JSON.parse(JSON.stringify([kaiju])));
+    for (const key of [
+      "market",
+      "country",
+      "countrySure",
+      "place",
+      "match",
+      "products",
+      "priceFrom",
+      "newest",
+      "updated",
+      "phone",
+      "slow",
+    ])
+      expect(old, key).not.toHaveProperty(key);
+    // What a scan sends for a shop it learned nothing about is the same as nothing.
+    const [blank] = cleanEcomBrands([
+      {
+        ...kaiju,
+        market: "",
+        country: "",
+        countrySure: false,
+        place: "",
+        products: null,
+        priceFrom: null,
+        priceTo: null,
+        newest: "",
+        updated: "",
+        phone: "",
+        slow: false,
+      },
+    ]);
+    expect(blank).toEqual(old);
+  });
+
+  it("drops details that are not what they should be", () => {
+    const [b] = cleanEcomBrands([
+      {
+        ...kaiju,
+        market: "USA",
+        country: "us",
+        countrySure: true,
+        place: "Austin",
+        match: "perfect",
+        products: -3,
+        priceFrom: 20,
+        priceTo: "85",
+        newest: "yesterday",
+        updated: "2026-13-45",
+        phone: 5125550100,
+        slow: "yes",
+      },
+    ]);
+    for (const key of [
+      "market",
+      "country",
+      "countrySure",
+      "place",
+      "match",
+      "products",
+      "priceFrom",
+      "priceTo",
+      "newest",
+      "updated",
+      "phone",
+      "slow",
+    ])
+      expect(b, key).not.toHaveProperty(key);
+    const [fixed] = cleanEcomBrands([
+      {
+        ...kaiju,
+        products: 12.6,
+        priceFrom: 40,
+        priceTo: 15,
+        tools: Array.from({ length: 30 }, (_, i) => `Tool ${i}`),
+      },
+    ]);
+    expect(fixed).toMatchObject({ products: 13, priceFrom: 40, priceTo: 40 });
+    expect(fixed.tools).toHaveLength(16);
   });
 
   it("drops what is not a whole brand and repairs what it can", () => {
@@ -137,8 +265,44 @@ describe("what the list shows", () => {
   const all = [kaiju, otaku, sora, candle];
 
   it("counts who can be reached how", () => {
-    expect(ecomCounts(all)).toEqual({ all: 4, instagram: 2, email: 2, both: 1 });
-    expect(ECOM_FILTERS.map((f) => f.id)).toEqual(["all", "instagram", "email", "both"]);
+    expect(ecomCounts(all)).toEqual({ all: 4, best: 2, instagram: 2, email: 2, both: 1 });
+    expect(ECOM_FILTERS.map((f) => f.id)).toEqual(["all", "best", "instagram", "email", "both"]);
+  });
+
+  it("calls a brand a best match only when everything that was checked holds", () => {
+    expect(ecomBest(read({}), NOW)).toBe(true);
+    // An Instagram instead of an email will do; neither will not.
+    expect(
+      ecomBest(read({ email: "", instagram: "https://www.instagram.com/kaijuclothing" }), NOW),
+    ).toBe(true);
+    expect(ecomBest(read({ email: "" }), NOW)).toBe(false);
+    // Not a shop that was read.
+    expect(ecomBest(read({ kind: "page" }), NOW)).toBe(false);
+    expect(ecomBest(read({ kind: "unread" }), NOW)).toBe(false);
+    // Not confirmed in the country that was asked for.
+    expect(ecomBest(read({ countrySure: false }), NOW)).toBe(false);
+    expect(ecomBest(read({ country: "" }), NOW)).toBe(false);
+    expect(ecomBest(read({ country: "GB" }), NOW)).toBe(false);
+    // Does not sell the niche, sells next to nothing, is abandoned, or ships from far away.
+    expect(ecomBest(read({ match: "none" }), NOW)).toBe(false);
+    expect(ecomBest(read({ match: "some" }), NOW)).toBe(true);
+    expect(ecomBest(read({ products: 3 }), NOW)).toBe(false);
+    expect(ecomBest(read({ updated: "2025-06-01" }), NOW)).toBe(false);
+    expect(ecomBest(read({ slow: true }), NOW)).toBe(false);
+    // A scan without a country has no country to hold a brand to.
+    expect(ecomBest(read({ market: "", country: "GB" }), NOW)).toBe(true);
+    // Found before any of this was checked: judged on what is known.
+    expect(ecomBest(kaiju, NOW)).toBe(true);
+    expect(ecomBest(otaku, NOW)).toBe(false);
+  });
+
+  it("finds a brand by where it is", () => {
+    const b = read({});
+    expect(ecomMatches(b, "austin")).toBe(true);
+    expect(ecomMatches(b, "Texas")).toBe(true);
+    expect(ecomMatches(b, "united states")).toBe(true);
+    expect(ecomMatches(b, "canada")).toBe(false);
+    expect(ecomMatches(kaiju, "united states")).toBe(false);
   });
 
   it("finds a brand by its name, site, account, email or what it sells", () => {
@@ -230,6 +394,18 @@ describe("a brand saved to Raw Data", () => {
       instagramVia: "site",
       instagramWhy: "linked on their website, and the handle matches the business name",
     });
+  });
+
+  it("carries the phone number and the town a scan read", () => {
+    expect(ecomToRaw(read({}), "r3", 9_000)).toMatchObject({
+      phone: "+1 512 555 0100",
+      city: "Austin",
+    });
+    expect(ecomToRaw(read({ place: "Texas", phone: "" }), "r4", 9_000)).toMatchObject({
+      phone: "",
+      city: "Texas",
+    });
+    expect(ecomToRaw(read({ place: "" }), "r5", 9_000).city).toBe("");
   });
 
   it("has no Instagram details when no account was found", () => {
@@ -361,6 +537,8 @@ describe("what a finished scan says", () => {
     notBrands: 12,
     seen: 3,
     notShops: 9,
+    elsewhere: 0,
+    unplaced: 0,
   };
 
   it("gives the result, the cost and what was left out", () => {
@@ -378,6 +556,8 @@ describe("what a finished scan says", () => {
       notBrands: 1,
       seen: 0,
       notShops: 1,
+      elsewhere: 0,
+      unplaced: 0,
     };
     expect(ecomScanSummary(one, "stopped")).toBe(
       "Found 1 new brand with 1 search: 1 with Instagram, 0 with an email. Left out: 1 marketplace, big name or fan page, 1 site that sells nothing. Stopped.",
@@ -391,6 +571,34 @@ describe("what a finished scan says", () => {
   });
 });
 
+describe("what a finished scan for one country says", () => {
+  const tally = {
+    searches: 20,
+    found: 14,
+    withInstagram: 11,
+    withEmail: 9,
+    notBrands: 6,
+    seen: 0,
+    notShops: 4,
+    elsewhere: 17,
+    unplaced: 8,
+  };
+
+  it("counts the brands it left out for being somewhere else, or for not saying where they are", () => {
+    expect(ecomScanSummary(tally)).toBe(
+      "Found 14 new brands with 20 searches: 11 with Instagram, 9 with an email. Left out: 6 marketplaces, big names and fan pages, 4 sites that sell nothing, 17 based in another country, 8 brands that do not say where they are based.",
+    );
+    expect(
+      ecomScanSummary(
+        { ...tally, found: 0, elsewhere: 1, unplaced: 1, notBrands: 0, notShops: 0 },
+        "dry",
+      ),
+    ).toBe(
+      "No new brands in 20 searches. Left out: 1 based in another country, 1 brand that does not say where it is based. Stopped early: the last searches found nothing new.",
+    );
+  });
+});
+
 describe("where the next scan of a niche carries on", () => {
   const scan = {
     niche: "anime",
@@ -401,7 +609,7 @@ describe("where the next scan of a niche carries on", () => {
 
   it("starts at the top for a niche that was never scanned", () => {
     expect(ecomStartAt(undefined, scan)).toEqual({ startAt: {}, continuing: false });
-    expect(ecomStartAt({ "clothing||stores": 10 }, scan)).toEqual({
+    expect(ecomStartAt({ "clothing||stores|2": 10 }, scan)).toEqual({
       startAt: {},
       continuing: false,
     });
@@ -409,7 +617,7 @@ describe("where the next scan of a niche carries on", () => {
 
   it("picks each source up after the searches that already ran", () => {
     const cursors = ecomCursorsAfter(undefined, scan, { stores: 10, instagram: 10 });
-    expect(cursors).toEqual({ "anime||stores": 10, "anime||instagram": 10 });
+    expect(cursors).toEqual({ "anime||stores|2": 10, "anime||instagram|2": 10 });
     expect(ecomStartAt(cursors, scan)).toEqual({
       startAt: { stores: 10, instagram: 10 },
       continuing: true,
@@ -423,8 +631,44 @@ describe("where the next scan of a niche carries on", () => {
     });
   });
 
+  it("keeps a country scan for confirmed brands apart from one that lists unconfirmed brands too", () => {
+    const us = { ...scan, market: "us" };
+    const cursors = ecomCursorsAfter(undefined, us, { stores: 20, instagram: 20 });
+    expect(ecomStartAt(cursors, us).startAt).toEqual({ stores: 20, instagram: 20 });
+    expect(ecomStartAt(cursors, { ...us, strict: true }).startAt).toEqual({
+      stores: 20,
+      instagram: 20,
+    });
+    // The brands the first scan left out are behind its 20 searches: this one starts at the top to find them.
+    expect(ecomStartAt(cursors, { ...us, strict: false })).toEqual({
+      startAt: {},
+      continuing: false,
+    });
+    const both = ecomCursorsAfter(
+      cursors,
+      { ...us, strict: false, sources: ["stores"] },
+      { stores: 8 },
+    );
+    expect(both).toEqual({
+      "anime|us|stores|2": 20,
+      "anime|us|instagram|2": 20,
+      "anime|us|stores|2|all": 8,
+    });
+    expect(ecomStartAt(both, { ...us, strict: false }).startAt).toEqual({ stores: 8 });
+  });
+
+  it("does not carry on from a position kept for the older search plan", () => {
+    // Saved before the plan changed: its tenth search is not this plan's tenth search.
+    expect(ecomStartAt({ "anime||stores": 10, "anime||instagram": 10 }, scan)).toEqual({
+      startAt: {},
+      continuing: false,
+    });
+  });
+
   it("starts over once every search has run, and whenever Only new is off", () => {
-    const done = ecomCursorsAfter(undefined, scan, { stores: 60, instagram: 12 });
+    const all = ecomQueryPlan((resolveNiche("anime") ?? { id: "missing", label: "missing", noun: "missing", terms: [] }), "stores").length;
+    expect(all).toBe(120);
+    const done = ecomCursorsAfter(undefined, scan, { stores: all, instagram: 12 });
     expect(ecomStartAt(done, scan)).toEqual({ startAt: { instagram: 12 }, continuing: true });
     expect(ecomStartAt(done, { ...scan, onlyNew: false })).toEqual({
       startAt: {},
@@ -434,11 +678,11 @@ describe("where the next scan of a niche carries on", () => {
 
   it("moves a source on without touching the others, and remembers the latest niches", () => {
     let cursors = ecomCursorsAfter(
-      { "anime||stores": 10, "clothing||stores": 4 },
+      { "anime||stores|2": 10, "clothing||stores|2": 4 },
       { ...scan, sources: ["stores"] },
       { stores: 20, instagram: 99 },
     );
-    expect(cursors).toEqual({ "clothing||stores": 4, "anime||stores": 20 });
+    expect(cursors).toEqual({ "clothing||stores|2": 4, "anime||stores|2": 20 });
     for (let i = 0; i < 70; i++)
       cursors = ecomCursorsAfter(
         cursors,
@@ -446,8 +690,8 @@ describe("where the next scan of a niche carries on", () => {
         { stores: 5 },
       );
     expect(Object.keys(cursors)).toHaveLength(60);
-    expect(cursors["niche 69||stores"]).toBe(5);
-    expect(cursors["anime||stores"]).toBeUndefined();
+    expect(cursors["niche 69||stores|2"]).toBe(5);
+    expect(cursors["anime||stores|2"]).toBeUndefined();
   });
 
   it("ignores saved progress that is not a whole number", () => {

@@ -46,9 +46,10 @@ import { resolveIntegrationEnv } from "./integration-settings.server";
 import { runTick, keepAlive, verifySchedulerToken } from "./tick";
 import { readBoundedBody, requestIpHash, securityJson } from "./request-security";
 import { MAX_SCRAPE_RESULTS } from "./scrape-limits";
-import { fetchPublicSite } from "./public-site-fetch";
+import { fetchPublicJson, fetchPublicSite } from "./public-site-fetch";
 import { ecomScanStep, type EcomStepInput } from "./ecom-scan";
-import { storeContactPaths } from "./ecom-brands";
+import { ECOM_MAX_STEPS, storeContactPaths } from "./ecom-brands";
+import { CATALOG_SAMPLE } from "./ecom-detail";
 import {
   bioLinkUrl,
   igResultsHaveProfiles,
@@ -846,6 +847,9 @@ export async function enrichPeople(env: Env, people: EnrichInput[], opts: { useP
 /* Ecom brand scan — one search per request, then the shops are read      */
 /* --------------------------------------------------------------------- */
 
+/** How a shop's own public files are asked for: as the research reader, and as JSON. */
+const SHOP_FILE_HEADERS = { "User-Agent": BIO_UA, Accept: "application/json" };
+
 /**
  * One step of an ecom scan (see ecom-scan.ts). The admin screen asks step by
  * step, so it counts every search and can stop between any two. Searches go
@@ -863,7 +867,8 @@ async function ecomDiscover(request: Request, env: Env): Promise<Response> {
     if ((body.niche !== undefined && (typeof body.niche !== "string" || body.niche.length > 160)) ||
         (body.market !== undefined && typeof body.market !== "string") ||
         (body.source !== undefined && body.source !== "stores" && body.source !== "instagram") ||
-        (body.step !== undefined && (!Number.isInteger(body.step) || body.step < 0 || body.step > 60)) ||
+        (body.step !== undefined && (!Number.isInteger(body.step) || body.step < 0 || body.step > ECOM_MAX_STEPS)) ||
+        (body.strict !== undefined && typeof body.strict !== "boolean") ||
         (body.have !== undefined && (!Array.isArray(body.have) || body.have.length > 800 || body.have.some((key) => typeof key !== "string" || key.length > 200)))) {
       return json({ error: "invalid scan options" }, 400);
     }
@@ -881,7 +886,7 @@ async function ecomDiscover(request: Request, env: Env): Promise<Response> {
       done: false,
       stopped: true,
       retry: false,
-      skipped: { notBrands: 0, seen: 0, notShops: 0 },
+      skipped: { notBrands: 0, seen: 0, notShops: 0, elsewhere: 0, unplaced: 0 },
       noProvider: true,
       warnings: [],
     });
@@ -900,6 +905,13 @@ async function ecomDiscover(request: Request, env: Env): Promise<Response> {
         keepPages: true,
         pagesFor: ({ html, domain }) => storeContactPaths(html, domain),
       }),
+    // A Shopify shop publishes where it is registered and what it sells in two public files.
+    // Same guard as every page read: public destinations only, bounded size, JSON or nothing.
+    readShopFile: (domain, file) =>
+      (file === "meta"
+        ? fetchPublicJson(`https://${domain}/meta.json`, 6_000, SHOP_FILE_HEADERS, 80_000)
+        : fetchPublicJson(`https://${domain}/products.json?limit=${CATALOG_SAMPLE}`, 8_000, SHOP_FILE_HEADERS, 2_000_000)
+      ).catch(() => null),
     // Blacklisted companies (bounced, opted out) are always hidden; "seen before" only with Only new.
     hideSeen: db
       ? async (list) =>
@@ -987,6 +999,8 @@ interface SearchOpts {
   page?: number;
   /** Two-letter country ("us", "gb", "be"): the market the results should come from. */
   gl?: string;
+  /** Two-letter language ("en", "nl", "de", "fr") the results should be in. */
+  hl?: string;
 }
 
 async function googleSearch(
@@ -996,6 +1010,7 @@ async function googleSearch(
 ): Promise<{ blob: string; firstLink: string; results: SearchResult[]; error?: string; stop?: boolean; /** A provider gave a real answer (set by the waterfall). */ answered?: boolean }> {
   const page = Math.max(1, Math.min(10, Math.floor(opts.page || 1)));
   const gl = /^[a-z]{2}$/i.test(opts.gl || "") ? (opts.gl as string).toLowerCase() : "";
+  const hl = /^[a-z]{2}$/i.test(opts.hl || "") ? (opts.hl as string).toLowerCase() : "";
   if (p.kind === "brave") {
     // Brave Search — a free tier (≈2,000 searches/mo) that keeps website/email
     // discovery working after Serper runs out. Returns the real result links.
@@ -1005,6 +1020,7 @@ async function googleSearch(
     // Brave counts pages from 0 and stops at 9.
     if (page > 1) u.searchParams.set("offset", String(Math.min(page - 1, 9)));
     if (gl) u.searchParams.set("country", gl.toUpperCase());
+    if (hl) u.searchParams.set("search_lang", hl);
     const res = await fetch(u.toString(), {
       headers: { "X-Subscription-Token": p.key, Accept: "application/json" },
       signal: AbortSignal.timeout(12_000),
@@ -1031,6 +1047,7 @@ async function googleSearch(
     if (page > 1) u.searchParams.set("start", String((page - 1) * 10));
     // Google itself writes the United Kingdom as "uk".
     if (gl) u.searchParams.set("gl", gl === "gb" ? "uk" : gl);
+    if (hl) u.searchParams.set("hl", hl);
     u.searchParams.set("api_key", p.key);
     const res = await fetch(u.toString());
     if (!res.ok) {
@@ -1072,7 +1089,7 @@ async function googleSearch(
   const res = await fetch("https://google.serper.dev/search", {
     method: "POST",
     headers: { "X-API-KEY": p.key, "Content-Type": "application/json" },
-    body: JSON.stringify({ q, num: 10, ...(page > 1 ? { page } : {}), ...(gl ? { gl } : {}) }),
+    body: JSON.stringify({ q, num: 10, ...(page > 1 ? { page } : {}), ...(gl ? { gl } : {}), ...(hl ? { hl } : {}) }),
   });
   if (!res.ok) {
     const p = searchProviderProblem("Serper", res.status, await res.text().catch(() => ""));

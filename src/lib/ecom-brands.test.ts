@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  AD_PIXELS,
   ECOM_MARKETS,
   ECOM_MAX_STEPS,
   ECOM_NICHES,
   type EcomBrand,
   bioWebsite,
+  ecomAbandoned,
   ecomFit,
   ecomCursorKey,
   ecomIndustry,
@@ -88,18 +90,18 @@ describe("the niche to scan for", () => {
 
 describe("the trade a brand is saved under", () => {
   it("reads right in a sentence", () => {
-    expect(ecomIndustry(resolveNiche("anime")!)).toBe("online anime brands");
-    expect(ecomIndustry(resolveNiche("household")!)).toBe("online home goods brands");
-    expect(ecomIndustry(resolveNiche("scented candles")!)).toBe("online scented candle brands");
-    expect(ecomIndustry(resolveNiche("cat toys")!)).toBe("online cat toy brands");
-    expect(ecomIndustry(resolveNiche("watches")!)).toBe("online watch brands");
-    expect(ecomIndustry(resolveNiche("phone accessories")!)).toBe("online phone accessory brands");
+    expect(ecomIndustry((resolveNiche("anime") ?? { id: "missing", label: "missing", noun: "missing", terms: [] }))).toBe("online anime brands");
+    expect(ecomIndustry((resolveNiche("household") ?? { id: "missing", label: "missing", noun: "missing", terms: [] }))).toBe("online home goods brands");
+    expect(ecomIndustry((resolveNiche("scented candles") ?? { id: "missing", label: "missing", noun: "missing", terms: [] }))).toBe("online scented candle brands");
+    expect(ecomIndustry((resolveNiche("cat toys") ?? { id: "missing", label: "missing", noun: "missing", terms: [] }))).toBe("online cat toy brands");
+    expect(ecomIndustry((resolveNiche("watches") ?? { id: "missing", label: "missing", noun: "missing", terms: [] }))).toBe("online watch brands");
+    expect(ecomIndustry((resolveNiche("phone accessories") ?? { id: "missing", label: "missing", noun: "missing", terms: [] }))).toBe("online phone accessory brands");
   });
 
   it("leaves words alone that it cannot safely make singular", () => {
-    expect(ecomIndustry(resolveNiche("hoodies")!)).toBe("online hoodies brands");
-    expect(ecomIndustry(resolveNiche("vintage jeans")!)).toBe("online vintage jeans brands");
-    expect(ecomIndustry(resolveNiche("streetwear")!)).toBe("online streetwear brands");
+    expect(ecomIndustry((resolveNiche("hoodies") ?? { id: "missing", label: "missing", noun: "missing", terms: [] }))).toBe("online hoodies brands");
+    expect(ecomIndustry((resolveNiche("vintage jeans") ?? { id: "missing", label: "missing", noun: "missing", terms: [] }))).toBe("online vintage jeans brands");
+    expect(ecomIndustry((resolveNiche("streetwear") ?? { id: "missing", label: "missing", noun: "missing", terms: [] }))).toBe("online streetwear brands");
   });
 
   it("is recognised again, and a local trade is not", () => {
@@ -112,7 +114,7 @@ describe("the trade a brand is saved under", () => {
 });
 
 describe("the searches of a scan", () => {
-  const anime = resolveNiche("anime")!;
+  const anime = (resolveNiche("anime") ?? { id: "missing", label: "missing", noun: "missing", terms: [] });
 
   it("covers every term with a different kind of search in the first round", () => {
     const plan = ecomQueryPlan(anime, "stores");
@@ -124,21 +126,35 @@ describe("the searches of a scan", () => {
     expect(plan.every((s) => s.page >= 1 && s.page <= 3)).toBe(true);
   });
 
-  it("never plans the same search twice, and stops at the limit", () => {
-    for (const source of ["stores", "instagram"] as const) {
-      const plan = ecomQueryPlan(anime, source);
-      expect(new Set(plan.map((s) => `${s.q}#${s.page}`)).size).toBe(plan.length);
-      expect(plan.length).toBeLessThanOrEqual(ECOM_MAX_STEPS);
-    }
+  it("never plans the same search twice, and stops at the limit, in every country", () => {
+    for (const market of ECOM_MARKETS)
+      for (const source of ["stores", "instagram"] as const)
+        for (const niche of [
+          anime,
+          (resolveNiche("handmade soap") ?? { id: "missing", label: "missing", noun: "missing", terms: [] }),
+          (resolveNiche("cat trees, cat beds, cat toys") ?? { id: "missing", label: "missing", noun: "missing", terms: [] }),
+        ])
+          for (const operators of [true, false]) {
+            const plan = ecomQueryPlan(niche, source, market, { operators });
+            const label = `${niche.label} ${market.id} ${source}`;
+            expect(new Set(plan.map((s) => `${s.q}#${s.page}`)).size, label).toBe(plan.length);
+            expect(plan.length, label).toBeLessThanOrEqual(ECOM_MAX_STEPS);
+            expect(plan.length, label).toBeGreaterThanOrEqual(20);
+            expect(
+              plan.every((s) => s.page >= 1 && s.page <= 5 && s.q.length < 300),
+              label,
+            ).toBe(true);
+          }
+    expect(ECOM_MAX_STEPS).toBe(120);
   });
 
   it("gives one typed term every kind of search, then the next pages", () => {
-    const plan = ecomQueryPlan(resolveNiche("handmade soap")!, "stores");
+    const plan = ecomQueryPlan((resolveNiche("handmade soap") ?? { id: "missing", label: "missing", noun: "missing", terms: [] }), "stores");
     // One term is searched five pages deep, so a later scan still has new searches to ask.
     expect(plan.length).toBe(25);
     expect(plan[24].page).toBe(5);
     expect(
-      ecomQueryPlan(resolveNiche("cat furniture, cat trees, cat beds")!, "stores").at(-1)?.page,
+      ecomQueryPlan((resolveNiche("cat furniture, cat trees, cat beds") ?? { id: "missing", label: "missing", noun: "missing", terms: [] }), "stores").at(-1)?.page,
     ).toBe(4);
     expect(plan.slice(0, 5).every((s) => s.page === 1)).toBe(true);
     expect(new Set(plan.slice(0, 5).map((s) => s.q)).size).toBe(5);
@@ -159,12 +175,19 @@ describe("the searches of a scan", () => {
   });
 
   it("names a scan by its niche, country and source, however the niche was typed", () => {
-    expect(ecomCursorKey("Anime", "", "stores")).toBe("anime||stores");
-    expect(ecomCursorKey(" anime ", "BE", "instagram")).toBe("anime|be|instagram");
+    // The "2" is the version of the search plan: positions kept for the older plan must not be reused.
+    expect(ecomCursorKey("Anime", "", "stores")).toBe("anime||stores|2");
+    expect(ecomCursorKey(" anime ", "BE", "instagram")).toBe("anime|be|instagram|2");
     expect(ecomCursorKey("Cat Trees, cat furniture", "zz", "stores")).toBe(
-      "cat trees,cat furniture||stores",
+      "cat trees,cat furniture||stores|2",
     );
     expect(ecomCursorKey("", "", "stores")).toBe("");
+    // A country scan that also keeps unconfirmed brands runs its own list of searches from the top.
+    expect(ecomCursorKey("anime", "us", "stores")).toBe("anime|us|stores|2");
+    expect(ecomCursorKey("anime", "us", "stores", true)).toBe("anime|us|stores|2");
+    expect(ecomCursorKey("anime", "us", "stores", false)).toBe("anime|us|stores|2|all");
+    // Anywhere there is no country to confirm, so there is only one list.
+    expect(ecomCursorKey("anime", "", "stores", false)).toBe("anime||stores|2");
   });
 
   it("asks Instagram for profile pages only", () => {
@@ -176,13 +199,113 @@ describe("the searches of a scan", () => {
   it("uses the words shops use in the chosen country", () => {
     const be = ecomMarket("be");
     expect(be.gl).toBe("be");
-    const plan = ecomQueryPlan(resolveNiche("kaarsen")!, "stores", be);
-    expect(plan[1].q).toBe(
+    const plan = ecomQueryPlan((resolveNiche("kaarsen") ?? { id: "missing", label: "missing", noun: "missing", terms: [] }), "stores", be);
+    expect(plan[3].q).toBe(
       'kaarsen ("in winkelwagen" OR "ajouter au panier") -amazon -etsy -ebay -aliexpress -temu -walmart',
     );
-    expect(plan[3].q).toContain("webshop");
+    expect(plan[6].q).toContain("webshop");
     expect(ecomMarket("zz")).toBe(ECOM_MARKETS[0]);
     expect(ecomMarket(undefined).gl).toBe("");
+  });
+
+  it("searches a country in its own words: what its brands say, how they deliver, where they are", () => {
+    const us = ecomMarket("us");
+    const plan = ecomQueryPlan((resolveNiche("handmade soap") ?? { id: "missing", label: "missing", noun: "missing", terms: [] }), "stores", us);
+    const no = "-amazon -etsy -ebay -aliexpress -temu -walmart";
+    expect(plan.slice(0, 8)).toEqual([
+      {
+        q: `handmade soap brand ("made in usa" OR "made in the usa" OR "american made") ${no}`,
+        page: 1,
+      },
+      { q: 'handmade soap "powered by shopify"', page: 1 },
+      {
+        q: `handmade soap brand shop (California OR Texas OR "New York" OR Florida) ${no}`,
+        page: 1,
+      },
+      { q: `handmade soap "add to cart" ${no}`, page: 1 },
+      {
+        q: `handmade soap shop ("ships from the usa" OR "free us shipping" OR "continental us") ${no}`,
+        page: 1,
+      },
+      { q: "handmade soap inurl:collections", page: 1 },
+      { q: `handmade soap brand official online store ${no}`, page: 1 },
+      { q: "handmade soap inurl:product-category", page: 1 },
+    ]);
+    // Anywhere: the plan a scan without a country always had.
+    expect(ecomQueryPlan((resolveNiche("handmade soap") ?? { id: "missing", label: "missing", noun: "missing", terms: [] }), "stores").slice(0, 2)).toEqual([
+      { q: 'handmade soap "powered by shopify"', page: 1 },
+      { q: `handmade soap "add to cart" ${no}`, page: 1 },
+    ]);
+  });
+
+  it("moves on to other places of the country instead of asking the same place for page two", () => {
+    const us = ecomMarket("us");
+    const placed = ecomQueryPlan((resolveNiche("handmade soap") ?? { id: "missing", label: "missing", noun: "missing", terms: [] }), "stores", us).filter((s) =>
+      / brand shop \(/.test(s.q),
+    );
+    expect(placed).toHaveLength(5);
+    expect(placed.map((s) => /\((.+?)\)/.exec(s.q)?.[1])).toEqual(
+      us.regions.map((group) => group.map((p) => (p.includes(" ") ? `"${p}"` : p)).join(" OR ")),
+    );
+    expect(placed.every((s) => s.page === 1)).toBe(true);
+    // A country with fewer place groups than rounds comes back to the first group, on the next page.
+    const be = ecomMarket("be");
+    const belgian = ecomQueryPlan((resolveNiche("kaarsen") ?? { id: "missing", label: "missing", noun: "missing", terms: [] }), "stores", be).filter((s) =>
+      / brand shop \(/.test(s.q),
+    );
+    expect(belgian.map((s) => s.page)).toEqual([1, 1, 2, 2, 3]);
+    expect(belgian[0].q).toContain("(Antwerpen OR Gent OR Brussel OR Leuven)");
+    expect(belgian[2].q).toBe(belgian[0].q);
+  });
+
+  it("keeps the country searches for a provider without Google's inurl:", () => {
+    const us = ecomMarket("us");
+    const brave = ecomQueryPlan(anime, "stores", us, { operators: false });
+    expect(brave.some((s) => s.q.includes("inurl:"))).toBe(false);
+    expect(brave[0].q).toContain('"made in usa"');
+    expect(brave[2].q).toContain("(California OR Texas");
+    expect(brave.length).toBe(ecomQueryPlan(anime, "stores", us).length);
+  });
+
+  it("asks Instagram for pages that name the country or one of its places", () => {
+    const plan = ecomQueryPlan(anime, "instagram", ecomMarket("us"));
+    expect(plan.every((s) => s.q.startsWith("site:instagram.com "))).toBe(true);
+    expect(plan[0].q).toBe(
+      'site:instagram.com anime streetwear brand "followers" ("USA" OR "made in usa" OR "US based")',
+    );
+    expect(plan[2].q).toBe(
+      'site:instagram.com anime merch shop "followers" (California OR Texas OR "New York" OR Florida)',
+    );
+    // The searches that find brand pages anywhere stay in the plan.
+    expect(plan[1].q).toBe('site:instagram.com anime clothing brand shop "followers"');
+  });
+
+  it("knows every country's own words, and asks in its language", () => {
+    for (const m of ECOM_MARKETS.filter((m) => m.id)) {
+      expect(m.gl, m.id).toBe(m.id);
+      expect(m.home.length, m.id).toBeGreaterThanOrEqual(2);
+      expect(m.local.length, m.id).toBeGreaterThanOrEqual(2);
+      expect(m.tags.length, m.id).toBeGreaterThanOrEqual(2);
+      expect(m.regions.length, m.id).toBeGreaterThanOrEqual(2);
+      expect(
+        m.regions.every((group) => group.length >= 3 && group.length <= 5),
+        m.id,
+      ).toBe(true);
+      expect(new Set(m.regions.flat()).size, m.id).toBe(m.regions.flat().length);
+    }
+    expect(ecomMarket("us").hl).toBe("en");
+    expect(ecomMarket("de").hl).toBe("de");
+    // Belgium searches in Dutch and in French: no one language is asked for.
+    expect(ecomMarket("be").hl).toBe("");
+    expect(ECOM_MARKETS[0]).toMatchObject({
+      id: "",
+      gl: "",
+      hl: "",
+      home: [],
+      local: [],
+      tags: [],
+      regions: [],
+    });
   });
 });
 
@@ -320,6 +443,51 @@ describe("what a shop's pages say about it", () => {
       tools: ["Meta pixel", "Klaviyo"],
       currency: "EUR",
     });
+  });
+
+  it("recognises the tools a shop advertises, mails and collects reviews with", () => {
+    const html = `<html><body><a href="/cart">Cart</a><a href="/collections/all">Shop</a>
+      <script>pintrk('load', '2612345678901');</script>
+      <script src="https://sc-static.net/scevent.min.js"></script>
+      <script>ttq.load('C4ABCDEF');</script>
+      <script src="https://omnisnippet1.com/inshop/launcher-v2.js" data-omnisend></script>
+      <script src="https://chimpstatic.com/mcjs-connected/js/users/abc.js"></script>
+      <script src="https://sdk.postscript.io/sdk.bundle.js"></script>
+      <script src="https://cdn.attn.tv/kaiju/dtag.js"></script>
+      <div class="jdgm-widget"></div><script src="https://loox.io/widget/loox.js"></script>
+      <div class="yotpo-widget-instance"></div><script src="https://cdn-static.okendo.io/reviews-widget-plus/js/okendo-reviews.js"></script>
+      <script src="https://cdn1.stamped.io/files/widget.min.js"></script>
+      <script src="https://static.rechargecdn.com/assets/js/widget.min.js"></script>
+      <script>window.Shopify = {}; Shopify.shop = "kaiju.myshopify.com";</script></body></html>`;
+    const { tools } = readStore([{ path: "/", html }], "kaijuclothing.com");
+    expect(tools).toEqual([
+      "TikTok pixel",
+      "Pinterest tag",
+      "Snap pixel",
+      "Omnisend",
+      "Mailchimp",
+      "Postscript",
+      "Attentive",
+      "Judge.me",
+      "Loox",
+      "Yotpo",
+      "Okendo",
+      "Stamped",
+      "Recharge",
+    ]);
+    // The ones that mean the brand pays for ads.
+    expect(tools.filter((t) => AD_PIXELS.includes(t))).toEqual([
+      "TikTok pixel",
+      "Pinterest tag",
+      "Snap pixel",
+    ]);
+    expect(AD_PIXELS).toEqual([
+      "Meta pixel",
+      "TikTok pixel",
+      "Google Ads",
+      "Pinterest tag",
+      "Snap pixel",
+    ]);
   });
 
   it("reads a WooCommerce shop and takes the name from the title when the site gives none", () => {
@@ -527,6 +695,108 @@ describe("how ready a brand is to contact", () => {
     expect(at(500)).toBeGreaterThan(at(50));
     expect(at(900_000)).toBe(at(50));
   });
+
+  const NOW = Date.parse("2026-11-16T12:00:00Z");
+  const fit = (over: Partial<EcomBrand>) => ecomFit({ ...brand({}), ...over }, NOW);
+
+  it("counts whether a brand is based in the country that was asked for", () => {
+    const base = fit({}).score;
+    // Being where the scan asked is what is expected: it adds a reason, not points.
+    const confirmed = fit({
+      market: "us",
+      country: "US",
+      countrySure: true,
+      place: "Austin, Texas",
+    });
+    expect(confirmed.score).toBe(base);
+    expect(confirmed.why).toContain("based in Austin, Texas");
+    expect(fit({ market: "us", country: "US", countrySure: true }).why).toContain(
+      "based in the United States",
+    );
+    const ownWord = fit({ market: "us", country: "US", countrySure: false });
+    expect(ownWord.score).toBe(base - 3);
+    expect(ownWord.why).toContain("probably in the United States");
+    const unknown = fit({ market: "us", country: "" });
+    expect(unknown.score).toBe(base - 10);
+    expect(unknown.why).toContain("country not confirmed");
+    const hint = fit({ market: "us", country: "GB", countrySure: false });
+    expect(hint.score).toBe(base - 10);
+    expect(hint.why).toContain("may be in the United Kingdom");
+    // A scan without a country has no opinion about where a brand is.
+    expect(fit({ country: "GB", countrySure: true }).score).toBe(base);
+  });
+
+  it("counts whether the shop sells the niche, and how much it sells", () => {
+    const base = fit({}).score;
+    expect(fit({ match: "strong" })).toMatchObject({ score: base });
+    expect(fit({ match: "strong" }).why).toContain("sells anime");
+    expect(fit({ match: "some" }).score).toBe(base);
+    expect(fit({ match: "none" }).score).toBe(base - 20);
+    expect(fit({ match: "none" }).why).toContain("the niche is not mentioned on the shop");
+    expect(fit({ products: 3 }).score).toBe(base - 10);
+    expect(fit({ products: 3 }).why).toContain("only 3 products");
+    expect(fit({ products: 1 }).why).toContain("only 1 product");
+    expect(fit({ products: 5 }).score).toBe(base);
+    expect(fit({ products: null }).score).toBe(base);
+  });
+
+  it("counts whether the shop is alive", () => {
+    const base = fit({}).score;
+    expect(fit({ newest: "2026-10-01", updated: "2026-11-10" })).toMatchObject({ score: base + 5 });
+    expect(fit({ newest: "2026-10-01" }).why).toContain("new products in the last 3 months");
+    // An old newest product is no fault while the shop still changes: it sells what it has.
+    expect(fit({ newest: "2024-01-01", updated: "2026-11-10" }).score).toBe(base);
+    const dead = fit({ newest: "2024-01-01", updated: "2025-03-01" });
+    expect(dead.score).toBe(base - 10);
+    expect(dead.why).toContain("nothing in the shop has changed in over a year");
+    expect(fit({ slow: true }).score).toBe(base - 5);
+    expect(fit({ slow: true }).why).toContain("speaks of deliveries of 2 weeks or more");
+  });
+
+  it("calls a shop abandoned only when it knows", () => {
+    expect(ecomAbandoned({ updated: "2025-11-01" }, NOW)).toBe(true);
+    expect(ecomAbandoned({ updated: "2025-11-20" }, NOW)).toBe(false);
+    expect(ecomAbandoned({ updated: "" }, NOW)).toBe(false);
+    expect(ecomAbandoned({}, NOW)).toBe(false);
+    expect(ecomAbandoned({ updated: "last year" }, NOW)).toBe(false);
+  });
+
+  it("stays between 0 and 100, and only a brand with everything reaches the top", () => {
+    expect(
+      fit({
+        kind: "unread",
+        platform: "",
+        market: "us",
+        country: "",
+        match: "none",
+        products: 1,
+        updated: "2020-01-01",
+        slow: true,
+      }).score,
+    ).toBe(0);
+    const best = {
+      instagram: "https://www.instagram.com/kaijuclothing",
+      instagramSure: true,
+      email: "hello@kaijuclothing.com",
+      followers: 12_400,
+      market: "us",
+      country: "US",
+      countrySure: true,
+      match: "strong" as const,
+    };
+    // What a brand scored before any of this was read, when nothing is wrong with it.
+    expect(fit(best).score).toBe(95);
+    expect(fit({ ...best, newest: "2026-11-01" }).score).toBe(100);
+    expect(fit({ ...best, newest: "2026-11-01" }).why).toEqual([
+      "Shopify shop",
+      "Instagram found",
+      "email on their site",
+      "12k followers",
+      "based in the United States",
+      "sells anime",
+      "new products in the last 3 months",
+    ]);
+  });
 });
 
 describe("one brand found twice", () => {
@@ -571,6 +841,65 @@ describe("one brand found twice", () => {
         score: 95,
       });
     }
+  });
+
+  it("keeps where the brand is and what its shop sells", () => {
+    const read = brand({
+      market: "us",
+      country: "US",
+      countrySure: true,
+      place: "Austin, Texas",
+      countryWhy: "their shop is registered in Austin, Texas",
+      match: "strong",
+      products: 148,
+      priceFrom: 28,
+      priceTo: 85,
+      newest: "2026-10-20",
+      updated: "2026-11-10",
+      phone: "+1 512 555 0100",
+    });
+    const fromBio = {
+      ...page,
+      market: "us",
+      country: "US",
+      countrySure: false,
+      place: "",
+      countryWhy: "the flag on their Instagram page",
+    };
+    for (const merged of [mergeEcomBrand(read, fromBio), mergeEcomBrand(fromBio, read)])
+      expect(merged).toMatchObject({
+        market: "us",
+        country: "US",
+        countrySure: true,
+        place: "Austin, Texas",
+        countryWhy: "their shop is registered in Austin, Texas",
+        match: "strong",
+        products: 148,
+        priceFrom: 28,
+        priceTo: 85,
+        newest: "2026-10-20",
+        updated: "2026-11-10",
+        phone: "+1 512 555 0100",
+      });
+    // A shop that says nothing takes what the page says, as one piece.
+    expect(mergeEcomBrand(brand({ market: "us" }), fromBio)).toMatchObject({
+      country: "US",
+      countrySure: false,
+      place: "",
+      countryWhy: "the flag on their Instagram page",
+    });
+    // A hint on the shop gives way to what the other find's own site confirms.
+    const hinted = brand({
+      market: "us",
+      country: "GB",
+      countrySure: false,
+      countryWhy: "prices in GBP",
+    });
+    expect(mergeEcomBrand(hinted, { ...read, key: "kaijuclothing.com" })).toMatchObject({
+      country: "US",
+      countrySure: true,
+      place: "Austin, Texas",
+    });
   });
 
   it("is added once to a list, and a new brand is added", () => {

@@ -163,10 +163,14 @@ describe("a scan step with the real site reader", () => {
       tiktok: "https://www.tiktok.com/@kaijuclothing",
       tools: ["Meta pixel"],
       currency: "USD",
+      // Its own words name the niche. Prices in dollars say nothing about where a shop is.
+      match: "strong",
+      country: "",
+      countrySure: false,
       score: 80,
-      why: ["Shopify shop", "Instagram found", "email on their site"],
+      why: ["Shopify shop", "Instagram found", "email on their site", "sells anime"],
     });
-    expect(out.skipped).toEqual({ notBrands: 0, seen: 0, notShops: 1 });
+    expect(out.skipped).toEqual({ notBrands: 0, seen: 0, notShops: 1, elsewhere: 0, unplaced: 0 });
   });
 });
 

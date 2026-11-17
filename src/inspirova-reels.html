@@ -1,0 +1,179 @@
+<!--
+  "Proof you can watch": Instagram videos on the homepage, right under the "Who we work with" rows.
+  src/routes/index.tsx adds this file to the end of the homepage document; the script below moves the section into place.
+  To change the videos, edit the REELS list at the top of the script. Every class starts with rl-.
+-->
+<style>
+  .rl{position:relative;padding:6px 0 84px}
+  .rl[hidden]{display:none}
+  .rl-head{max-width:760px;margin:0 auto 30px;padding:0 24px;text-align:center}
+  .rl-eye{font-family:var(--mono);font-weight:700;letter-spacing:.2em;font-size:.72rem;color:#A88BFF;text-transform:uppercase}
+  .rl-head h2{margin-top:12px;font-family:var(--display);font-weight:700;font-size:clamp(1.5rem,3.4vw,2.3rem);letter-spacing:-.02em;line-height:1.15;text-wrap:balance}
+  .rl-head p{margin-top:10px;color:var(--muted)}
+  .rl-row{display:flex;justify-content:center;align-items:flex-start;gap:22px;max-width:1180px;margin:0 auto;padding:6px 24px 8px;list-style:none}
+  .rl-card{flex:0 1 350px;min-width:0}
+  .rl-frame{position:relative;border-radius:22px;overflow:hidden;border:1px solid rgba(168,139,255,.32);
+    background:linear-gradient(165deg,#1E1250 0%,#0B0722 70%);box-shadow:0 34px 90px -44px rgba(124,92,255,.9)}
+  .rl-frame iframe{display:block;width:100%;border:0;background:#fff}
+  .rl-poster{position:relative;display:grid;place-items:center;align-content:center;gap:16px;width:100%;aspect-ratio:9/16;padding:24px;border:0;
+    color:#fff;font:inherit;text-align:center;text-decoration:none;cursor:pointer;
+    background:
+      radial-gradient(60% 40% at 30% 18%,rgba(124,92,255,.42),transparent 70%),
+      radial-gradient(55% 40% at 78% 88%,rgba(255,131,102,.2),transparent 72%),
+      linear-gradient(165deg,#1E1250 0%,#0B0722 70%)}
+  .rl-poster[hidden]{display:none}
+  .rl-play{width:78px;height:78px;border-radius:50%;display:grid;place-items:center;
+    background:linear-gradient(140deg,#7C5CFF,#A88BFF 60%,#FF8366);box-shadow:0 18px 44px -14px #7C5CFF,inset 0 1px 0 rgba(255,255,255,.35);
+    transition:transform .25s var(--ease)}
+  .rl-play svg{width:30px;height:30px;margin-left:4px}
+  .rl-poster:hover .rl-play{transform:scale(1.08)}
+  .rl-poster b{font-family:var(--display);font-weight:700;font-size:1.1rem}
+  .rl-poster small{font-size:.85rem;color:rgba(255,255,255,.7);max-width:24ch}
+  .rl-poster.rl-wait{cursor:default}
+  .rl-poster.rl-wait .rl-play{animation:rl-pulse 1.4s ease-in-out infinite alternate}
+  @keyframes rl-pulse{from{opacity:.55;transform:scale(.94)}}
+  .rl-open{display:inline-flex;align-items:center;gap:7px;margin-top:12px;font-size:.86rem;color:var(--muted);transition:color .2s}
+  .rl-open:hover{color:#fff}
+  .rl-open svg{width:14px;height:14px}
+  @media (max-width:1060px){
+    /* Phones and tablets: one row to swipe through, the next video peeks in from the side. */
+    .rl-row{justify-content:flex-start;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;
+      gap:14px;padding-left:max(24px,calc(50% - 170px));padding-right:max(24px,calc(50% - 170px))}
+    .rl-row::-webkit-scrollbar{display:none}
+    .rl-card{flex:0 0 min(340px,84vw);scroll-snap-align:center}
+    .rl{padding-bottom:64px}
+  }
+</style>
+
+<section class="rl" id="videos" aria-labelledby="rl-title" hidden>
+  <div class="rl-head">
+    <div class="rl-eye">On video</div>
+    <h2 id="rl-title">Proof you can watch.</h2>
+    <p>Straight from Instagram. Press play on any of them.</p>
+  </div>
+  <ul class="rl-row" id="rlRow"></ul>
+</section>
+
+<script>
+/*<rl-logic>*/
+(function (w) {
+  "use strict";
+  /* ---- settings ---- */
+  var REELS = [
+    "https://www.instagram.com/reel/DYHX6UOoBhO/",
+    "https://www.instagram.com/reel/DX6po0uoIZS/",
+    "https://www.instagram.com/reel/DRVU9kgCOTA/"
+  ];
+  /* "view": a video loads from Instagram when the section comes into view.
+     "tap":  nothing is loaded from Instagram until a visitor presses play on that video. */
+  var LOAD = "tap";
+
+  /* The short code Instagram gives a reel or post, from any link to it. */
+  function code(url) {
+    var m = /^https?:\/\/(?:www\.)?instagram\.com\/(?:[A-Za-z0-9_.]+\/)?(?:reels?|p|tv)\/([A-Za-z0-9_-]{5,40})(?:[\/?#]|$)/.exec(String(url || "").trim());
+    return m ? m[1] : "";
+  }
+  /* Clean links: the share and tracking parts of a pasted link are left out. */
+  function links(url) {
+    var c = code(url);
+    return c ? { code: c, page: "https://www.instagram.com/reel/" + c + "/", embed: "https://www.instagram.com/reel/" + c + "/embed/" } : null;
+  }
+  function list(urls) {
+    var seen = {}, out = [];
+    (urls || []).forEach(function (u) { var l = links(u); if (l && !seen[l.code]) { seen[l.code] = 1; out.push(l); } });
+    return out;
+  }
+  /* Instagram draws a header above the video and a footer under it; this is the room a frame needs at a given width. */
+  function frameHeight(width) { return Math.round(width * 16 / 9) + 226; }
+
+  w.InspReels = { REELS: REELS, LOAD: LOAD, code: code, links: links, list: list, frameHeight: frameHeight };
+})(window);
+/*</rl-logic>*/
+</script>
+<script>
+(function () {
+  "use strict";
+  var R = window.InspReels, sec = document.getElementById("videos"), row = document.getElementById("rlRow");
+  if (!R || !sec || !row) return;
+  var reels = R.list(R.REELS);
+  if (!reels.length) return;
+
+  /* Into place: under the "Who we work with" rows, or above the FAQ, or at the end of the page. */
+  var trades = document.querySelector(".trades"), faq = document.getElementById("faq"), main = document.getElementById("main-content");
+  if (trades && trades.parentNode) trades.parentNode.insertBefore(sec, trades.nextSibling);
+  else if (faq && faq.parentNode) faq.parentNode.insertBefore(sec, faq);
+  else if (main) main.appendChild(sec);
+  else return;
+
+  var PLAY = '<span class="rl-play"><svg viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z"/></svg></span>';
+  var OUT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M11 7H6v11h11v-5"/></svg>';
+  row.innerHTML = reels.map(function (r, i) {
+    return '<li class="rl-card" data-i="' + i + '"><div class="rl-frame">' +
+      '<button type="button" class="rl-poster" aria-label="Play video ' + (i + 1) + ' from Instagram">' + PLAY + "<b>Video " + (i + 1) + "</b><small>Plays here, from Instagram</small></button>" +
+      '</div><a class="rl-open" href="' + r.page + '" target="_blank" rel="noopener">Open on Instagram ' + OUT + "</a></li>";
+  }).join("");
+  sec.hidden = false;
+
+  function load(card) {
+    if (card.getAttribute("data-on")) return;
+    card.setAttribute("data-on", "1");
+    var r = reels[+card.getAttribute("data-i")], frame = card.querySelector(".rl-frame"), poster = card.querySelector(".rl-poster");
+    var f = document.createElement("iframe"), done = false;
+    poster.classList.add("rl-wait"); poster.disabled = true;
+    poster.querySelector("small").textContent = "Loading from Instagram";
+    f.title = "Instagram video " + (+card.getAttribute("data-i") + 1);
+    f.setAttribute("scrolling", "no");
+    f.setAttribute("allow", "autoplay; clipboard-write; encrypted-media; picture-in-picture; fullscreen");
+    f.setAttribute("allowfullscreen", "");
+    f.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+    f.style.height = "0";
+    f.addEventListener("load", function () {
+      if (done) return;
+      done = true;
+      poster.hidden = true;
+      f.style.height = R.frameHeight(frame.clientWidth) + "px";
+    });
+    /* Nothing came back (blocked or offline): keep the card and send people to Instagram instead. */
+    window.setTimeout(function () {
+      if (done) return;
+      done = true;
+      if (f.parentNode) f.parentNode.removeChild(f);
+      var a = document.createElement("a");
+      a.className = "rl-poster"; a.href = r.page; a.target = "_blank"; a.rel = "noopener";
+      a.innerHTML = PLAY + "<b>Watch on Instagram</b><small>This video could not load here</small>";
+      frame.replaceChild(a, poster);
+    }, 12000);
+    f.src = r.embed;
+    frame.appendChild(f);
+  }
+
+  row.addEventListener("click", function (e) {
+    var p = e.target instanceof Element ? e.target.closest("button.rl-poster") : null;
+    if (p) load(p.closest(".rl-card"));
+  });
+  /* Instagram tells the page how tall each video really is. */
+  window.addEventListener("message", function (e) {
+    if (e.origin !== "https://www.instagram.com") return;
+    var d = null;
+    try { d = typeof e.data === "string" ? JSON.parse(e.data) : e.data; } catch (err) { return; }
+    var h = d && d.type === "MEASURE" && d.details && +d.details.height;
+    if (!h || h < 200 || h > 2400) return;
+    var frames = row.querySelectorAll("iframe");
+    for (var i = 0; i < frames.length; i++) {
+      if (frames[i].contentWindow !== e.source) continue;
+      frames[i].setAttribute("data-measured", "1");
+      frames[i].style.height = Math.round(h) + "px";
+    }
+  });
+  window.addEventListener("resize", function () {
+    var frames = row.querySelectorAll("iframe");
+    for (var i = 0; i < frames.length; i++) if (!frames[i].getAttribute("data-measured") && frames[i].style.height !== "0px") frames[i].style.height = R.frameHeight(frames[i].parentNode.clientWidth) + "px";
+  });
+  if (R.LOAD === "view" && "IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) { if (en.isIntersecting) { io.unobserve(en.target); load(en.target); } });
+    }, { rootMargin: "500px 0px" });
+    [].forEach.call(row.children, function (c) { io.observe(c); });
+  }
+})();
+</script>
