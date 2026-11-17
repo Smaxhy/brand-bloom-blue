@@ -74,6 +74,13 @@
 .public-site a { transition: color .2s, background-color .2s; }
 .public-site a:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; }
 
+/* The page behind a full-screen public page takes that page's own colour. Phone browsers colour their own top and
+   bottom bars from it (Safari on iOS 26 reads the body background), so the bars match the dark site instead of
+   showing white. #08060F is --ink in src/inspirova.html (homepage and results frames); the second rule follows
+   .public-site above (privacy page). The account side has neither element and keeps its own background. */
+html:has(iframe#main-content), html:has(iframe#main-content) body { background: #08060F; }
+html:has(main.public-site), html:has(main.public-site) body { background: oklch(.19 .004 90); }
+
 @utility shadow-brand { box-shadow: var(--shadow-brand); }
 @utility shadow-soft { box-shadow: var(--shadow-soft); }
 @utility bg-brand-gradient { background: linear-gradient(135deg, var(--brand-violet), var(--brand-coral)); }
